@@ -41,6 +41,7 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const waitingTimerRef = useRef<number | null>(null);
+  const hasVideoStartedRef = useRef(false);
 
   const clearWaitingTimer = () => {
     if (waitingTimerRef.current !== null) {
@@ -86,6 +87,7 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
   useEffect(() => {
     if (!current) return;
     if (current.type === "video") {
+      hasVideoStartedRef.current = false;
       setVideoLoading(shouldLoadVideo);
       setImageLoading(false);
       return;
@@ -198,7 +200,7 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
                 controlsList="nodownload"
                 disablePictureInPicture
                 onLoadStart={() => {
-                  if (shouldLoadVideo) {
+                  if (shouldLoadVideo && !hasVideoStartedRef.current) {
                     setVideoLoading(true);
                   }
                 }}
@@ -210,22 +212,37 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
                   if (videoEl?.paused) {
                     return;
                   }
+                  if (hasVideoStartedRef.current) {
+                    return;
+                  }
                   scheduleBufferingOverlay();
                 }}
                 onCanPlay={() => {
                   clearWaitingTimer();
+                  if (!hasVideoStartedRef.current) {
+                    hasVideoStartedRef.current = true;
+                  }
                   setVideoLoading(false);
                 }}
                 onCanPlayThrough={() => {
                   clearWaitingTimer();
+                  if (!hasVideoStartedRef.current) {
+                    hasVideoStartedRef.current = true;
+                  }
                   setVideoLoading(false);
                 }}
                 onPlaying={() => {
                   clearWaitingTimer();
+                  if (!hasVideoStartedRef.current) {
+                    hasVideoStartedRef.current = true;
+                  }
                   setVideoLoading(false);
                 }}
                 onLoadedData={() => {
                   clearWaitingTimer();
+                  if (!hasVideoStartedRef.current) {
+                    hasVideoStartedRef.current = true;
+                  }
                   setVideoLoading(false);
                 }}
                 onError={() => {
