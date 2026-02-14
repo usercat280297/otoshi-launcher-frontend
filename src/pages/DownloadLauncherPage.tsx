@@ -535,6 +535,27 @@ export default function DownloadLauncherPage() {
       .catch(() => undefined);
   }, []);
 
+  const resolveDownloadUrl = useCallback(
+    (kind: "installer" | "portable", artifactList: LauncherArtifact[] = artifacts): string | null => {
+      const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+      const envOverride =
+        kind === "portable" ? import.meta.env.VITE_PORTABLE_URL : import.meta.env.VITE_INSTALLER_URL;
+      if (envOverride) {
+        return String(envOverride);
+      }
+
+      const artifact = artifactList.find((item) => item.kind === kind);
+      if (!artifact?.download_url) {
+        return null;
+      }
+      if (/^https?:\/\//i.test(artifact.download_url)) {
+        return artifact.download_url;
+      }
+      return `${API_URL}${artifact.download_url.startsWith("/") ? "" : "/"}${artifact.download_url}`;
+    },
+    [artifacts]
+  );
+
   const handleDownload = async (kind: "installer" | "portable" = "installer") => {
     if (isDownloading) return;
 
@@ -587,6 +608,7 @@ export default function DownloadLauncherPage() {
           clearInterval(progressInterval);
           setDownloadProgress(100);
           setDownloadComplete(true);
+          setIsDownloading(false);
         } else {
           throw new Error("Download failed");
         }
@@ -594,17 +616,37 @@ export default function DownloadLauncherPage() {
         clearInterval(progressInterval);
       } else {
         // Fallback to direct file download
-        fallbackDownload(kind);
+        void fallbackDownload(kind);
       }
     } catch (error) {
       console.warn("API download failed, using fallback:", error);
-      fallbackDownload(kind);
-    } finally {
-      setIsDownloading(false);
+      void fallbackDownload(kind);
     }
   };
 
-  const fallbackDownload = (kind: "installer" | "portable" = "installer") => {
+  const fallbackDownload = async (kind: "installer" | "portable" = "installer") => {
+    const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+    let targetUrl = resolveDownloadUrl(kind);
+
+    if (!targetUrl) {
+      try {
+        const artifactResp = await fetch(`${API_URL}/launcher-download/artifacts`);
+        if (artifactResp.ok) {
+          const latestArtifacts = (await artifactResp.json()) as LauncherArtifact[];
+          setArtifacts(latestArtifacts);
+          targetUrl = resolveDownloadUrl(kind, latestArtifacts);
+        }
+      } catch {
+        // Keep fallback path silent and fail below if no URL can be resolved.
+      }
+    }
+
+    if (!targetUrl) {
+      console.error(`No download URL available for ${kind}`);
+      setIsDownloading(false);
+      return;
+    }
+
     const interval = setInterval(() => {
       setDownloadProgress((prev) => {
         if (prev >= 100) {
@@ -612,13 +654,8 @@ export default function DownloadLauncherPage() {
           setIsDownloading(false);
           setDownloadComplete(true);
           const link = document.createElement("a");
-          if (kind === "portable") {
-            link.href = "/downloads/OtoshiLauncher-Portable.zip";
-            link.download = "OtoshiLauncher-Portable.zip";
-          } else {
-            link.href = "/downloads/OtoshiLauncher-Setup.exe";
-            link.download = "OtoshiLauncher-Setup.exe";
-          }
+          link.href = targetUrl;
+          link.download = kind === "portable" ? "OtoshiLauncher-Portable.zip" : "OtoshiLauncher-Setup.exe";
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);

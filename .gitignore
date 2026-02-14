@@ -11,3 +11,5 @@ src-tauri/target/
 src-tauri/.tauri/
 src-tauri/logs/
 src-tauri/resources/backend/
+public/downloads/*.zip
+public/downloads/*.exe
