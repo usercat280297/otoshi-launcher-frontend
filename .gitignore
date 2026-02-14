@@ -10,3 +10,4 @@ Thumbs.db
 src-tauri/target/
 src-tauri/.tauri/
 src-tauri/logs/
+src-tauri/resources/backend/
