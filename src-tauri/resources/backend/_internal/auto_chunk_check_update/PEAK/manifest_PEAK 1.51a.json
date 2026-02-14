@@ -1,0 +1,2130 @@
+{
+  "version": "PEAK 1.51a",
+  "game_name": "PEAK",
+  "[REDACTED_HF_TOKEN]": "https://huggingface.co/datasets/MangaVNteam/Assassin-Creed-Odyssey-Crack/tree/main/PEAK/PEAK%201.51a",
+  "created_at": "2026-01-16 12:07:03",
+  "updated_at": "2026-02-08 19:25:18",
+  "compression": "HYBRID (Thông minh - Max)",
+  "chunk_size_mb": 100.0,
+  "total_chunks": 108,
+  "total_size": 7759529123,
+  "total_original_size": 7759469489,
+  "compression_ratio": -0.0007685319219907782,
+  "chunks": [
+    {
+      "id": 0,
+      "filename": "chunk_0000.zip",
+      "hash": "bd113c413033fe0f7290d4415d5aa9dbae0bc8b25e6c15537061884655d746ed",
+      "size": 81631932,
+      "compressed_size": 81631932,
+      "original_size": 81626938,
+      "file_count": 33,
+      "files": [
+        "PEAK.exe",
+        "UnityCrashHandler64.exe",
+        "UnityPlayer.dll",
+        "version.txt",
+        "D3D12\\D3D12Core.dll",
+        "MonoBleedingEdge\\EmbedRuntime\\MonoPosixHelper.dll",
+        "MonoBleedingEdge\\EmbedRuntime\\mono-2.0-bdwgc.dll",
+        "MonoBleedingEdge\\etc\\mono\\browscap.ini",
+        "MonoBleedingEdge\\etc\\mono\\config",
+        "MonoBleedingEdge\\etc\\mono\\2.0\\DefaultWsdlHelpGenerator.aspx",
+        "MonoBleedingEdge\\etc\\mono\\2.0\\machine.config",
+        "MonoBleedingEdge\\etc\\mono\\2.0\\settings.map",
+        "MonoBleedingEdge\\etc\\mono\\2.0\\web.config",
+        "MonoBleedingEdge\\etc\\mono\\2.0\\Browsers\\Compat.browser",
+        "MonoBleedingEdge\\etc\\mono\\4.0\\DefaultWsdlHelpGenerator.aspx",
+        "MonoBleedingEdge\\etc\\mono\\4.0\\machine.config",
+        "MonoBleedingEdge\\etc\\mono\\4.0\\settings.map",
+        "MonoBleedingEdge\\etc\\mono\\4.0\\web.config",
+        "MonoBleedingEdge\\etc\\mono\\4.0\\Browsers\\Compat.browser",
+        "MonoBleedingEdge\\etc\\mono\\4.5\\DefaultWsdlHelpGenerator.aspx",
+        "MonoBleedingEdge\\etc\\mono\\4.5\\machine.config",
+        "MonoBleedingEdge\\etc\\mono\\4.5\\settings.map",
+        "MonoBleedingEdge\\etc\\mono\\4.5\\web.config",
+        "MonoBleedingEdge\\etc\\mono\\4.5\\Browsers\\Compat.browser",
+        "MonoBleedingEdge\\etc\\mono\\mconfig\\config.xml",
+        "PEAK_Data\\RuntimeInitializeOnLoads.json",
+        "PEAK_Data\\ScriptingAssemblies.json",
+        "PEAK_Data\\app.info",
+        "PEAK_Data\\boot.config",
+        "PEAK_Data\\globalgamemanagers",
+        "PEAK_Data\\globalgamemanagers.assets",
+        "PEAK_Data\\globalgamemanagers.assets.resS",
+        "PEAK_Data\\level0"
+      ]
+    },
+    {
+      "id": 1,
+      "filename": "chunk_0001.zip",
+      "hash": "381604aeada51d7f3cd49e266eb9cef380ef12ebaa693077a6f98feb5e2d6d24",
+      "size": 42753638,
+      "compressed_size": 42753638,
+      "original_size": 42753508,
+      "file_count": 1,
+      "files": [
+        "PEAK_Data\\level1"
+      ]
+    },
+    {
+      "id": 2,
+      "filename": "chunk_0002.zip",
+      "hash": "1ffcdd2dc1931195c6cf77b24f9f30b38bdbe9d3a45449d29a8c40078120dc1d",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level10",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 3,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "filename": "chunk_0003.zip",
+      "hash": "6e909e89a8068d477ce214e352304ce01e57a297bc422c07f1444dbc7b8404cf",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level10",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 3,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "filename": "chunk_0004.zip",
+      "hash": "889557b98b12b8a4099478bc5f9b3dd5f72fe22a4f690d75a0a80d792d372490",
+      "size": 53485720,
+      "compressed_size": 53485720,
+      "original_size": 53485572,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level10",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 3,
+          "offset": 209715200,
+          "size": 53485572
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "filename": "chunk_0005.zip",
+      "hash": "f2e719fdf2a5275f6e4a9917ddb2b6e2d0ece58c231c9f439ecbe48f746e81f3",
+      "size": 195854,
+      "compressed_size": 195854,
+      "original_size": 195712,
+      "file_count": 1,
+      "files": [
+        "PEAK_Data\\level10.resS"
+      ]
+    },
+    {
+      "id": 6,
+      "filename": "chunk_0006.zip",
+      "hash": "cd26e3d99dfceda8cb90c31c3f5c7d1785436d2e52f81126c930b6bc2a6852c2",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level11",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 3,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "filename": "chunk_0007.zip",
+      "hash": "7f11f99ec2a9103fd4213b5182de6112061bb45ef8b1ad9c871888b5ecec2f7c",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level11",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 3,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "filename": "chunk_0008.zip",
+      "hash": "ac5dcd85839ff3d6321e978037c79b07eef2486473b607a2d4b8c0892d6aefab",
+      "size": 68948424,
+      "compressed_size": 68948424,
+      "original_size": 68948276,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level11",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 3,
+          "offset": 209715200,
+          "size": 68948276
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "filename": "chunk_0009.zip",
+      "hash": "13c7a9afa744bafb232859c2a24d7650081ddf52c82853ee7f7f1242f1ce9aec",
+      "size": 178062,
+      "compressed_size": 178062,
+      "original_size": 177920,
+      "file_count": 1,
+      "files": [
+        "PEAK_Data\\level11.resS"
+      ]
+    },
+    {
+      "id": 10,
+      "filename": "chunk_0010.zip",
+      "hash": "2ff7a4e7967a28d619885f6db5b34ea54026f1e91561e4e9af46a233bf6779c4",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level12",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 3,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "filename": "chunk_0011.zip",
+      "hash": "2eea5d59629d20438b6b3bb301a7501091fe8970ad0554a16157f54a3d25b5c2",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level12",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 3,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "filename": "chunk_0012.zip",
+      "hash": "3f884300a1cdf3e9d1fad8aad11f4925a08b0547f8fb7098ef47d0ff71acff20",
+      "size": 52866120,
+      "compressed_size": 52866120,
+      "original_size": 52865972,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level12",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 3,
+          "offset": 209715200,
+          "size": 52865972
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "filename": "chunk_0013.zip",
+      "hash": "44478e68ec5297ded2d81d8b5c93d595b6aa40848bac54fb7e191ced03856397",
+      "size": 213646,
+      "compressed_size": 213646,
+      "original_size": 213504,
+      "file_count": 1,
+      "files": [
+        "PEAK_Data\\level12.resS"
+      ]
+    },
+    {
+      "id": 14,
+      "filename": "chunk_0014.zip",
+      "hash": "7d525018693dcf18ee27d39c9348093f0602fb560613014de0ab5560e49ef858",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level13",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 3,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "filename": "chunk_0015.zip",
+      "hash": "97ea9a7823475a69bd51e45151cbd224abd1c192f6ddb80b1d2dcc6540dedacf",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level13",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 3,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "filename": "chunk_0016.zip",
+      "hash": "abecb72c57f644a25763271989e9ce53f19940b1c59f3ce54bc56a3048846e4a",
+      "size": 66792888,
+      "compressed_size": 66792888,
+      "original_size": 66792740,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level13",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 3,
+          "offset": 209715200,
+          "size": 66792740
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "filename": "chunk_0017.zip",
+      "hash": "6de556517d98c24f548033235466e5a856610c45758e070688d8b1cd7fd91ffd",
+      "size": 106894,
+      "compressed_size": 106894,
+      "original_size": 106752,
+      "file_count": 1,
+      "files": [
+        "PEAK_Data\\level13.resS"
+      ]
+    },
+    {
+      "id": 18,
+      "filename": "chunk_0018.zip",
+      "hash": "aa8e0b07cfaf000e1782be9888a4aaa0e42f135dbb8498f5426949337ebfed3c",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level14",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 3,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "filename": "chunk_0019.zip",
+      "hash": "7389c4442fe6e99e86ab5841ee55e2ac5d839fd260540e781725fdc7437d4c10",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level14",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 3,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "filename": "chunk_0020.zip",
+      "hash": "96394bd067ac6a9efe9d271844579131cb70840c15a5be865233e97c4ebb9e16",
+      "size": 52824792,
+      "compressed_size": 52824792,
+      "original_size": 52824644,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level14",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 3,
+          "offset": 209715200,
+          "size": 52824644
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "filename": "chunk_0021.zip",
+      "hash": "8c4a1275bc2a24113760de14665064227dfa81cd43077719673c3a8317d78635",
+      "size": 213646,
+      "compressed_size": 213646,
+      "original_size": 213504,
+      "file_count": 1,
+      "files": [
+        "PEAK_Data\\level14.resS"
+      ]
+    },
+    {
+      "id": 22,
+      "filename": "chunk_0022.zip",
+      "hash": "4cbce259ec956e62a8de8e56ab52bdc4249cf5985270ccb62b8d66b48b64a7a4",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level15",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 3,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "filename": "chunk_0023.zip",
+      "hash": "706da5f68ffa124cf3a3c3a65614ea9933a7a1075994b960cee67b34bc64e6b3",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level15",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 3,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "filename": "chunk_0024.zip",
+      "hash": "bd792a48c5e31dcecb14d1aaaa733d00e122e19a860229cc8fe2a54491ac493d",
+      "size": 64797208,
+      "compressed_size": 64797208,
+      "original_size": 64797060,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level15",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 3,
+          "offset": 209715200,
+          "size": 64797060
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "filename": "chunk_0025.zip",
+      "hash": "d14dd4ac0dac6ededf772167be838a92b196b1e85b77e5a4b3f62ea437afa3bd",
+      "size": 142478,
+      "compressed_size": 142478,
+      "original_size": 142336,
+      "file_count": 1,
+      "files": [
+        "PEAK_Data\\level15.resS"
+      ]
+    },
+    {
+      "id": 26,
+      "filename": "chunk_0026.zip",
+      "hash": "665a034a1f347e92ac114509b00097f575828fb9b269c2400e97bbde3c3c4c6d",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level16",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 3,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "filename": "chunk_0027.zip",
+      "hash": "58540047da0c611261d0287821dc52439070ac2882ed056b1dfd621411efc8a1",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level16",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 3,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 28,
+      "filename": "chunk_0028.zip",
+      "hash": "79b71c0a773405e9e920c879b4a5abc0e5a269e045287afb8941cbf1c99e1a05",
+      "size": 56277640,
+      "compressed_size": 56277640,
+      "original_size": 56277492,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level16",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 3,
+          "offset": 209715200,
+          "size": 56277492
+        }
+      ]
+    },
+    {
+      "id": 29,
+      "filename": "chunk_0029.zip",
+      "hash": "b1b9fb150738adb4f6b2050d1f94c5610c15a015b1160a7e3ae490d3c0ccad2f",
+      "size": 178062,
+      "compressed_size": 178062,
+      "original_size": 177920,
+      "file_count": 1,
+      "files": [
+        "PEAK_Data\\level16.resS"
+      ]
+    },
+    {
+      "id": 30,
+      "filename": "chunk_0030.zip",
+      "hash": "c9b7282a8d263d7c3779144c39b92c4a036fa5bf3fe6b99955ba6fe24c2c6ff1",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level17",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 3,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "filename": "chunk_0031.zip",
+      "hash": "6739c78904eca19ee8c7be72602f69a9da238bdbc601ae914127c9d8fe5b54c2",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level17",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 3,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "filename": "chunk_0032.zip",
+      "hash": "06c6d668090f6b0810ec95ddc54cd8c2d6c0674c214faa60136f647dbc341502",
+      "size": 56725784,
+      "compressed_size": 56725784,
+      "original_size": 56725636,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level17",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 3,
+          "offset": 209715200,
+          "size": 56725636
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "filename": "chunk_0033.zip",
+      "hash": "a5fc63aeae4c99b058e2da096391831eb97c2280e3eee0cbf9e63d4d70b2ee7a",
+      "size": 178062,
+      "compressed_size": 178062,
+      "original_size": 177920,
+      "file_count": 1,
+      "files": [
+        "PEAK_Data\\level17.resS"
+      ]
+    },
+    {
+      "id": 34,
+      "filename": "chunk_0034.zip",
+      "hash": "0b11edf80ae5843b3705129665dcea033c176e14c677ee33f6265b331388f6bb",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level18",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 3,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "filename": "chunk_0035.zip",
+      "hash": "31f31a538bcf5ed50b6f62d8171b2a60a61bb778b3d29516e913922c522d0beb",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level18",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 3,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 36,
+      "filename": "chunk_0036.zip",
+      "hash": "a27a2134e2125e2bdf2caf36fbf7a3ea1f515fc872fd5b4ab9ae9be05afea39c",
+      "size": 69039912,
+      "compressed_size": 69039912,
+      "original_size": 69039764,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level18",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 3,
+          "offset": 209715200,
+          "size": 69039764
+        }
+      ]
+    },
+    {
+      "id": 37,
+      "filename": "chunk_0037.zip",
+      "hash": "eaee20a4755d203763076d8ea3f49bca56c6e58c0981e97aa895f7e562d5ae81",
+      "size": 142478,
+      "compressed_size": 142478,
+      "original_size": 142336,
+      "file_count": 1,
+      "files": [
+        "PEAK_Data\\level18.resS"
+      ]
+    },
+    {
+      "id": 38,
+      "filename": "chunk_0038.zip",
+      "hash": "501296c77b771715a258a45e3d5db7db866fa0c5fc302d2aac6562439eaf13eb",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level19",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 3,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 39,
+      "filename": "chunk_0039.zip",
+      "hash": "4b202f32d4c63ff532a48f9dd8b9b7258285f852d28f5a22bfc282fecded6ce4",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level19",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 3,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 40,
+      "filename": "chunk_0040.zip",
+      "hash": "e83734adcd0ba5b9cb21eb196182bee202c524b37de91870ff444e813e7d5602",
+      "size": 51524856,
+      "compressed_size": 51524856,
+      "original_size": 51524708,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level19",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 3,
+          "offset": 209715200,
+          "size": 51524708
+        }
+      ]
+    },
+    {
+      "id": 41,
+      "filename": "chunk_0041.zip",
+      "hash": "1eeaa718742457795abd07efee693a715726a91d7a4146b16941e8723ff5e4a4",
+      "size": 232210,
+      "compressed_size": 232210,
+      "original_size": 231960,
+      "file_count": 2,
+      "files": [
+        "PEAK_Data\\level19.resS",
+        "PEAK_Data\\level2"
+      ]
+    },
+    {
+      "id": 42,
+      "filename": "chunk_0042.zip",
+      "hash": "d1f2e581eff24adada0eb5cb00a1d096fd0862fc00b62d00235f35a242f8713e",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level20",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 3,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 43,
+      "filename": "chunk_0043.zip",
+      "hash": "5f75a2e46bd3dca284ca5fac9c3464af711b96490d7055a0feb2022f7f98719d",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level20",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 3,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 44,
+      "filename": "chunk_0044.zip",
+      "hash": "7ac20f1cbf554bdeccb49b9d3b95a34cb1f4c055e8cc5e271256265fcddb7179",
+      "size": 63969384,
+      "compressed_size": 63969384,
+      "original_size": 63969236,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level20",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 3,
+          "offset": 209715200,
+          "size": 63969236
+        }
+      ]
+    },
+    {
+      "id": 45,
+      "filename": "chunk_0045.zip",
+      "hash": "db196ba7f9138d89079a37517697760b1dec6b73dc1a8298569ee9b5ca6772bb",
+      "size": 195854,
+      "compressed_size": 195854,
+      "original_size": 195712,
+      "file_count": 1,
+      "files": [
+        "PEAK_Data\\level20.resS"
+      ]
+    },
+    {
+      "id": 46,
+      "filename": "chunk_0046.zip",
+      "hash": "d5c0ee8da2470b734589e0138686a7259d95a2cc736bd7eeea196edf3ea5c5ab",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level21",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 3,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 47,
+      "filename": "chunk_0047.zip",
+      "hash": "4f254528f18f50cb7fadf5fcbba2a0048a031ff691df199cd42371e19ed32553",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level21",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 3,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 48,
+      "filename": "chunk_0048.zip",
+      "hash": "56394b9d13a1792913d2c3a3a40e83122bc4055c7f4cd30ebbbdd99ad23a17d1",
+      "size": 64849992,
+      "compressed_size": 64849992,
+      "original_size": 64849844,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level21",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 3,
+          "offset": 209715200,
+          "size": 64849844
+        }
+      ]
+    },
+    {
+      "id": 49,
+      "filename": "chunk_0049.zip",
+      "hash": "73e6652cf5b22188303b0cd04e10ceffb189b74934b0ed47080e4ab48709d08e",
+      "size": 231438,
+      "compressed_size": 231438,
+      "original_size": 231296,
+      "file_count": 1,
+      "files": [
+        "PEAK_Data\\level21.resS"
+      ]
+    },
+    {
+      "id": 50,
+      "filename": "chunk_0050.zip",
+      "hash": "7f086e4ee5d5eaa2b1607847adb7eb673406f063b0d180a3437be20fec077ba1",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level22",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 3,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 51,
+      "filename": "chunk_0051.zip",
+      "hash": "50fd82b5e61a36594b822d99a4816bc17c2f169cb6efeea2a149ee544668b073",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level22",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 3,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 52,
+      "filename": "chunk_0052.zip",
+      "hash": "a10f4af9f69e05a2779772a18ffa808d5e7311019d7b535ba8a029df45b6b156",
+      "size": 52522744,
+      "compressed_size": 52522744,
+      "original_size": 52522596,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level22",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 3,
+          "offset": 209715200,
+          "size": 52522596
+        }
+      ]
+    },
+    {
+      "id": 53,
+      "filename": "chunk_0053.zip",
+      "hash": "923bd9702bd10d38b7e23a91eccf34d4d98412215ef21af89e0bf18b0d50dfae",
+      "size": 195854,
+      "compressed_size": 195854,
+      "original_size": 195712,
+      "file_count": 1,
+      "files": [
+        "PEAK_Data\\level22.resS"
+      ]
+    },
+    {
+      "id": 54,
+      "filename": "chunk_0054.zip",
+      "hash": "bcbb2dc2c9a849995d8c30a83428616a85fc4fd3e217602f6c105e0966c520bc",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level23",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 3,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 55,
+      "filename": "chunk_0055.zip",
+      "hash": "dd679e3fcf74069462a49626dcad0b062fb84203a5cf1459cc23bab38b7e74e2",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level23",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 3,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 56,
+      "filename": "chunk_0056.zip",
+      "hash": "407ffe3b9328b2172bff79647c70d290f1d051fae01085db5dc43d4c70a38ea6",
+      "size": 75351160,
+      "compressed_size": 75351160,
+      "original_size": 75351012,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level23",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 3,
+          "offset": 209715200,
+          "size": 75351012
+        }
+      ]
+    },
+    {
+      "id": 57,
+      "filename": "chunk_0057.zip",
+      "hash": "90589273d652f71345a2226fb246251f74e35531764c67037b99038bea153f44",
+      "size": 124686,
+      "compressed_size": 124686,
+      "original_size": 124544,
+      "file_count": 1,
+      "files": [
+        "PEAK_Data\\level23.resS"
+      ]
+    },
+    {
+      "id": 58,
+      "filename": "chunk_0058.zip",
+      "hash": "5bab2dd561bdfe28868d40f151e3f8272b1260deacaaca855bcf52144376fc71",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level24",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 3,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 59,
+      "filename": "chunk_0059.zip",
+      "hash": "3ea6a598a28dceb14a5995edbda10973eaf75632a769d60280ef3ceae44f90d7",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level24",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 3,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 60,
+      "filename": "chunk_0060.zip",
+      "hash": "7296dec5ebb2d6db56f501563d0e4d2f9c947a729c5ff770ff5f3cad1f8f0dfe",
+      "size": 66320424,
+      "compressed_size": 66320424,
+      "original_size": 66320276,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level24",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 3,
+          "offset": 209715200,
+          "size": 66320276
+        }
+      ]
+    },
+    {
+      "id": 61,
+      "filename": "chunk_0061.zip",
+      "hash": "a4d68b52fa67c69d626c18f93a18d4edd4df29b9581519d997d0f6b03e3e56f9",
+      "size": 142478,
+      "compressed_size": 142478,
+      "original_size": 142336,
+      "file_count": 1,
+      "files": [
+        "PEAK_Data\\level24.resS"
+      ]
+    },
+    {
+      "id": 62,
+      "filename": "chunk_0062.zip",
+      "hash": "7e76e3f6f92c3d16c7a29c0225af5ac24e48da664e9d520e06250625270bf09f",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level25",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 3,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 63,
+      "filename": "chunk_0063.zip",
+      "hash": "564d379bd6626014071b4d69bf2388ae7f22908257fe90111c5188af52a3bb10",
+      "size": 104857748,
+      "compressed_size": 104857748,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level25",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 3,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 64,
+      "filename": "chunk_0064.zip",
+      "hash": "154cc647da149a1194d84755d627263067531aa88bba1079f5728e9a9333a11d",
+      "size": 65398296,
+      "compressed_size": 65398296,
+      "original_size": 65398148,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level25",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 3,
+          "offset": 209715200,
+          "size": 65398148
+        }
+      ]
+    },
+    {
+      "id": 65,
+      "filename": "chunk_0065.zip",
+      "hash": "b46c9368263e1c52b5263616b442aa54192efed9d6e927374c880216d6bf3573",
+      "size": 124686,
+      "compressed_size": 124686,
+      "original_size": 124544,
+      "file_count": 1,
+      "files": [
+        "PEAK_Data\\level25.resS"
+      ]
+    },
+    {
+      "id": 66,
+      "filename": "chunk_0066.zip",
+      "hash": "0fe01feca8745cc5538b2cd78f9a707cf9d702cd17d7dc93dcad7bb3c11d83ac",
+      "size": 104857746,
+      "compressed_size": 104857746,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level3",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 3,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 67,
+      "filename": "chunk_0067.zip",
+      "hash": "4506f8b4cebbbc8925298ff9ea8f2e2c67ee60d1ca6828ad579d30d73a1e333e",
+      "size": 104857746,
+      "compressed_size": 104857746,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level3",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 3,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 68,
+      "filename": "chunk_0068.zip",
+      "hash": "b323cc7b1c8ca4e29540931cca9adbf2aface491235e28455c8fc15b618db947",
+      "size": 53252742,
+      "compressed_size": 53252742,
+      "original_size": 53252596,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level3",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 3,
+          "offset": 209715200,
+          "size": 53252596
+        }
+      ]
+    },
+    {
+      "id": 69,
+      "filename": "chunk_0069.zip",
+      "hash": "57bd442384fe1503fb539a685ffd6f48b30ec4598518f673b697e61c4d1d94e8",
+      "size": 71156940,
+      "compressed_size": 71156940,
+      "original_size": 71156692,
+      "file_count": 2,
+      "files": [
+        "PEAK_Data\\level3.resS",
+        "PEAK_Data\\level4"
+      ]
+    },
+    {
+      "id": 70,
+      "filename": "chunk_0070.zip",
+      "hash": "5ed11ddd90299662e0aa3a011a838357d0cc6da7915b059db017ce9632152146",
+      "size": 104857746,
+      "compressed_size": 104857746,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level5",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 3,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 71,
+      "filename": "chunk_0071.zip",
+      "hash": "5056385382038988841f609a85cc85f3a55fa24373a75c2a4bce8ff430798ffa",
+      "size": 104857746,
+      "compressed_size": 104857746,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level5",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 3,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 72,
+      "filename": "chunk_0072.zip",
+      "hash": "de80229baf6e247fd33f863a4fc6499834e572f73532c4383b30ab47e30d3a2a",
+      "size": 66205238,
+      "compressed_size": 66205238,
+      "original_size": 66205092,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level5",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 3,
+          "offset": 209715200,
+          "size": 66205092
+        }
+      ]
+    },
+    {
+      "id": 73,
+      "filename": "chunk_0073.zip",
+      "hash": "0afb38f851ca06ab9f43f9bd4415c5f4229994b2f52639dcbb48b8d3aeade244",
+      "size": 213644,
+      "compressed_size": 213644,
+      "original_size": 213504,
+      "file_count": 1,
+      "files": [
+        "PEAK_Data\\level5.resS"
+      ]
+    },
+    {
+      "id": 74,
+      "filename": "chunk_0074.zip",
+      "hash": "6b5c6cb40b67498043b04c97466e281a463fb2a9446686b16ef0ec7d59f3b5b4",
+      "size": 104857746,
+      "compressed_size": 104857746,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level6",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 3,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 75,
+      "filename": "chunk_0075.zip",
+      "hash": "ca65096e1c824137f2f32169438288360e7db80a98989a95532dbadefa4bc182",
+      "size": 104857746,
+      "compressed_size": 104857746,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level6",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 3,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 76,
+      "filename": "chunk_0076.zip",
+      "hash": "91c3070b66c334bcc8ee4b2bb0b747299a335a3223063be74c100f4d3ab04c68",
+      "size": 53439094,
+      "compressed_size": 53439094,
+      "original_size": 53438948,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level6",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 3,
+          "offset": 209715200,
+          "size": 53438948
+        }
+      ]
+    },
+    {
+      "id": 77,
+      "filename": "chunk_0077.zip",
+      "hash": "6cd4a176b44ec27ef5da14b72a40df0a66a3b8ec222ca471191eb98145738a02",
+      "size": 178060,
+      "compressed_size": 178060,
+      "original_size": 177920,
+      "file_count": 1,
+      "files": [
+        "PEAK_Data\\level6.resS"
+      ]
+    },
+    {
+      "id": 78,
+      "filename": "chunk_0078.zip",
+      "hash": "bc5b1c5870060e58fae0d4bf6eb9b4e97da9e7066520e57b9643eea07b044ff0",
+      "size": 104857746,
+      "compressed_size": 104857746,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level7",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 3,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 79,
+      "filename": "chunk_0079.zip",
+      "hash": "e0da7ab8d08ae34346c447c6931ec56ed4b8505af5d2092e25731d4a29467370",
+      "size": 104857746,
+      "compressed_size": 104857746,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level7",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 3,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 80,
+      "filename": "chunk_0080.zip",
+      "hash": "4749d3b3abc00630008d15609aa09b87cc2bfce17f81ff6cade0c563bf4e90ac",
+      "size": 65527846,
+      "compressed_size": 65527846,
+      "original_size": 65527700,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level7",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 3,
+          "offset": 209715200,
+          "size": 65527700
+        }
+      ]
+    },
+    {
+      "id": 81,
+      "filename": "chunk_0081.zip",
+      "hash": "318e8b8da558ee312c0160e25a3db5ab278a8e89a21c69807046e670268d484f",
+      "size": 178060,
+      "compressed_size": 178060,
+      "original_size": 177920,
+      "file_count": 1,
+      "files": [
+        "PEAK_Data\\level7.resS"
+      ]
+    },
+    {
+      "id": 82,
+      "filename": "chunk_0082.zip",
+      "hash": "403025536a1ae6259051512f9ea3eaf78f4545181105f37ff2d9bb78031f69db",
+      "size": 104857746,
+      "compressed_size": 104857746,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level8",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 3,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 83,
+      "filename": "chunk_0083.zip",
+      "hash": "6acca3f0c92ef1f7aa83a3b52b5a8e0d8380b4078377b8883e3166d0c4b76cf3",
+      "size": 104857746,
+      "compressed_size": 104857746,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level8",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 3,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 84,
+      "filename": "chunk_0084.zip",
+      "hash": "03ab69a17fd10becbb04eb3c279aa656c1c2755e415cfaed42f44dd3551dfb59",
+      "size": 59214614,
+      "compressed_size": 59214614,
+      "original_size": 59214468,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level8",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 3,
+          "offset": 209715200,
+          "size": 59214468
+        }
+      ]
+    },
+    {
+      "id": 85,
+      "filename": "chunk_0085.zip",
+      "hash": "e7cc6a428569d971ffa765227613af8bd98f7e10980f1b87bc588ab62b524453",
+      "size": 160268,
+      "compressed_size": 160268,
+      "original_size": 160128,
+      "file_count": 1,
+      "files": [
+        "PEAK_Data\\level8.resS"
+      ]
+    },
+    {
+      "id": 86,
+      "filename": "chunk_0086.zip",
+      "hash": "6842c74bf99699ceac93bbd65b1beb96a770155b9967a74068178be978a354f1",
+      "size": 104857746,
+      "compressed_size": 104857746,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level9",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 3,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 87,
+      "filename": "chunk_0087.zip",
+      "hash": "cef29ee60af66fcb32679d584e0eb5394deb3e2031644bbce7530d0d0aa0d16c",
+      "size": 104857746,
+      "compressed_size": 104857746,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level9",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 3,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 88,
+      "filename": "chunk_0088.zip",
+      "hash": "6a1f9aaad839a19c90874b981fc2ac258e27c8eeae8db0e0ddea2c165e66d45c",
+      "size": 64694646,
+      "compressed_size": 64694646,
+      "original_size": 64694500,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\level9",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 3,
+          "offset": 209715200,
+          "size": 64694500
+        }
+      ]
+    },
+    {
+      "id": 89,
+      "filename": "chunk_0089.zip",
+      "hash": "c659cd9bd9e58b7fea6a67cb439389e0046b95cfef0a1a644d0d341fafbf1f26",
+      "size": 84592416,
+      "compressed_size": 84592416,
+      "original_size": 84592148,
+      "file_count": 2,
+      "files": [
+        "PEAK_Data\\level9.resS",
+        "PEAK_Data\\resources.assets"
+      ]
+    },
+    {
+      "id": 90,
+      "filename": "chunk_0090.zip",
+      "hash": "486068e484838f2c4b66110c8885b60c8d80fe8f8aaa3242ccfb86d4a8b94340",
+      "size": 104857776,
+      "compressed_size": 104857776,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\resources.assets.resS",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 5,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 91,
+      "filename": "chunk_0091.zip",
+      "hash": "3cdc7253b8611c085ecceb3a58532835a1e249b54b47389ad79296c480024056",
+      "size": 104857776,
+      "compressed_size": 104857776,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\resources.assets.resS",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 5,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 92,
+      "filename": "chunk_0092.zip",
+      "hash": "fc9e7fb6fa48eff8f1ef36a6533fe606d36966cf18826a346dd4887cbf06b149",
+      "size": 104857776,
+      "compressed_size": 104857776,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\resources.assets.resS",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 5,
+          "offset": 209715200,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 93,
+      "filename": "chunk_0093.zip",
+      "hash": "f66d61abbe7be6af6eda26192e1efa99be4c51fa35e4ba5368b85c8e7bde38c8",
+      "size": 104857776,
+      "compressed_size": 104857776,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\resources.assets.resS",
+          "is_split": true,
+          "part_index": 3,
+          "total_parts": 5,
+          "offset": 314572800,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 94,
+      "filename": "chunk_0094.zip",
+      "hash": "809bef7f412a17ee2f7cb92f409ae9daef7de0a65e5f0eb50f7ffb5bfcec6982",
+      "size": 19014688,
+      "compressed_size": 19014688,
+      "original_size": 19014512,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\resources.assets.resS",
+          "is_split": true,
+          "part_index": 4,
+          "total_parts": 5,
+          "offset": 419430400,
+          "size": 19014512
+        }
+      ]
+    },
+    {
+      "id": 95,
+      "filename": "chunk_0095.zip",
+      "hash": "5f2f092867c029e8e3bbd6e8694909b04b37da82c98627c6091e40b5cebeea99",
+      "size": 104857770,
+      "compressed_size": 104857770,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\resources.resource",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 2,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 96,
+      "filename": "chunk_0096.zip",
+      "hash": "125098997fd5424f794ce117cf9e4163148974df4444fe5835024c06df809e6c",
+      "size": 42523114,
+      "compressed_size": 42523114,
+      "original_size": 42522944,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\resources.resource",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 2,
+          "offset": 104857600,
+          "size": 42522944
+        }
+      ]
+    },
+    {
+      "id": 97,
+      "filename": "chunk_0097.zip",
+      "hash": "cf6a29d8048ed0eb04b3194359eeacfbf2dc22f4c3faaa00a30d854505bc0f87",
+      "size": 65186624,
+      "compressed_size": 65186624,
+      "original_size": 65186044,
+      "file_count": 4,
+      "files": [
+        "PEAK_Data\\sharedassets0.assets",
+        "PEAK_Data\\sharedassets0.assets.resS",
+        "PEAK_Data\\sharedassets0.resource",
+        "PEAK_Data\\sharedassets1.assets"
+      ]
+    },
+    {
+      "id": 98,
+      "filename": "chunk_0098.zip",
+      "hash": "9ce576a5ebad7ac6462993a173c46a7bc04ad719ff9f41fab858b5f9777cec16",
+      "size": 100499848,
+      "compressed_size": 100499848,
+      "original_size": 100499680,
+      "file_count": 1,
+      "files": [
+        "PEAK_Data\\sharedassets1.assets.resS"
+      ]
+    },
+    {
+      "id": 99,
+      "filename": "chunk_0099.zip",
+      "hash": "e16b32a3a203676f706be2e24016f87d89a14b3a8c30d4f2568f0fab60adf362",
+      "size": 80232936,
+      "compressed_size": 80232936,
+      "original_size": 80230148,
+      "file_count": 20,
+      "files": [
+        "PEAK_Data\\sharedassets1.resource",
+        "PEAK_Data\\sharedassets10.assets",
+        "PEAK_Data\\sharedassets11.assets",
+        "PEAK_Data\\sharedassets12.assets",
+        "PEAK_Data\\sharedassets13.assets",
+        "PEAK_Data\\sharedassets14.assets",
+        "PEAK_Data\\sharedassets15.assets",
+        "PEAK_Data\\sharedassets16.assets",
+        "PEAK_Data\\sharedassets17.assets",
+        "PEAK_Data\\sharedassets18.assets",
+        "PEAK_Data\\sharedassets19.assets",
+        "PEAK_Data\\sharedassets2.assets",
+        "PEAK_Data\\sharedassets2.assets.resS",
+        "PEAK_Data\\sharedassets20.assets",
+        "PEAK_Data\\sharedassets21.assets",
+        "PEAK_Data\\sharedassets22.assets",
+        "PEAK_Data\\sharedassets23.assets",
+        "PEAK_Data\\sharedassets24.assets",
+        "PEAK_Data\\sharedassets25.assets",
+        "PEAK_Data\\sharedassets3.assets"
+      ]
+    },
+    {
+      "id": 100,
+      "filename": "chunk_0100.zip",
+      "hash": "6cc309ff8fa6eb0d828fb28e831ba2fb8d58d9eba5ce2be7fb1e7e93c6405ea5",
+      "size": 104857784,
+      "compressed_size": 104857784,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\sharedassets3.assets.resS",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 5,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 101,
+      "filename": "chunk_0101.zip",
+      "hash": "e45325010222a3eb541ab6560f941c0a1d778ce0f5fd2caa2accb1b215a406e0",
+      "size": 104857784,
+      "compressed_size": 104857784,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\sharedassets3.assets.resS",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 5,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 102,
+      "filename": "chunk_0102.zip",
+      "hash": "2b8c2c295b4a2b9b1761458fa1c1e1cb8ed57851d64db12756a3eabb0eeff772",
+      "size": 104857784,
+      "compressed_size": 104857784,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\sharedassets3.assets.resS",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 5,
+          "offset": 209715200,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 103,
+      "filename": "chunk_0103.zip",
+      "hash": "585febd06a89c83223ce916e727452a4730772c802a9ce24b845fe0f8bf8b563",
+      "size": 104857784,
+      "compressed_size": 104857784,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\sharedassets3.assets.resS",
+          "is_split": true,
+          "part_index": 3,
+          "total_parts": 5,
+          "offset": 314572800,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 104,
+      "filename": "chunk_0104.zip",
+      "hash": "dfa87b4dfc8cf1671c80127df65db5200354122f8bccf0855a4657815bad4662",
+      "size": 89573928,
+      "compressed_size": 89573928,
+      "original_size": 89573744,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "PEAK_Data\\sharedassets3.assets.resS",
+          "is_split": true,
+          "part_index": 4,
+          "total_parts": 5,
+          "offset": 419430400,
+          "size": 89573744
+        }
+      ]
+    },
+    {
+      "id": 105,
+      "filename": "chunk_0105.zip",
+      "hash": "0c468fe71efac959b6c1322b8646557f4e958af57dc3784e8d058eca0f9521ba",
+      "size": 65013830,
+      "compressed_size": 65013830,
+      "original_size": 65013532,
+      "file_count": 2,
+      "files": [
+        "PEAK_Data\\sharedassets3.resource",
+        "PEAK_Data\\sharedassets4.assets"
+      ]
+    },
+    {
+      "id": 106,
+      "filename": "chunk_0106.zip",
+      "hash": "60190d7c4d6d2689747ac0c821793e9c160e23b04f1af712047588d8f763eb78",
+      "size": 104756710,
+      "compressed_size": 104756710,
+      "original_size": 104722218,
+      "file_count": 203,
+      "files": [
+        "PEAK_Data\\sharedassets4.assets.resS",
+        "PEAK_Data\\sharedassets4.resource",
+        "PEAK_Data\\sharedassets5.assets",
+        "PEAK_Data\\sharedassets6.assets",
+        "PEAK_Data\\sharedassets7.assets",
+        "PEAK_Data\\sharedassets8.assets",
+        "PEAK_Data\\sharedassets9.assets",
+        "PEAK_Data\\Managed\\Ashley.MeshSplitter.dll",
+        "PEAK_Data\\Managed\\Assembly-CSharp-firstpass.dll",
+        "PEAK_Data\\Managed\\Assembly-CSharp.dll",
+        "PEAK_Data\\Managed\\DOTween.dll",
+        "PEAK_Data\\Managed\\DOTweenPro.dll",
+        "PEAK_Data\\Managed\\DemiLib.dll",
+        "PEAK_Data\\Managed\\HBAO.Runtime.dll",
+        "PEAK_Data\\Managed\\HBAO.Universal.Runtime.dll",
+        "PEAK_Data\\Managed\\Mono.Security.dll",
+        "PEAK_Data\\Managed\\Newtonsoft.Json.dll",
+        "PEAK_Data\\Managed\\Photon3Unity3D.dll",
+        "PEAK_Data\\Managed\\PhotonChat.dll",
+        "PEAK_Data\\Managed\\PhotonRealtime.dll",
+        "PEAK_Data\\Managed\\PhotonUnityNetworking.Demos.dll",
+        "PEAK_Data\\Managed\\PhotonUnityNetworking.Utilities.dll",
+        "PEAK_Data\\Managed\\PhotonUnityNetworking.dll",
+        "PEAK_Data\\Managed\\PhotonVoice.API.dll",
+        "PEAK_Data\\Managed\\PhotonVoice.PUN.dll",
+        "PEAK_Data\\Managed\\PhotonVoice.dll",
+        "PEAK_Data\\Managed\\Sirenix.OdinInspector.Attributes.dll",
+        "PEAK_Data\\Managed\\Sirenix.OdinInspector.Modules.Unity.Addressables.dll",
+        "PEAK_Data\\Managed\\Sirenix.OdinInspector.Modules.UnityLocalization.dll",
+        "PEAK_Data\\Managed\\Sirenix.Serialization.Config.dll",
+        "PEAK_Data\\Managed\\Sirenix.Serialization.dll",
+        "PEAK_Data\\Managed\\Sirenix.Utilities.dll",
+        "PEAK_Data\\Managed\\System.ComponentModel.Composition.dll",
+        "PEAK_Data\\Managed\\System.Configuration.dll",
+        "PEAK_Data\\Managed\\System.Core.dll",
+        "PEAK_Data\\Managed\\System.Data.DataSetExtensions.dll",
+        "PEAK_Data\\Managed\\System.Data.dll",
+        "PEAK_Data\\Managed\\System.Drawing.dll",
+        "PEAK_Data\\Managed\\System.EnterpriseServices.dll",
+        "PEAK_Data\\Managed\\System.IO.Compression.FileSystem.dll",
+        "PEAK_Data\\Managed\\System.IO.Compression.dll",
+        "PEAK_Data\\Managed\\System.Net.Http.dll",
+        "PEAK_Data\\Managed\\System.Numerics.dll",
+        "PEAK_Data\\Managed\\System.Runtime.Serialization.dll",
+        "PEAK_Data\\Managed\\System.Runtime.dll",
+        "PEAK_Data\\Managed\\System.Security.dll",
+        "PEAK_Data\\Managed\\System.ServiceModel.Internals.dll",
+        "PEAK_Data\\Managed\\System.Transactions.dll",
+        "PEAK_Data\\Managed\\System.Xml.Linq.dll",
+        "PEAK_Data\\Managed\\System.Xml.dll",
+        "PEAK_Data\\Managed\\System.dll",
+        "PEAK_Data\\Managed\\Tayx.Graphy.dll",
+        "PEAK_Data\\Managed\\Unity.AI.Navigation.dll",
+        "PEAK_Data\\Managed\\Unity.Addressables.dll",
+        "PEAK_Data\\Managed\\Unity.Animation.Rigging.DocCodeExamples.dll",
+        "PEAK_Data\\Managed\\Unity.Animation.Rigging.dll",
+        "PEAK_Data\\Managed\\Unity.Burst.Unsafe.dll",
+        "PEAK_Data\\Managed\\Unity.Burst.dll",
+        "PEAK_Data\\Managed\\Unity.Cinemachine.dll",
+        "PEAK_Data\\Managed\\Unity.Collections.LowLevel.ILSupport.dll",
+        "PEAK_Data\\Managed\\Unity.Collections.dll",
+        "PEAK_Data\\Managed\\Unity.InputSystem.ForUI.dll",
+        "PEAK_Data\\Managed\\Unity.InputSystem.RebindingUI.dll",
+        "PEAK_Data\\Managed\\Unity.InputSystem.dll",
+        "PEAK_Data\\Managed\\Unity.InternalAPIEngineBridge.013.dll",
+        "PEAK_Data\\Managed\\Unity.Localization.dll",
+        "PEAK_Data\\Managed\\Unity.Mathematics.dll",
+        "PEAK_Data\\Managed\\Unity.MemoryProfiler.dll",
+        "PEAK_Data\\Managed\\Unity.Multiplayer.Center.Common.dll",
+        "PEAK_Data\\Managed\\Unity.Multiplayer.Playmode.Common.Runtime.dll",
+        "PEAK_Data\\Managed\\Unity.Multiplayer.Playmode.dll",
+        "PEAK_Data\\Managed\\Unity.Networking.Transport.dll",
+        "PEAK_Data\\Managed\\Unity.Profiling.Core.dll",
+        "PEAK_Data\\Managed\\Unity.RenderPipeline.Universal.ShaderLibrary.dll",
+        "PEAK_Data\\Managed\\Unity.RenderPipelines.Core.Runtime.Shared.dll",
+        "PEAK_Data\\Managed\\Unity.RenderPipelines.Core.Runtime.dll",
+        "PEAK_Data\\Managed\\Unity.RenderPipelines.Core.ShaderLibrary.dll",
+        "PEAK_Data\\Managed\\Unity.RenderPipelines.GPUDriven.Runtime.dll",
+        "PEAK_Data\\Managed\\Unity.RenderPipelines.ShaderGraph.ShaderGraphLibrary.dll",
+        "PEAK_Data\\Managed\\Unity.RenderPipelines.Universal.2D.Runtime.dll",
+        "PEAK_Data\\Managed\\Unity.RenderPipelines.Universal.Config.Runtime.dll",
+        "PEAK_Data\\Managed\\Unity.RenderPipelines.Universal.Runtime.dll",
+        "PEAK_Data\\Managed\\Unity.RenderPipelines.Universal.Shaders.dll",
+        "PEAK_Data\\Managed\\Unity.Rendering.LightTransport.Runtime.dll",
+        "PEAK_Data\\Managed\\Unity.ResourceManager.dll",
+        "PEAK_Data\\Managed\\Unity.ScriptableBuildPipeline.dll",
+        "PEAK_Data\\Managed\\Unity.Services.Authentication.PlayerAccounts.dll",
+        "PEAK_Data\\Managed\\Unity.Services.Authentication.dll",
+        "PEAK_Data\\Managed\\Unity.Services.Core.Analytics.dll",
+        "PEAK_Data\\Managed\\Unity.Services.Core.Components.dll",
+        "PEAK_Data\\Managed\\Unity.Services.Core.Configuration.dll",
+        "PEAK_Data\\Managed\\Unity.Services.Core.Device.dll",
+        "PEAK_Data\\Managed\\Unity.Services.Core.Environments.Internal.dll",
+        "PEAK_Data\\Managed\\Unity.Services.Core.Environments.dll",
+        "PEAK_Data\\Managed\\Unity.Services.Core.Internal.dll",
+        "PEAK_Data\\Managed\\Unity.Services.Core.Networking.dll",
+        "PEAK_Data\\Managed\\Unity.Services.Core.Registration.dll",
+        "PEAK_Data\\Managed\\Unity.Services.Core.Scheduler.dll",
+        "PEAK_Data\\Managed\\Unity.Services.Core.Telemetry.dll",
+        "PEAK_Data\\Managed\\Unity.Services.Core.Threading.dll",
+        "PEAK_Data\\Managed\\Unity.Services.Core.dll",
+        "PEAK_Data\\Managed\\Unity.Services.Multiplayer.dll",
+        "PEAK_Data\\Managed\\Unity.Services.QoS.dll",
+        "PEAK_Data\\Managed\\Unity.Services.Wire.Internal.dll",
+        "PEAK_Data\\Managed\\Unity.Splines.dll",
+        "PEAK_Data\\Managed\\Unity.TextMeshPro.dll",
+        "PEAK_Data\\Managed\\Unity.Timeline.dll",
+        "PEAK_Data\\Managed\\Unity.VisualEffectGraph.Runtime.dll",
+        "PEAK_Data\\Managed\\UnityEngine.AIModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.AMDModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.ARModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.AccessibilityModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.AndroidJNIModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.AnimationModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.AssetBundleModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.AudioModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.ClothModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.ClusterInputModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.ClusterRendererModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.ContentLoadModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.CoreModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.CrashReportingModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.DSPGraphModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.DirectorModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.GIModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.GameCenterModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.GraphicsStateCollectionSerializerModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.GridModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.HierarchyCoreModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.HotReloadModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.IMGUIModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.ImageConversionModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.InputForUIModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.InputLegacyModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.InputModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.JSONSerializeModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.LocalizationModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.MarshallingModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.MultiplayerModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.NVIDIAModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.ParticleSystemModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.PerformanceReportingModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.Physics2DModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.PhysicsModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.PropertiesModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.RuntimeInitializeOnLoadManagerInitializerModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.ScreenCaptureModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.ShaderVariantAnalyticsModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.SharedInternalsModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.SpriteMaskModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.SpriteShapeModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.StreamingModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.SubstanceModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.SubsystemsModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.TLSModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.TerrainModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.TerrainPhysicsModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.TextCoreFontEngineModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.TextCoreTextEngineModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.TextRenderingModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.TilemapModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.UI.dll",
+        "PEAK_Data\\Managed\\UnityEngine.UIElementsModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.UIModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.UmbraModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.UnityAnalyticsCommonModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.UnityAnalyticsModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.UnityConnectModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.UnityCurlModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.UnityTestProtocolModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.UnityWebRequestAssetBundleModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.UnityWebRequestAudioModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.UnityWebRequestModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.UnityWebRequestTextureModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.UnityWebRequestWWWModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.VFXModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.VRModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.VehiclesModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.VideoModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.VirtualTexturingModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.WindModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.XRModule.dll",
+        "PEAK_Data\\Managed\\UnityEngine.dll",
+        "PEAK_Data\\Managed\\UnityUIExtensions.dll",
+        "PEAK_Data\\Managed\\Whinarn.UnityMeshSimplifier.Runtime.dll",
+        "PEAK_Data\\Managed\\Zorro.AutoLOD.dll",
+        "PEAK_Data\\Managed\\Zorro.ControllerSupport.dll",
+        "PEAK_Data\\Managed\\Zorro.Core.Runtime.dll",
+        "PEAK_Data\\Managed\\Zorro.JiggleBones.dll",
+        "PEAK_Data\\Managed\\Zorro.PhotonUtility.dll",
+        "PEAK_Data\\Managed\\Zorro.Settings.Runtime.dll",
+        "PEAK_Data\\Managed\\Zorro.UI.Runtime.dll",
+        "PEAK_Data\\Managed\\com.rlabrecque.steamworks.net.dll",
+        "PEAK_Data\\Managed\\mscorlib.dll",
+        "PEAK_Data\\Managed\\netstandard.dll",
+        "PEAK_Data\\Managed\\pworld.dll",
+        "PEAK_Data\\Managed\\sc.posteffects.runtime.dll",
+        "PEAK_Data\\Managed\\unity-websocket-sharp.dll",
+        "PEAK_Data\\Managed\\websocket-sharp.dll",
+        "PEAK_Data\\Plugins\\Steamworks.NET.txt",
+        "PEAK_Data\\Plugins\\x86_64\\AudioIn.dll",
+        "PEAK_Data\\Plugins\\x86_64\\lib_burst_generated.dll",
+        "PEAK_Data\\Plugins\\x86_64\\opus_egpv.dll"
+      ]
+    },
+    {
+      "id": 107,
+      "filename": "chunk_0107.zip",
+      "hash": "ab56fb814ba60b55528babc621a11e1424e78dfd3c2b6c3f032eac643dcdbea4",
+      "size": 7575677,
+      "compressed_size": 7575677,
+      "original_size": 7574821,
+      "file_count": 5,
+      "files": [
+        "PEAK_Data\\Plugins\\x86_64\\steam_api64.dll",
+        "PEAK_Data\\Plugins\\x86_64\\webrtc-audio.dll",
+        "PEAK_Data\\Resources\\unity default resources",
+        "PEAK_Data\\Resources\\unity_builtin_extra",
+        "PEAK_Data\\StreamingAssets\\UnityServicesProjectConfiguration.json"
+      ]
+    }
+  ],
+  "hf_repo_id": "MangaVNteam/Assassin-Creed-Odyssey-Crack",
+  "hf_repo": "MangaVNteam/Assassin-Creed-Odyssey-Crack",
+  "hf_repo_type": "dataset",
+  "hf_revision": "main",
+  "hf_folder": "PEAK/PEAK 1.51a",
+  "hf_game_path": "PEAK/PEAK 1.51a",
+  "hf_base_url": "https://huggingface.co/datasets/MangaVNteam/Assassin-Creed-Odyssey-Crack/resolve/main",
+  "app_id": "3527290",
+  "steam_app_id": "3527290"
+}

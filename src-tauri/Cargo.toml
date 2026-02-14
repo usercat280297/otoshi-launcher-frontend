@@ -1,0 +1,44 @@
+[package]
+name = "otoshi_launcher"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[build-dependencies]
+tauri-build = { version = "2.0.0", features = [] }
+# Used by `build.rs` to generate NSIS / WiX installer UI bitmaps.
+image = { version = "0.25", default-features = false, features = ["bmp", "png"] }
+
+[dependencies]
+tauri = { version = "2.0.0", features = ["devtools", "image-png", "tray-icon"] }
+tauri-plugin-dialog = "2.0.0"
+tauri-plugin-shell = "2.2"
+tauri-plugin-deep-link = "2.0.0"
+tauri-plugin-single-instance = "2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+reqwest = { version = "0.11", features = ["json", "rustls-tls", "blocking", "stream"] }
+futures-util = "0.3"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+rusqlite = { version = "0.31", features = ["bundled", "chrono"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.6", features = ["v4", "serde"] }
+memmap2 = "0.9"
+aes-gcm = "0.10"
+base64 = "0.22"
+rand = "0.8"
+once_cell = "1.19"
+launcher_core = { path = "../../native/launcher_core" }
+tokio = { version = "1.36", features = ["fs", "io-util", "macros", "rt-multi-thread", "sync", "time"] }
+sha2 = "0.10"
+hex = "0.4"
+zstd = "0.13"
+rsa = { version = "0.9", features = ["pem"] }
+sysinfo = "0.30"
+zip = { version = "0.6", default-features = false, features = ["deflate"] }
+urlencoding = "2.1"
+blake3 = "1.5"
+libloading = "0.8"

@@ -1,0 +1,467 @@
+{
+  "version": "RV THERE YET? 1.0.14956",
+  "game_name": "Ride",
+  "created_at": "2026-01-16 13:03:28",
+  "compression": "HYBRID (Thông minh - Max)",
+  "chunk_size_mb": 100.0,
+  "total_chunks": 23,
+  "total_size": 2227783054,
+  "total_original_size": 2227772878,
+  "compression_ratio": -0.0004567790595100263,
+  "chunks": [
+    {
+      "id": 0,
+      "filename": "chunk_0000.zip",
+      "hash": "3df692388b8e41d0c1b8b46adb4ff5805c73ab515bcc61d7f39320a1bc837a50",
+      "size": 101382987,
+      "compressed_size": 101382987,
+      "original_size": 101379029,
+      "file_count": 23,
+      "files": [
+        "Manifest_DebugFiles_Win64.txt",
+        "Manifest_NonUFSFiles_Win64.txt",
+        "Manifest_UFSFiles_Win64.txt",
+        "Ride.exe",
+        "Engine\\Binaries\\ThirdParty\\DbgHelp\\dbghelp.dll",
+        "Engine\\Binaries\\ThirdParty\\MsQuic\\v220\\win64\\msquic.dll",
+        "Engine\\Binaries\\ThirdParty\\NVIDIA\\NVaftermath\\Win64\\GFSDK_Aftermath_Lib.x64.dll",
+        "Engine\\Binaries\\ThirdParty\\Ogg\\Win64\\VS2015\\libogg_64.dll",
+        "Engine\\Binaries\\ThirdParty\\Steamworks\\Steamv16\\Win64\\steam_api64.dll",
+        "Engine\\Binaries\\ThirdParty\\Vorbis\\Win64\\VS2015\\libvorbis_64.dll",
+        "Engine\\Binaries\\ThirdParty\\Vorbis\\Win64\\VS2015\\libvorbisfile_64.dll",
+        "Engine\\Binaries\\ThirdParty\\Windows\\XAudio2_9\\x64\\xaudio2_9redist.dll",
+        "Engine\\Binaries\\Win64\\CrashReportClient.exe",
+        "Engine\\Binaries\\Win64\\tbb12.dll",
+        "Engine\\Binaries\\Win64\\tbbmalloc.dll",
+        "Engine\\Config\\StagedBuild_Ride.ini",
+        "Engine\\Content\\Renderer\\TessellationTable.bin",
+        "Engine\\Content\\Slate\\Cursor\\invisible.cur",
+        "Engine\\Content\\SlateDebug\\Fonts\\LastResort.tps",
+        "Engine\\Content\\SlateDebug\\Fonts\\LastResort.ttf",
+        "Engine\\Extras\\Redist\\en-us\\vc_redist.arm64.exe",
+        "Engine\\Extras\\Redist\\en-us\\vc_redist.x64.exe",
+        "Engine\\Plugins\\NNE\\NNERuntimeORT\\Binaries\\ThirdParty\\Onnxruntime\\Win64\\onnxruntime.dll"
+      ]
+    },
+    {
+      "id": 1,
+      "filename": "chunk_0001.zip",
+      "hash": "794721f2c6b0617d906d46e926279d0c7535ec0f30a533783a0456d10b32cfdb",
+      "size": 47740066,
+      "compressed_size": 47740066,
+      "original_size": 47739832,
+      "file_count": 1,
+      "files": [
+        "Engine\\Programs\\CrashReportClient\\Content\\Paks\\CrashReportClient.pak"
+      ]
+    },
+    {
+      "id": 2,
+      "filename": "chunk_0002.zip",
+      "hash": "a7011e59bd8c53057449752c829507b8e15b3b0be4a57f014ef21d6ae8e6308f",
+      "size": 104857800,
+      "compressed_size": 104857800,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "Ride\\Binaries\\Win64\\Ride-Win64-Shipping.exe",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 2,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "filename": "chunk_0003.zip",
+      "hash": "06c8eb8d7f0bbfb013ec6cb85681ec0a4e17e6c7022a222dac36b44451bcc2aa",
+      "size": 57717960,
+      "compressed_size": 57717960,
+      "original_size": 57717760,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "Ride\\Binaries\\Win64\\Ride-Win64-Shipping.exe",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 2,
+          "offset": 104857600,
+          "size": 57717760
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "filename": "chunk_0004.zip",
+      "hash": "b29cfa6dff10995a921c1efa1bade583a56ef8415a1b36d6c89be731094cf27a",
+      "size": 93919297,
+      "compressed_size": 93919297,
+      "original_size": 93918365,
+      "file_count": 6,
+      "files": [
+        "Ride\\Binaries\\Win64\\tbb12.dll",
+        "Ride\\Binaries\\Win64\\tbbmalloc.dll",
+        "Ride\\Binaries\\Win64\\D3D12\\x64\\D3D12Core.dll",
+        "Ride\\Binaries\\Win64\\D3D12\\x64\\d3d12SDKLayers.dll",
+        "Ride\\Binaries\\Win64\\DML\\x64\\DirectML.dll",
+        "Ride\\Content\\Paks\\Ride-Windows.pak"
+      ]
+    },
+    {
+      "id": 5,
+      "filename": "chunk_0005.zip",
+      "hash": "5c7651e16ad35982d4270a061c7e6732b1d2bb2bf318c62afe44ed5d758f2c67",
+      "size": 104857784,
+      "compressed_size": 104857784,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "Ride\\Content\\Paks\\Ride-Windows.ucas",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 17,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "filename": "chunk_0006.zip",
+      "hash": "eec0d02854a9e2382828ae1335cc2efadc299393d5056222ecdbbb4a3a71e510",
+      "size": 104857784,
+      "compressed_size": 104857784,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "Ride\\Content\\Paks\\Ride-Windows.ucas",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 17,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "filename": "chunk_0007.zip",
+      "hash": "8706de65f5a85ceea9983c3875cbbf8634a198303d975eeeb73c04b0cb098aa2",
+      "size": 104857784,
+      "compressed_size": 104857784,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "Ride\\Content\\Paks\\Ride-Windows.ucas",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 17,
+          "offset": 209715200,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "filename": "chunk_0008.zip",
+      "hash": "17ee5f113b77ef278c7895aebd0b546063e36f529c21f2c06828228b05ede680",
+      "size": 104857784,
+      "compressed_size": 104857784,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "Ride\\Content\\Paks\\Ride-Windows.ucas",
+          "is_split": true,
+          "part_index": 3,
+          "total_parts": 17,
+          "offset": 314572800,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "filename": "chunk_0009.zip",
+      "hash": "ca16edffa8731230669d769006401edb51edb5fb0d4cd8e6b0513ff222f477ed",
+      "size": 104857784,
+      "compressed_size": 104857784,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "Ride\\Content\\Paks\\Ride-Windows.ucas",
+          "is_split": true,
+          "part_index": 4,
+          "total_parts": 17,
+          "offset": 419430400,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "filename": "chunk_0010.zip",
+      "hash": "70b401b93542fefee41d03e9e5b1c68ccf9033408764f136797a1c58905a9452",
+      "size": 104857784,
+      "compressed_size": 104857784,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "Ride\\Content\\Paks\\Ride-Windows.ucas",
+          "is_split": true,
+          "part_index": 5,
+          "total_parts": 17,
+          "offset": 524288000,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "filename": "chunk_0011.zip",
+      "hash": "a74fb359dfdfbe0da7dddfd38a769d9bdfd2600da6d79c6b2d75b3ffd7515a47",
+      "size": 104857784,
+      "compressed_size": 104857784,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "Ride\\Content\\Paks\\Ride-Windows.ucas",
+          "is_split": true,
+          "part_index": 6,
+          "total_parts": 17,
+          "offset": 629145600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "filename": "chunk_0012.zip",
+      "hash": "60a950438ed10c76c6b6d656aba737a6b3e0f0f14caa74373ca3e5f6e590893d",
+      "size": 104857784,
+      "compressed_size": 104857784,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "Ride\\Content\\Paks\\Ride-Windows.ucas",
+          "is_split": true,
+          "part_index": 7,
+          "total_parts": 17,
+          "offset": 734003200,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "filename": "chunk_0013.zip",
+      "hash": "f18d08e29e7fa68d39a5caccbf32619c756ff9741cbe8a42c075a1f7a19d88ce",
+      "size": 104857784,
+      "compressed_size": 104857784,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "Ride\\Content\\Paks\\Ride-Windows.ucas",
+          "is_split": true,
+          "part_index": 8,
+          "total_parts": 17,
+          "offset": 838860800,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "filename": "chunk_0014.zip",
+      "hash": "4ec9711330af77f588fdfcf5659d233031d274535f79518c841e8f0e69556f19",
+      "size": 104857784,
+      "compressed_size": 104857784,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "Ride\\Content\\Paks\\Ride-Windows.ucas",
+          "is_split": true,
+          "part_index": 9,
+          "total_parts": 17,
+          "offset": 943718400,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "filename": "chunk_0015.zip",
+      "hash": "fdaf4b71a21ee728f2fdeee8f2e0153da39a730c6a4e62b54f290f312369bcdc",
+      "size": 104857784,
+      "compressed_size": 104857784,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "Ride\\Content\\Paks\\Ride-Windows.ucas",
+          "is_split": true,
+          "part_index": 10,
+          "total_parts": 17,
+          "offset": 1048576000,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "filename": "chunk_0016.zip",
+      "hash": "23a1562664855d2b0cbf17512c94f3d2cc938a04d355da27e19393902039642a",
+      "size": 104857784,
+      "compressed_size": 104857784,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "Ride\\Content\\Paks\\Ride-Windows.ucas",
+          "is_split": true,
+          "part_index": 11,
+          "total_parts": 17,
+          "offset": 1153433600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "filename": "chunk_0017.zip",
+      "hash": "45556a333fa47e9b1a78d25af40d527f502a895f5980eb1a9fc3b6a2328443f2",
+      "size": 104857784,
+      "compressed_size": 104857784,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "Ride\\Content\\Paks\\Ride-Windows.ucas",
+          "is_split": true,
+          "part_index": 12,
+          "total_parts": 17,
+          "offset": 1258291200,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "filename": "chunk_0018.zip",
+      "hash": "4072825b54bb6ef52f6e15c9261564ef7f956e501810129ee23bbac6816ed285",
+      "size": 104857784,
+      "compressed_size": 104857784,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "Ride\\Content\\Paks\\Ride-Windows.ucas",
+          "is_split": true,
+          "part_index": 13,
+          "total_parts": 17,
+          "offset": 1363148800,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "filename": "chunk_0019.zip",
+      "hash": "45456d3068ceb832f5e30846c602e536b7cc237e971a3c5da2263ac376efdea8",
+      "size": 104857784,
+      "compressed_size": 104857784,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "Ride\\Content\\Paks\\Ride-Windows.ucas",
+          "is_split": true,
+          "part_index": 14,
+          "total_parts": 17,
+          "offset": 1468006400,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "filename": "chunk_0020.zip",
+      "hash": "e07a1c6e4042b0da4548b1451f0319e5ba252aeb8f91d67d0b29c68317107d39",
+      "size": 104857784,
+      "compressed_size": 104857784,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "Ride\\Content\\Paks\\Ride-Windows.ucas",
+          "is_split": true,
+          "part_index": 15,
+          "total_parts": 17,
+          "offset": 1572864000,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "filename": "chunk_0021.zip",
+      "hash": "878b4de7586737c17d959adcd95af4be9a9fbae7478ba5cf525f762da5a1251c",
+      "size": 79100024,
+      "compressed_size": 79100024,
+      "original_size": 79099840,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "Ride\\Content\\Paks\\Ride-Windows.ucas",
+          "is_split": true,
+          "part_index": 16,
+          "total_parts": 17,
+          "offset": 1677721600,
+          "size": 79099840
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "filename": "chunk_0022.zip",
+      "hash": "d35ec4b33559de120dc687c8649fd33f4b8ca6b85faf77f43cc5b209dbf45329",
+      "size": 65340376,
+      "compressed_size": 65340376,
+      "original_size": 65338852,
+      "file_count": 9,
+      "files": [
+        "Ride\\Content\\Paks\\Ride-Windows.utoc",
+        "Ride\\Content\\Paks\\global.ucas",
+        "Ride\\Content\\Paks\\global.utoc",
+        "Ride\\Content\\Paks\\Ride\\Content\\Localization\\Game\\en\\Game.locres",
+        "Ride\\Content\\Splash\\Splash.bmp",
+        "Ride\\Plugins\\DLSS\\Binaries\\ThirdParty\\Win64\\nvngx_dlss.dll",
+        "Ride\\Plugins\\DLSS\\Binaries\\ThirdParty\\Win64\\nvngx_dlssd.dll",
+        "Ride\\Plugins\\Sentry\\Binaries\\Win64\\crashpad_handler.exe",
+        "Ride\\Plugins\\Sentry\\Binaries\\Win64\\crashpad_wer.dll"
+      ]
+    }
+  ],
+  "hf_repo_id": "MangaVNteam/Assassin-Creed-Odyssey-Crack",
+  "hf_repo": "MangaVNteam/Assassin-Creed-Odyssey-Crack",
+  "hf_repo_type": "dataset",
+  "hf_revision": "main",
+  "hf_folder": "RV THERE YET/RV THERE YET? 1.0.14956",
+  "hf_game_path": "RV THERE YET/RV THERE YET? 1.0.14956",
+  "hf_base_url": "https://huggingface.co/datasets/MangaVNteam/Assassin-Creed-Odyssey-Crack/resolve/main",
+  "updated_at": "2026-02-08 19:25:18",
+  "app_id": "3949040",
+  "steam_app_id": "3949040"
+}

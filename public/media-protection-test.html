@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Media Protection Test</title>
+  <style>
+    body {
+      background: #1a1a1a;
+      color: white;
+      font-family: Arial, sans-serif;
+      padding: 40px;
+    }
+    .test-section {
+      margin: 30px 0;
+      padding: 20px;
+      background: #2a2a2a;
+      border-radius: 8px;
+    }
+    h1 { color: #38bdf8; }
+    h2 { color: #a78bfa; margin-bottom: 15px; }
+    .test-item {
+      margin: 15px 0;
+    }
+    img, video {
+      max-width: 400px;
+      border: 2px solid #444;
+      border-radius: 4px;
+    }
+    .status {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 4px;
+      margin-left: 10px;
+      font-weight: bold;
+    }
+    .protected { background: #22c55e; color: black; }
+    .warning { background: #f59e0b; color: black; }
+    ul {
+      list-style: none;
+      padding-left: 0;
+    }
+    li {
+      padding: 8px 0;
+    }
+    li::before {
+      content: "✓ ";
+      color: #22c55e;
+      font-weight: bold;
+      margin-right: 8px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🛡️ Media Protection Test - Otoshi Launcher</h1>
+
+  <div class="test-section">
+    <h2>1. Test Image Protection</h2>
+    <div class="test-item">
+      <img
+        src="https://cdn.cloudflare.steamstatic.com/steam/apps/2358720/header.jpg"
+        alt="Black Myth Wukong"
+        id="test-image"
+      />
+      <p>Thử test:</p>
+      <ul>
+        <li>Click chuột phải → Nên bị chặn</li>
+        <li>Kéo hình ảnh ra ngoài → Không được</li>
+        <li>Nhấn Ctrl+S → Không save được</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="test-section">
+    <h2>2. Test Video Protection</h2>
+    <div class="test-item">
+      <video
+        id="test-video"
+        poster="https://cdn.cloudflare.steamstatic.com/steam/apps/1245620/header.jpg"
+        controls
+        controlsList="nodownload nofullscreen noremoteplayback"
+        disablePictureInPicture
+      >
+        <source src="https://cdn.cloudflare.steamstatic.com/steam/apps/256843493/movie_max.mp4" type="video/mp4">
+      </video>
+      <p>Thử test:</p>
+      <ul>
+        <li>Di chuột vào video → IDM không hiện nút download</li>
+        <li>Click chuột phải → Menu không có "Save video"</li>
+        <li>Video controls → Không có nút download</li>
+        <li>Kéo video → Không được</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="test-section">
+    <h2>3. Protection Status</h2>
+    <div id="status-output">
+      <p>⏳ Đang kiểm tra...</p>
+    </div>
+  </div>
+
+  <script>
+    // Apply media protection
+    function applyProtection() {
+      const protectionProps = {
+        contextmenu: (e) => {
+          e.preventDefault();
+          console.log('✅ Right-click blocked!');
+          return false;
+        },
+        dragstart: (e) => {
+          e.preventDefault();
+          console.log('✅ Drag blocked!');
+          return false;
+        },
+        mousedown: (e) => {
+          e.preventDefault();
+          console.log('✅ Selection blocked!');
+        }
+      };
+
+      // Apply to image
+      const img = document.getElementById('test-image');
+      img.draggable = false;
+      img.style.userSelect = 'none';
+      img.style.webkitUserSelect = 'none';
+      img.style.userDrag = 'none';
+      img.style.webkitUserDrag = 'none';
+      Object.keys(protectionProps).forEach(event => {
+        img.addEventListener(event, protectionProps[event]);
+      });
+
+      // Apply to video
+      const video = document.getElementById('test-video');
+      video.draggable = false;
+      video.style.userSelect = 'none';
+      video.style.webkitUserSelect = 'none';
+      video.style.userDrag = 'none';
+      video.style.webkitUserDrag = 'none';
+      Object.keys(protectionProps).forEach(event => {
+        video.addEventListener(event, protectionProps[event]);
+      });
+
+      // Inject global CSS
+      const style = document.createElement('style');
+      style.textContent = `
+        img, video {
+          -webkit-user-select: none !important;
+          -moz-user-select: none !important;
+          user-select: none !important;
+          -webkit-user-drag: none !important;
+          user-drag: none !important;
+        }
+        [id*="IDM"], [class*="IDM"] {
+          display: none !important;
+        }
+        *::-webkit-media-controls-download-button {
+          display: none !important;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    // Check protection status
+    function checkStatus() {
+      const statusEl = document.getElementById('status-output');
+      const checks = [];
+
+      // Check image draggable
+      const img = document.getElementById('test-image');
+      checks.push(`Image draggable: ${img.draggable} <span class="status ${!img.draggable ? 'protected' : 'warning'}">${!img.draggable ? 'PROTECTED' : 'VULNERABLE'}</span>`);
+
+      // Check video draggable
+      const video = document.getElementById('test-video');
+      checks.push(`Video draggable: ${video.draggable} <span class="status ${!video.draggable ? 'protected' : 'warning'}">${!video.draggable ? 'PROTECTED' : 'VULNERABLE'}</span>`);
+
+      // Check controlsList
+      const hasNoDownload = video.controlsList.contains('nodownload');
+      checks.push(`Video download hidden: ${hasNoDownload} <span class="status ${hasNoDownload ? 'protected' : 'warning'}">${hasNoDownload ? 'PROTECTED' : 'VULNERABLE'}</span>`);
+
+      // Check disablePictureInPicture
+      checks.push(`PiP disabled: ${video.disablePictureInPicture} <span class="status ${video.disablePictureInPicture ? 'protected' : 'warning'}">${video.disablePictureInPicture ? 'PROTECTED' : 'VULNERABLE'}</span>`);
+
+      statusEl.innerHTML = '<ul>' + checks.map(c => `<li>${c}</li>`).join('') + '</ul>';
+    }
+
+    // Initialize
+    applyProtection();
+    setTimeout(checkStatus, 100);
+
+    // Log to console
+    console.log('%c🛡️ Media Protection Test Initialized', 'color: #38bdf8; font-size: 16px; font-weight: bold;');
+    console.log('Try to:');
+    console.log('1. Right-click on image/video');
+    console.log('2. Drag image/video');
+    console.log('3. Press Ctrl+S on media');
+    console.log('4. Look for IDM overlay button');
+  </script>
+</body>
+</html>

@@ -1,0 +1,704 @@
+{
+  "version": "Silent Hill F DLC",
+  "game_name": "Silent Hill f DLC",
+  "created_at": "2026-01-10 16:33:19",
+  "compression": "HYBRID (Thông minh - Max)",
+  "chunk_size_mb": 100.0,
+  "total_chunks": 35,
+  "total_size": 3201968974,
+  "total_original_size": 3201952210,
+  "compression_ratio": -0.0005235555967209038,
+  "chunks": [
+    {
+      "id": 0,
+      "filename": "chunk_0000.zip",
+      "hash": "a0d525bfa1ee4d85d425e72333909b311503d25d9530d624224fe3c14ce09d67",
+      "size": 50213582,
+      "compressed_size": 50213582,
+      "original_size": 50213264,
+      "file_count": 2,
+      "files": [
+        "SHf_BonusContent.exe",
+        "SHf_BonusContent\\Binaries\\Win64\\OpenImageDenoise.dll"
+      ]
+    },
+    {
+      "id": 1,
+      "filename": "chunk_0001.zip",
+      "hash": "81857f59808f525276c1682f66d09336b19dcd23cfb34b51336a1aecc9cc9765",
+      "size": 104857848,
+      "compressed_size": 104857848,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Binaries\\Win64\\SHf_BonusContent-Win64-Shipping.exe",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 2,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "filename": "chunk_0002.zip",
+      "hash": "dcecffd80cd289ac7d0e1ad2d6839b852672ca2d428c6cd806ac3253a0369882",
+      "size": 33763576,
+      "compressed_size": 33763576,
+      "original_size": 33763328,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Binaries\\Win64\\SHf_BonusContent-Win64-Shipping.exe",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 2,
+          "offset": 104857600,
+          "size": 33763328
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "filename": "chunk_0003.zip",
+      "hash": "7c2deeb0fb75ec6e8fd54a77aeebba7b4ac987a2ddb2845589f6651d91bce296",
+      "size": 16036130,
+      "compressed_size": 16036130,
+      "original_size": 16034896,
+      "file_count": 7,
+      "files": [
+        "SHf_BonusContent\\Binaries\\Win64\\tbb.dll",
+        "SHf_BonusContent\\Binaries\\Win64\\tbb12.dll",
+        "SHf_BonusContent\\Binaries\\Win64\\tbbmalloc.dll",
+        "SHf_BonusContent\\Binaries\\Win64\\D3D12\\D3D12Core.dll",
+        "SHf_BonusContent\\Binaries\\Win64\\D3D12\\d3d12SDKLayers.dll",
+        "SHf_BonusContent\\Content\\Legal\\License\\LICENSE.txt",
+        "SHf_BonusContent\\Content\\Legal\\SCE_License\\SCE_License.txt"
+      ]
+    },
+    {
+      "id": 4,
+      "filename": "chunk_0004.zip",
+      "hash": "1147c9b132e485997b4ebef128cee0e99d9a0780d3c51b4a47b40405d6bf3611",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 27,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "filename": "chunk_0005.zip",
+      "hash": "c53f4e2136195dd7d6c4309fbec48e39e089f086bdac7474202088b45af29991",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 27,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "filename": "chunk_0006.zip",
+      "hash": "513b9a7836ba132d065a3f8ad56786c01e77d7a9167bc0e79e9b1a12b68f2dac",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 27,
+          "offset": 209715200,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "filename": "chunk_0007.zip",
+      "hash": "f709dcf9e12c3130f78f0aa8440b12ddb0b8ca93b594eb34f881e0834eba8614",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 3,
+          "total_parts": 27,
+          "offset": 314572800,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "filename": "chunk_0008.zip",
+      "hash": "eaadee4fb4b94e0c53fdd81f62c5ac984b013ddb526a1f8865726626e515d9ca",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 4,
+          "total_parts": 27,
+          "offset": 419430400,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "filename": "chunk_0009.zip",
+      "hash": "bffee83eeb6c905d11c7bebbd7482fa4dff01992ef817e305ad88efc02912fe8",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 5,
+          "total_parts": 27,
+          "offset": 524288000,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "filename": "chunk_0010.zip",
+      "hash": "d6f0b33b5f58960746f2a350ab48f83009d04ec18d2f105112bba3861eb2638a",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 6,
+          "total_parts": 27,
+          "offset": 629145600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "filename": "chunk_0011.zip",
+      "hash": "5e25a150c6f17cd24672032d5817ab58cf019981e753e1d41441b786d8356417",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 7,
+          "total_parts": 27,
+          "offset": 734003200,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "filename": "chunk_0012.zip",
+      "hash": "3702714796bf3aafef115b710dbf452b2de3047262e2e0ea63d9fc717edce426",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 8,
+          "total_parts": 27,
+          "offset": 838860800,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "filename": "chunk_0013.zip",
+      "hash": "b07703491ad9ac28f74ebb78f74dc73888005242a5f53c71e5eb6375703c6454",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 9,
+          "total_parts": 27,
+          "offset": 943718400,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "filename": "chunk_0014.zip",
+      "hash": "1977f69f77f68f57f3eab12452370344c64ed5587e2763efffaec119983aedce",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 10,
+          "total_parts": 27,
+          "offset": 1048576000,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "filename": "chunk_0015.zip",
+      "hash": "c8de1a0b11c736590573b5e9b39b03ef1b4b8d1674a1db1f6e2b739b31d876c3",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 11,
+          "total_parts": 27,
+          "offset": 1153433600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "filename": "chunk_0016.zip",
+      "hash": "b06e4dbeb03172eefed333dbf742b349e42fc6a2472a054c034bda30b5b74ffb",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 12,
+          "total_parts": 27,
+          "offset": 1258291200,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "filename": "chunk_0017.zip",
+      "hash": "9bd5f48fa5f42c441241fa6fc51e8cdf0033cd69cd189f28528efd90a29ce749",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 13,
+          "total_parts": 27,
+          "offset": 1363148800,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "filename": "chunk_0018.zip",
+      "hash": "17b0b0f12f89af7daefc646e88557f55f42f29e0ed41567c72c9b5ddb02a36a8",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 14,
+          "total_parts": 27,
+          "offset": 1468006400,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "filename": "chunk_0019.zip",
+      "hash": "7c21b35205597028b426f75b89f6b10283866b7529a26c008d8f6cfa9c6d0f74",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 15,
+          "total_parts": 27,
+          "offset": 1572864000,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "filename": "chunk_0020.zip",
+      "hash": "0c151bf9b009ca33e17a41b9e4dcb00c1efbf84f9cf39b43b20c4c349168d4c1",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 16,
+          "total_parts": 27,
+          "offset": 1677721600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "filename": "chunk_0021.zip",
+      "hash": "caacb1df64ca1bc065c57a6745433eeb11323d81b2d264959c5788629d83b284",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 17,
+          "total_parts": 27,
+          "offset": 1782579200,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "filename": "chunk_0022.zip",
+      "hash": "7805579581989ed7ba0af30a348b913f410d19d034f1bc3dca477ad064466dbf",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 18,
+          "total_parts": 27,
+          "offset": 1887436800,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "filename": "chunk_0023.zip",
+      "hash": "72beec91a5a3f08e89fb9a98eda03a18c0509f51aa4c1ad922bc53744b81b97e",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 19,
+          "total_parts": 27,
+          "offset": 1992294400,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "filename": "chunk_0024.zip",
+      "hash": "b7d15bb1324a15eb25aa78c095fe76519f490dd9b3cf59e172e807432e1be8c9",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 20,
+          "total_parts": 27,
+          "offset": 2097152000,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "filename": "chunk_0025.zip",
+      "hash": "a91764cacc76720f26b0500efa8513580b8840372b2065b62e1eff741c4eb336",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 21,
+          "total_parts": 27,
+          "offset": 2202009600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "filename": "chunk_0026.zip",
+      "hash": "2a732c91c8ec4759534cee65d3a693571e8d5796b310234fb4dfa44f4c54153d",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 22,
+          "total_parts": 27,
+          "offset": 2306867200,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "filename": "chunk_0027.zip",
+      "hash": "cdcedaa8a3cfd7b6fc0855578f36c32c21aa97437fcdc317ae29a3a30a586ac2",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 23,
+          "total_parts": 27,
+          "offset": 2411724800,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 28,
+      "filename": "chunk_0028.zip",
+      "hash": "f9b839e5ba3eb3d0e0fb853286c1f3142e7f23b7bfe8929a18e0b7a4685ef1ec",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 24,
+          "total_parts": 27,
+          "offset": 2516582400,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 29,
+      "filename": "chunk_0029.zip",
+      "hash": "fed7d32acbfbf813a019e0979a3ef9475e540cbcdd788fe7836bcd7caabe305d",
+      "size": 104857830,
+      "compressed_size": 104857830,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 25,
+          "total_parts": 27,
+          "offset": 2621440000,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "filename": "chunk_0030.zip",
+      "hash": "d0ffbc6105fe9eea23edb935400b00f0e765839f73c4aca2221f38e94a1f9db7",
+      "size": 29751529,
+      "compressed_size": 29751529,
+      "original_size": 29751299,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.pak",
+          "is_split": true,
+          "part_index": 26,
+          "total_parts": 27,
+          "offset": 2726297600,
+          "size": 29751299
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "filename": "chunk_0031.zip",
+      "hash": "3053be63f5942cf6875d767420bec5e716d8a3333d89465038048d0b6a27cef1",
+      "size": 104857832,
+      "compressed_size": 104857832,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.ucas",
+          "is_split": true,
+          "part_index": 0,
+          "total_parts": 3,
+          "offset": 0,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "filename": "chunk_0032.zip",
+      "hash": "16c6c03e889a4a3eaa8dc3bc0bd88d28fc639efb5b1ad07fde84d56ab8b269b1",
+      "size": 104857832,
+      "compressed_size": 104857832,
+      "original_size": 104857600,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.ucas",
+          "is_split": true,
+          "part_index": 1,
+          "total_parts": 3,
+          "offset": 104857600,
+          "size": 104857600
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "filename": "chunk_0033.zip",
+      "hash": "b107439c41678efb2654509702c286ee001829a3ae6d2ad5fe2506042fa07878",
+      "size": 22284200,
+      "compressed_size": 22284200,
+      "original_size": 22283968,
+      "file_count": 1,
+      "files": [
+        {
+          "path": "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.ucas",
+          "is_split": true,
+          "part_index": 2,
+          "total_parts": 3,
+          "offset": 209715200,
+          "size": 22283968
+        }
+      ]
+    },
+    {
+      "id": 34,
+      "filename": "chunk_0034.zip",
+      "hash": "c361f8a5ff09b7f338d56ede8588a6e0a77278dd05fd5b0fe400af2b78b76fb6",
+      "size": 9042865,
+      "compressed_size": 9042865,
+      "original_size": 9035055,
+      "file_count": 31,
+      "files": [
+        "SHf_BonusContent\\Content\\Paks\\SHf_BonusContent-Windows.utoc",
+        "SHf_BonusContent\\Content\\Paks\\global.ucas",
+        "SHf_BonusContent\\Content\\Paks\\global.utoc",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\Ak3DAudioBedMixer.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkAudioInput.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkCompressor.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkConvolutionReverb.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkDelay.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkExpander.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkFlanger.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkGain.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkGuitarDistortion.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkHarmonizer.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkMatrixReverb.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkMotion.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkParametricEQ.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkPeakLimiter.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkPitchShifter.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkRecorder.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkReflect.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkRoomVerb.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkSilenceGenerator.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkSineTone.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkSoundEngineDLL.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkStereoDelay.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkSynthOne.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkTimeStretch.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkToneGen.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\AkTremolo.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\MSSpatial.dll",
+        "SHf_BonusContent\\Plugins\\Marketplace\\Wwise\\ThirdParty\\x64_vc170\\Release\\bin\\MasteringSuite.dll"
+      ]
+    }
+  ],
+  "hf_repo_id": "MangaVNteam/Assassin-Creed-Odyssey-Crack",
+  "hf_repo": "MangaVNteam/Assassin-Creed-Odyssey-Crack",
+  "hf_repo_type": "dataset",
+  "hf_revision": "main",
+  "hf_folder": "SILENT HILL F/Silent Hill F DLC",
+  "hf_game_path": "SILENT HILL F/Silent Hill F DLC",
+  "hf_base_url": "https://huggingface.co/datasets/MangaVNteam/Assassin-Creed-Odyssey-Crack/resolve/main",
+  "updated_at": "2026-02-08 19:25:18",
+  "app_id": "3282720",
+  "steam_app_id": "3282720"
+}

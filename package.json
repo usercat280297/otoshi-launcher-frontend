@@ -1,0 +1,47 @@
+{
+  "name": "otoshi-launcher-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "powershell -NoProfile -ExecutionPolicy Bypass -File \"scripts\\dev.ps1\"",
+    "dev:frontend": "vite --open",
+    "dev:backend": "powershell -NoProfile -ExecutionPolicy Bypass -File \"..\\backend\\scripts\\dev.ps1\"",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "type-check": "tsc --noEmit",
+    "i18n:audit": "powershell -NoProfile -ExecutionPolicy Bypass -File \"..\\scripts\\i18n_audit.ps1\" -Root \"src\"",
+    "lint": "eslint src --ext .ts,.tsx",
+    "tauri": "tauri",
+    "tauri:build": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$env:CI='false'; npm run tauri -- build\"",
+    "tauri:dev": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$env:CI='false'; npm run tauri -- dev\""
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-dialog": "^2.0.0",
+    "@tauri-apps/plugin-shell": "^2.3.4",
+    "framer-motion": "^11.0.0",
+    "hls.js": "^1.5.20",
+    "lucide-react": "^0.451.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.27.0",
+    "react-virtualized-auto-sizer": "^1.0.24",
+    "react-window": "^1.8.10"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0",
+    "@types/node": "^25.1.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/react-window": "^1.8.8",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.19",
+    "concurrently": "^9.0.1",
+    "postcss": "^8.4.38",
+    "rollup-plugin-visualizer": "^5.12.0",
+    "tailwindcss": "^3.4.7",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.8"
+  }
+}

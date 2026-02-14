@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.production.local
+*.log
+coverage/
+.DS_Store
+Thumbs.db
+src-tauri/target/
+src-tauri/.tauri/
+src-tauri/logs/
