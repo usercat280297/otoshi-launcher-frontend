@@ -42,6 +42,7 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
   const hlsRef = useRef<Hls | null>(null);
   const waitingTimerRef = useRef<number | null>(null);
   const hasVideoStartedRef = useRef(false);
+  const loadedVideoKeysRef = useRef<Set<string>>(new Set());
 
   const clearWaitingTimer = () => {
     if (waitingTimerRef.current !== null) {
@@ -81,21 +82,29 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
 
   const current = media[activeIndex];
   const currentVideo = current?.type === "video" ? current : null;
+  const currentVideoKey =
+    currentVideo ? `${currentVideo.hls ?? ""}::${currentVideo.url}` : null;
+  const currentVideoAlreadyLoaded = Boolean(
+    currentVideoKey && loadedVideoKeysRef.current.has(currentVideoKey)
+  );
   const shouldLoadVideo = isInView && Boolean(currentVideo);
-  const canUseHls = Boolean(shouldLoadVideo && currentVideo?.hls && Hls.isSupported());
+  const canUseHls = Boolean(
+    shouldLoadVideo && currentVideo?.hls && !currentVideo?.url && Hls.isSupported()
+  );
 
   useEffect(() => {
     if (!current) return;
     if (current.type === "video") {
-      hasVideoStartedRef.current = false;
-      setVideoLoading(shouldLoadVideo);
+      clearWaitingTimer();
+      hasVideoStartedRef.current = currentVideoAlreadyLoaded;
+      setVideoLoading(shouldLoadVideo && !currentVideoAlreadyLoaded);
       setImageLoading(false);
       return;
     }
     clearWaitingTimer();
     setImageLoading(true);
     setVideoLoading(false);
-  }, [current?.type, current?.url, shouldLoadVideo]);
+  }, [current?.type, current?.url, currentVideoAlreadyLoaded, shouldLoadVideo]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -111,6 +120,13 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
       }
       return;
     }
+    if (!currentVideoKey) {
+      return;
+    }
+    if (video.dataset.mediaKey === currentVideoKey) {
+      return;
+    }
+    video.dataset.mediaKey = currentVideoKey;
     if (canUseHls && currentVideo.hls) {
       if (hlsRef.current) {
         hlsRef.current.destroy();
@@ -148,7 +164,7 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
-    if (currentVideo.hls && video.canPlayType("application/vnd.apple.mpegurl")) {
+    if (currentVideo.hls && !currentVideo.url && video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = currentVideo.hls;
       video.load();
       return;
@@ -157,7 +173,13 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
       video.src = currentVideo.url;
       video.load();
     }
-  }, [canUseHls, currentVideo, shouldLoadVideo]);
+  }, [
+    canUseHls,
+    currentVideo?.hls,
+    currentVideo?.url,
+    currentVideoKey,
+    shouldLoadVideo
+  ]);
 
   useEffect(() => () => clearWaitingTimer(), []);
 
@@ -178,6 +200,14 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
   };
 
   const containerClassName = ["space-y-4", className].filter(Boolean).join(" ");
+  const markVideoReady = () => {
+    clearWaitingTimer();
+    if (currentVideoKey) {
+      loadedVideoKeysRef.current.add(currentVideoKey);
+    }
+    hasVideoStartedRef.current = true;
+    setVideoLoading(false);
+  };
 
   return (
     <div ref={containerRef} className={containerClassName}>
@@ -200,7 +230,11 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
                 controlsList="nodownload"
                 disablePictureInPicture
                 onLoadStart={() => {
-                  if (shouldLoadVideo && !hasVideoStartedRef.current) {
+                  if (
+                    shouldLoadVideo &&
+                    currentVideoKey &&
+                    !loadedVideoKeysRef.current.has(currentVideoKey)
+                  ) {
                     setVideoLoading(true);
                   }
                 }}
@@ -215,36 +249,15 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
                   if (hasVideoStartedRef.current) {
                     return;
                   }
+                  if (videoEl.currentTime > 0.01) {
+                    return;
+                  }
                   scheduleBufferingOverlay();
                 }}
-                onCanPlay={() => {
-                  clearWaitingTimer();
-                  if (!hasVideoStartedRef.current) {
-                    hasVideoStartedRef.current = true;
-                  }
-                  setVideoLoading(false);
-                }}
-                onCanPlayThrough={() => {
-                  clearWaitingTimer();
-                  if (!hasVideoStartedRef.current) {
-                    hasVideoStartedRef.current = true;
-                  }
-                  setVideoLoading(false);
-                }}
-                onPlaying={() => {
-                  clearWaitingTimer();
-                  if (!hasVideoStartedRef.current) {
-                    hasVideoStartedRef.current = true;
-                  }
-                  setVideoLoading(false);
-                }}
-                onLoadedData={() => {
-                  clearWaitingTimer();
-                  if (!hasVideoStartedRef.current) {
-                    hasVideoStartedRef.current = true;
-                  }
-                  setVideoLoading(false);
-                }}
+                onCanPlay={markVideoReady}
+                onCanPlayThrough={markVideoReady}
+                onPlaying={markVideoReady}
+                onLoadedData={markVideoReady}
                 onError={() => {
                   clearWaitingTimer();
                   setVideoLoading(false);
@@ -281,13 +294,13 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
           <>
             <button
               onClick={goPrevious}
-              className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full border border-background-border bg-background/80 p-2 text-text-secondary opacity-0 transition group-hover:opacity-100 hover:text-text-primary"
+              className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full border border-background-border bg-background/80 p-2 text-text-secondary opacity-100 transition hover:text-text-primary md:left-4 md:opacity-0 md:group-hover:opacity-100"
             >
               <ChevronLeft size={18} />
             </button>
             <button
               onClick={goNext}
-              className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full border border-background-border bg-background/80 p-2 text-text-secondary opacity-0 transition group-hover:opacity-100 hover:text-text-primary"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-background-border bg-background/80 p-2 text-text-secondary opacity-100 transition hover:text-text-primary md:right-4 md:opacity-0 md:group-hover:opacity-100"
             >
               <ChevronRight size={18} />
             </button>
@@ -295,12 +308,12 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
         )}
       </div>
 
-      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-elegant">
+      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-elegant md:gap-3">
         {media.map((item, index) => (
           <button
             key={`${item.type}-${index}`}
             onClick={() => setActiveIndex(index)}
-            className={`relative h-20 w-32 flex-shrink-0 overflow-hidden rounded-lg border transition ${
+            className={`relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-lg border transition md:h-20 md:w-32 ${
               index === activeIndex
                 ? "border-primary"
                 : "border-transparent hover:border-background-border"

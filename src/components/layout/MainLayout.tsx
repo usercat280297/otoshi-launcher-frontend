@@ -22,13 +22,13 @@ export default function MainLayout() {
   }, []);
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-background text-text-primary">
-      <div className="flex h-full w-full">
+    <div className="min-h-[100dvh] w-screen overflow-hidden bg-background text-text-primary">
+      <div className="flex min-h-[100dvh] w-full">
         <Sidebar />
         <div className="relative z-0 flex flex-1 flex-col overflow-hidden bg-background">
           <TopBar />
           <main className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-elegant">
-            <div className="mx-auto w-full max-w-[1400px] px-6 pb-24 pt-6 md:px-10 md:pb-12">
+            <div className="mx-auto w-full max-w-[1400px] px-4 pb-24 pt-4 sm:px-6 md:px-10 md:pb-12 md:pt-6">
               <Outlet />
             </div>
           </main>

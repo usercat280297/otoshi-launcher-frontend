@@ -540,13 +540,17 @@ export default function DownloadLauncherPage() {
       const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
       const envOverride =
         kind === "portable" ? import.meta.env.VITE_PORTABLE_URL : import.meta.env.VITE_INSTALLER_URL;
+      const staticFallback =
+        kind === "portable"
+          ? "/downloads/OtoshiLauncher-Portable.zip"
+          : "/downloads/OtoshiLauncher-Setup.exe";
       if (envOverride) {
         return String(envOverride);
       }
 
       const artifact = artifactList.find((item) => item.kind === kind);
       if (!artifact?.download_url) {
-        return null;
+        return staticFallback;
       }
       if (/^https?:\/\//i.test(artifact.download_url)) {
         return artifact.download_url;

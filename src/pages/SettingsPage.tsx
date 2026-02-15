@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bell, Download, Shield, User } from "lucide-react";
+import { Bell, Download, ExternalLink, Info, Shield, User } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useAuth } from "../context/AuthContext";
+import { useLocale } from "../context/LocaleContext";
 import Input from "../components/common/Input";
 import Button from "../components/common/Button";
+import { openExternal } from "../utils/openExternal";
 
-type SettingsSection = "account" | "downloads" | "notifications" | "privacy";
+type SettingsSection = "account" | "downloads" | "notifications" | "privacy" | "about";
 
 type SettingsState = {
   displayName: string;
@@ -48,6 +50,7 @@ const isTauriRuntime = () =>
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const { t } = useLocale();
   const [activeSection, setActiveSection] = useState<SettingsSection>("account");
   const [status, setStatus] = useState<string | null>(null);
   const [settings, setSettings] = useState<SettingsState>(() => {
@@ -112,11 +115,12 @@ export default function SettingsPage() {
   const sections = useMemo(
     () => [
       { id: "account" as const, label: "Account", icon: User },
-      { id: "downloads" as const, label: "Downloads", icon: Download },
-      { id: "notifications" as const, label: "Notifications", icon: Bell },
-      { id: "privacy" as const, label: "Privacy", icon: Shield }
+      { id: "downloads" as const, label: t("settings.downloads"), icon: Download },
+      { id: "notifications" as const, label: t("settings.notifications"), icon: Bell },
+      { id: "privacy" as const, label: t("settings.privacy"), icon: Shield },
+      { id: "about" as const, label: t("settings.about"), icon: Info }
     ],
-    []
+    [t]
   );
 
   const applyDownloadLimit = async () => {
@@ -141,31 +145,33 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-3xl font-semibold">Settings</h2>
+        <h2 className="text-3xl font-semibold">{t("nav.settings")}</h2>
         <p className="text-text-secondary">
-          Manage account, downloads, and privacy preferences.
+          Manage account, download, privacy, and launcher details.
         </p>
       </div>
 
       <div className="flex flex-col gap-6 lg:flex-row">
-        <aside className="glass-panel w-full space-y-2 p-4 lg:w-64">
-          {sections.map((section) => {
-            const Icon = section.icon;
-            return (
-              <button
-                key={section.id}
-                onClick={() => setActiveSection(section.id)}
-                className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm transition ${
-                  activeSection === section.id
-                    ? "bg-primary text-black"
-                    : "text-text-secondary hover:bg-background-muted hover:text-text-primary"
-                }`}
-              >
-                <Icon size={18} />
-                {section.label}
-              </button>
-            );
-          })}
+        <aside className="glass-panel w-full p-3 lg:w-64 lg:p-4">
+          <div className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible">
+            {sections.map((section) => {
+              const Icon = section.icon;
+              return (
+                <button
+                  key={section.id}
+                  onClick={() => setActiveSection(section.id)}
+                  className={`flex shrink-0 items-center gap-3 rounded-lg px-4 py-3 text-sm transition lg:w-full ${
+                    activeSection === section.id
+                      ? "bg-primary text-black"
+                      : "text-text-secondary hover:bg-background-muted hover:text-text-primary"
+                  }`}
+                >
+                  <Icon size={18} />
+                  <span className="whitespace-nowrap">{section.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </aside>
 
         <section className="flex-1 space-y-6">
@@ -315,6 +321,61 @@ export default function SettingsPage() {
                   />
                 </label>
               ))}
+            </div>
+          )}
+
+          {activeSection === "about" && (
+            <div className="glass-panel space-y-6 p-6">
+              <div>
+                <h3 className="section-title">{t("settings.about")}</h3>
+                <p className="text-sm text-text-secondary">
+                  Build information and official resources.
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="glass-card p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-text-muted">Version</p>
+                  <p className="mt-1 text-base font-semibold text-text-primary">
+                    {import.meta.env.VITE_APP_VERSION || "desktop build"}
+                  </p>
+                </div>
+                <div className="glass-card p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-text-muted">Runtime</p>
+                  <p className="mt-1 text-base font-semibold text-text-primary">
+                    {isTauriRuntime() ? "Desktop (Tauri)" : "Web"}
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Button
+                  variant="secondary"
+                  icon={<ExternalLink size={16} />}
+                  onClick={() => void openExternal("https://www.otoshi-launcher.me")}
+                >
+                  Official Website
+                </Button>
+                <Button
+                  variant="secondary"
+                  icon={<ExternalLink size={16} />}
+                  onClick={() => void openExternal("https://www.otoshi-launcher.me/privacy-policy")}
+                >
+                  Privacy Policy
+                </Button>
+                <Button
+                  variant="secondary"
+                  icon={<ExternalLink size={16} />}
+                  onClick={() => void openExternal("https://www.otoshi-launcher.me/terms-of-service")}
+                >
+                  Terms of Service
+                </Button>
+                <Button
+                  variant="secondary"
+                  icon={<ExternalLink size={16} />}
+                  onClick={() => void openExternal("https://discord.gg/6q7YRdWGZJ")}
+                >
+                  Discord Support
+                </Button>
+              </div>
             </div>
           )}
         </section>

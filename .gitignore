@@ -13,3 +13,5 @@ src-tauri/logs/
 src-tauri/resources/backend/
 public/downloads/*.zip
 public/downloads/*.exe
+!public/downloads/OtoshiLauncher-Portable.zip
+!public/downloads/OtoshiLauncher-Setup.exe

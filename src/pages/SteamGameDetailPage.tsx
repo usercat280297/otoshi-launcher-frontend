@@ -397,12 +397,23 @@ export default function SteamGameDetailPage() {
   const displayPrice = formatPrice(game.price);
   const tags = [...(game.genres || []), ...(game.categories || [])].slice(0, 6);
   const heroImage = game.heroImage || game.background || game.headerImage || "";
-  const videos = (game.movies || []).map((movie) => ({
-    url: movie.url,
-    thumbnail: movie.thumbnail || game.headerImage || "",
-    hls: movie.hls,
-    dash: movie.dash
-  }));
+  const videoSignature = useMemo(
+    () =>
+      (game.movies || [])
+        .map((movie) => `${movie.hls || ""}|${movie.url}|${movie.thumbnail || ""}`)
+        .join("||"),
+    [game.movies]
+  );
+  const videos = useMemo(
+    () =>
+      (game.movies || []).map((movie) => ({
+        url: movie.url,
+        thumbnail: movie.thumbnail || game.headerImage || "",
+        hls: movie.hls,
+        dash: movie.dash
+      })),
+    [videoSignature, game.headerImage]
+  );
   const platformLabel = (game.platforms || []).join(", ") || "Unknown";
   const iconImage = game.iconImage || game.logoImage || game.headerImage || "";
   const resolvedDlcCount = Math.max(
@@ -494,7 +505,7 @@ export default function SteamGameDetailPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.2 }}
-            className="fixed left-0 right-0 top-16 z-20"
+            className="fixed left-0 right-0 top-16 z-20 hidden md:block"
           >
             <div className="mx-auto w-full max-w-[1400px] px-6 md:px-10">
               <div className="flex items-center justify-between gap-4 rounded-xl border border-background-border bg-background/90 px-4 py-3 shadow-soft backdrop-blur">
@@ -573,13 +584,13 @@ export default function SteamGameDetailPage() {
             <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
           </div>
         )}
-        <div className="relative z-10 grid gap-10 px-8 py-12 md:grid-cols-[1.3fr_0.7fr]">
+        <div className="relative z-10 grid gap-8 px-4 py-6 sm:px-6 sm:py-8 md:grid-cols-[1.3fr_0.7fr] md:gap-10 md:px-8 md:py-12">
           <div className="space-y-5">
             {game.logoImage && (
               <img
                 src={game.logoImage}
                 alt={`${game.name} logo`}
-                className="h-20 w-auto max-w-[320px] object-contain"
+                className="h-14 w-auto max-w-[240px] object-contain sm:h-16 sm:max-w-[280px] md:h-20 md:max-w-[320px]"
                 {...getMediaProtectionProps()}
               />
             )}
@@ -591,10 +602,10 @@ export default function SteamGameDetailPage() {
               ))}
               <Badge label={`AppID ${game.appId}`} tone="secondary" />
             </div>
-            <h1 className="text-4xl font-semibold text-glow md:text-5xl">
+            <h1 className="text-3xl font-semibold text-glow sm:text-4xl md:text-5xl">
               {game.name}
             </h1>
-            <p className="text-lg text-text-secondary">
+            <p className="text-base text-text-secondary sm:text-lg">
               {game.shortDescription || "Steam catalog entry."}
             </p>
             <div className="flex flex-wrap gap-3">
@@ -648,7 +659,7 @@ export default function SteamGameDetailPage() {
               </p>
             )}
           </div>
-          <div className="relative flex items-start justify-end">
+          <div className="relative flex items-start justify-start md:justify-end">
             <div className="group relative">
               <button
                 aria-label={t("steam_detail.show_price_details")}
@@ -656,7 +667,7 @@ export default function SteamGameDetailPage() {
               >
                 <Tag size={18} />
               </button>
-              <div className="pointer-events-none absolute right-0 top-14 w-72 translate-y-2 scale-95 opacity-0 transition-all duration-200 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:scale-100 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:scale-100 group-focus-within:opacity-100">
+              <div className="pointer-events-none absolute left-0 top-14 w-[calc(100vw-3rem)] max-w-xs translate-y-2 scale-95 opacity-0 transition-all duration-200 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:scale-100 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:scale-100 group-focus-within:opacity-100 md:left-auto md:right-0 md:w-72 md:max-w-none">
                 <div className="glass-panel space-y-4 p-6">
                   <div>
                     <p className="text-xs uppercase tracking-[0.4em] text-text-muted">Price</p>
@@ -723,11 +734,11 @@ export default function SteamGameDetailPage() {
         {/* Tabbed Content Section */}
         <div className="glass-panel overflow-hidden">
           {/* Tab Navigation */}
-          <div className="flex items-center justify-between border-b border-background-border">
-            <div className="flex">
+          <div className="flex flex-col gap-2 border-b border-background-border px-2 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-0 sm:py-0">
+            <div className="flex overflow-x-auto scrollbar-elegant">
               <button
                 onClick={() => setActiveTab("about")}
-                className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition ${
+                className={`shrink-0 flex items-center gap-2 px-4 py-3 text-xs font-medium transition sm:px-6 sm:py-4 sm:text-sm ${
                   activeTab === "about"
                     ? "border-b-2 border-primary text-primary"
                     : "text-text-muted hover:text-text-primary hover:bg-background-muted/50"
@@ -739,7 +750,7 @@ export default function SteamGameDetailPage() {
               {resolvedDlcCount > 0 && (
                 <button
                   onClick={() => setActiveTab("dlc")}
-                  className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition ${
+                  className={`shrink-0 flex items-center gap-2 px-4 py-3 text-xs font-medium transition sm:px-6 sm:py-4 sm:text-sm ${
                     activeTab === "dlc"
                       ? "border-b-2 border-primary text-primary"
                       : "text-text-muted hover:text-text-primary hover:bg-background-muted/50"
@@ -755,7 +766,7 @@ export default function SteamGameDetailPage() {
               {extendedData && extendedData.achievements.items.length > 0 && (
                 <button
                   onClick={() => setActiveTab("achievements")}
-                  className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition ${
+                  className={`shrink-0 flex items-center gap-2 px-4 py-3 text-xs font-medium transition sm:px-6 sm:py-4 sm:text-sm ${
                     activeTab === "achievements"
                       ? "border-b-2 border-primary text-primary"
                       : "text-text-muted hover:text-text-primary hover:bg-background-muted/50"
@@ -771,7 +782,7 @@ export default function SteamGameDetailPage() {
               {extendedData && extendedData.news.items.length > 0 && (
                 <button
                   onClick={() => setActiveTab("news")}
-                  className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition ${
+                  className={`shrink-0 flex items-center gap-2 px-4 py-3 text-xs font-medium transition sm:px-6 sm:py-4 sm:text-sm ${
                     activeTab === "news"
                       ? "border-b-2 border-primary text-primary"
                       : "text-text-muted hover:text-text-primary hover:bg-background-muted/50"
@@ -786,7 +797,7 @@ export default function SteamGameDetailPage() {
               )}
               <button
                 onClick={() => setActiveTab("comments")}
-                className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition ${
+                className={`shrink-0 flex items-center gap-2 px-4 py-3 text-xs font-medium transition sm:px-6 sm:py-4 sm:text-sm ${
                   activeTab === "comments"
                     ? "border-b-2 border-primary text-primary"
                     : "text-text-muted hover:text-text-primary hover:bg-background-muted/50"
@@ -801,7 +812,7 @@ export default function SteamGameDetailPage() {
               {/* Properties Tab - Always visible */}
               <button
                 onClick={() => setActiveTab("properties")}
-                className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition ${
+                className={`shrink-0 flex items-center gap-2 px-4 py-3 text-xs font-medium transition sm:px-6 sm:py-4 sm:text-sm ${
                   activeTab === "properties"
                     ? "border-b-2 border-primary text-primary"
                     : "text-text-muted hover:text-text-primary hover:bg-background-muted/50"
@@ -817,7 +828,7 @@ export default function SteamGameDetailPage() {
               <button
                 onClick={handleRefreshDLC}
                 disabled={extendedLoading}
-                className="mr-4 flex items-center gap-2 rounded-lg border border-background-border bg-background-surface px-3 py-2 text-xs font-medium text-text-secondary transition hover:text-text-primary hover:border-primary disabled:opacity-50"
+                className="self-end mr-2 flex items-center gap-2 rounded-lg border border-background-border bg-background-surface px-3 py-2 text-xs font-medium text-text-secondary transition hover:text-text-primary hover:border-primary disabled:opacity-50 sm:mr-4"
                 title={t("steam_detail.refresh_dlc_title")}
               >
                 <RefreshCw size={14} className={extendedLoading ? "animate-spin" : ""} />

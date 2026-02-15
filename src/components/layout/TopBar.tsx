@@ -103,19 +103,16 @@ export default function TopBar() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-background-border bg-background/95 px-6 py-3 backdrop-blur md:px-10">
-      <div className="flex items-center gap-4">
-        <div className="flex flex-wrap items-center gap-6">
+    <header className="sticky top-0 z-30 border-b border-background-border bg-background/95 px-3 py-2 backdrop-blur sm:px-4 md:px-10 md:py-3">
+      <div className="flex items-center gap-2 sm:gap-4">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-6">
           <div className="flex items-center gap-3">
             <img
               src="/OTOSHI_icon.png"
               alt="Otoshi"
               className="h-9 w-9 rounded-md bg-background-elevated p-1 object-contain"
             />
-            <NavLink
-              to="/store"
-              className="text-sm font-semibold uppercase tracking-[0.25em] text-text-primary"
-            >
+            <NavLink to="/store" className="text-sm font-semibold uppercase tracking-[0.2em] text-text-primary sm:tracking-[0.25em]">
               {t("nav.store")}
             </NavLink>
           </div>
@@ -265,13 +262,13 @@ export default function TopBar() {
           }}
         />
 
-        <div className="flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-2 sm:gap-3">
           <div ref={menuRef} className="relative">
             <button
               type="button"
               onClick={() => setOpen((value) => !value)}
               aria-haspopup="listbox"
-              className="flex items-center gap-2 rounded-md border border-background-border bg-background-surface px-3 py-2 text-xs text-text-secondary transition hover:border-primary"
+              className="flex items-center gap-1 rounded-md border border-background-border bg-background-surface px-2 py-2 text-xs text-text-secondary transition hover:border-primary sm:gap-2 sm:px-3"
             >
               <Globe size={16} />
               <span className="text-[10px] font-semibold uppercase tracking-[0.2em]">
@@ -310,11 +307,11 @@ export default function TopBar() {
             )}
           </div>
           {token ? (
-            <div className="flex items-center gap-3 rounded-md border border-background-border bg-background-surface px-3 py-2 text-xs">
+            <div className="flex items-center gap-2 rounded-md border border-background-border bg-background-surface px-2 py-1.5 text-xs sm:gap-3 sm:px-3 sm:py-2">
               <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-[10px] font-semibold text-black">
                 {user?.username?.slice(0, 2).toUpperCase() || "OT"}
               </div>
-              <div className="text-left">
+              <div className="hidden text-left sm:block">
                 <p className="text-xs font-semibold">{user?.displayName || user?.username}</p>
                 <button
                   onClick={logout}
@@ -327,7 +324,7 @@ export default function TopBar() {
           ) : (
             <Link
               to="/login"
-              className="rounded-md border border-background-border bg-background-surface px-4 py-2 text-xs font-semibold text-text-secondary transition hover:text-text-primary"
+              className="rounded-md border border-background-border bg-background-surface px-3 py-2 text-xs font-semibold text-text-secondary transition hover:text-text-primary sm:px-4"
             >
               {t("action.sign_in")}
             </Link>
@@ -335,7 +332,7 @@ export default function TopBar() {
           <button
             type="button"
             onClick={toggleTheme}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-background-border bg-background-surface text-text-secondary transition hover:border-primary hover:text-text-primary"
+            className="hidden h-9 w-9 items-center justify-center rounded-full border border-background-border bg-background-surface text-text-secondary transition hover:border-primary hover:text-text-primary sm:flex"
             aria-label={theme === "dark" ? t("topbar.theme.switch_light") : t("topbar.theme.switch_dark")}
             title={theme === "dark" ? t("topbar.theme.light") : t("topbar.theme.dark")}
           >
@@ -344,7 +341,7 @@ export default function TopBar() {
           <button
             type="button"
             onClick={handleTourHelp}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-background-border bg-background-surface text-text-secondary transition hover:border-primary hover:text-text-primary"
+            className="hidden h-9 w-9 items-center justify-center rounded-full border border-background-border bg-background-surface text-text-secondary transition hover:border-primary hover:text-text-primary sm:flex"
             aria-label={t("topbar.guided_tour")}
             title={t("topbar.guided_tour")}
           >
@@ -352,7 +349,7 @@ export default function TopBar() {
           </button>
           {/* Only show Download Launcher button when NOT in Tauri app (i.e., in browser) */}
           {!tauriRuntime && (
-            <Link to="/download-launcher" className="epic-button px-4 py-2 text-xs font-semibold">
+            <Link to="/download-launcher" className="hidden epic-button px-4 py-2 text-xs font-semibold md:inline-flex">
               {t("action.download_launcher")}
             </Link>
           )}
