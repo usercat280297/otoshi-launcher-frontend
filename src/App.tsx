@@ -78,6 +78,12 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
+    const allowDevtoolsHotkey =
+      import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEVTOOLS_HOTKEY === "1";
+    if (!allowDevtoolsHotkey) {
+      return;
+    }
+
     const openDevtoolsShortcut = async (event: KeyboardEvent) => {
       const isDevtoolsHotkey =
         event.key === "F12" ||

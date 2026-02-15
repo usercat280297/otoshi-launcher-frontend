@@ -140,6 +140,23 @@ export default function SteamGameDetailPage() {
 
   const requiredAge = resolveRequiredAge(game?.requiredAge ?? 0);
   const gateScope = game?.appId ? `steam:${game.appId}` : "";
+  const videoSignature = useMemo(
+    () =>
+      (game?.movies || [])
+        .map((movie) => `${movie.hls || ""}|${movie.url}|${movie.thumbnail || ""}`)
+        .join("||"),
+    [game?.movies]
+  );
+  const videos = useMemo(
+    () =>
+      (game?.movies || []).map((movie) => ({
+        url: movie.url,
+        thumbnail: movie.thumbnail || game?.headerImage || "",
+        hls: movie.hls,
+        dash: movie.dash
+      })),
+    [videoSignature, game?.headerImage, game?.movies]
+  );
 
   useEffect(() => {
     if (!game) return;
@@ -397,23 +414,6 @@ export default function SteamGameDetailPage() {
   const displayPrice = formatPrice(game.price);
   const tags = [...(game.genres || []), ...(game.categories || [])].slice(0, 6);
   const heroImage = game.heroImage || game.background || game.headerImage || "";
-  const videoSignature = useMemo(
-    () =>
-      (game.movies || [])
-        .map((movie) => `${movie.hls || ""}|${movie.url}|${movie.thumbnail || ""}`)
-        .join("||"),
-    [game.movies]
-  );
-  const videos = useMemo(
-    () =>
-      (game.movies || []).map((movie) => ({
-        url: movie.url,
-        thumbnail: movie.thumbnail || game.headerImage || "",
-        hls: movie.hls,
-        dash: movie.dash
-      })),
-    [videoSignature, game.headerImage]
-  );
   const platformLabel = (game.platforms || []).join(", ") || "Unknown";
   const iconImage = game.iconImage || game.logoImage || game.headerImage || "";
   const resolvedDlcCount = Math.max(
