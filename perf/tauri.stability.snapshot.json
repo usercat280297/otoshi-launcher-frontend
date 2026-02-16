@@ -1,8 +1,8 @@
 {
     "crash_blockers":  0,
     "release_blockers":  0,
-    "cycles":  1,
+    "cycles":  2,
     "failures":  0,
     "source":  "tauri_desktop_smoke",
-    "generated_at":  "2026-02-16T11:05:14.1533998+07:00"
+    "generated_at":  "2026-02-16T22:01:27.2571643+07:00"
 }

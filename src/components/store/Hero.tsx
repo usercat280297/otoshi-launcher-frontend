@@ -51,15 +51,17 @@ export default function Hero({
 
   const [activeIndex, setActiveIndex] = useState(0);
   const prefetchedRef = useRef(new Set<string>());
-  const [heroImageSrc, setHeroImageSrc] = useState(game.heroImage);
+  const [heroImageSrc, setHeroImageSrc] = useState(
+    game.backgroundImage || game.heroImage || game.headerImage
+  );
   const [railImages, setRailImages] = useState<Record<string, string>>({});
 
   const mapSources = (item: Game) => ({
     t0: item.iconImage || item.capsuleImage || item.headerImage || item.heroImage || null,
-    t1: item.capsuleImage || item.headerImage || item.heroImage || null,
-    t2: item.headerImage || item.capsuleImage || item.heroImage || null,
-    t3: item.heroImage || item.headerImage || item.capsuleImage || null,
-    t4: item.heroImage || item.headerImage || item.capsuleImage || null,
+    t1: item.capsuleImage || item.headerImage || item.backgroundImage || item.heroImage || null,
+    t2: item.headerImage || item.capsuleImage || item.backgroundImage || item.heroImage || null,
+    t3: item.backgroundImage || item.heroImage || item.headerImage || item.capsuleImage || null,
+    t4: item.backgroundImage || item.heroImage || item.headerImage || item.capsuleImage || null,
   });
 
   const resolveId = (item: Game) => item.steamAppId || item.id;
@@ -84,7 +86,12 @@ export default function Hero({
   const slidesForRail = playlist.slice(0, 5);
 
   useEffect(() => {
-    setHeroImageSrc(activeGame.headerImage || activeGame.capsuleImage || activeGame.heroImage);
+    setHeroImageSrc(
+      activeGame.backgroundImage ||
+      activeGame.heroImage ||
+      activeGame.headerImage ||
+      activeGame.capsuleImage
+    );
     let cancelled = false;
     const dpr = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
 
@@ -259,8 +266,8 @@ export default function Hero({
                     src={
                       railImages[item.id] ||
                       item.iconImage ||
-                      item.headerImage ||
-                      item.capsuleImage
+                      item.capsuleImage ||
+                      item.headerImage
                     }
                     alt={item.title}
                     className="h-14 w-14 rounded-lg object-cover"

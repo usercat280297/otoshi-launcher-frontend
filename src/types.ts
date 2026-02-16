@@ -105,6 +105,130 @@ export type SteamCatalogItem = {
   dlcCount?: number;
 };
 
+export type SteamIndexAssetInfo = {
+  appId: string;
+  selectedSource: string;
+  assets: {
+    grid?: string | null;
+    hero?: string | null;
+    logo?: string | null;
+    icon?: string | null;
+  };
+  qualityScore?: number;
+  version?: number;
+};
+
+export type SteamIndexIngestStatus = {
+  latestJob: {
+    id?: string | null;
+    status: string;
+    processedCount: number;
+    successCount: number;
+    failureCount: number;
+    startedAt?: string | null;
+    completedAt?: string | null;
+    errorMessage?: string | null;
+    externalEnrichment?: {
+      steamdbSuccess: number;
+      steamdbFailed: number;
+      crossStoreSuccess: number;
+      crossStoreFailed: number;
+    };
+  };
+  totals: {
+    titles: number;
+    assets: number;
+    steamdbEnrichment: number;
+    crossStoreMappings: number;
+  };
+};
+
+export type SteamIndexAssetPrefetchResult = {
+  total: number;
+  processed: number;
+  success: number;
+  failed: number;
+};
+
+export type SteamIndexIngestRebuildResult = {
+  jobId: string;
+  processed: number;
+  success: number;
+  failed: number;
+  steamdbSuccess?: number;
+  steamdbFailed?: number;
+  crossStoreSuccess?: number;
+  crossStoreFailed?: number;
+  startedAt: string;
+  completedAt: string;
+};
+
+export type PropertiesInstallInfo = {
+  installed: boolean;
+  installPath?: string | null;
+  installRoots: string[];
+  sizeBytes?: number | null;
+  version?: string | null;
+  branch?: string | null;
+  buildId?: string | null;
+  lastPlayed?: string | null;
+  playtimeLocalHours?: number;
+};
+
+export type PropertiesHashMismatch = {
+  path: string;
+  expectedHash?: string | null;
+  actualHash?: string | null;
+  reason: string;
+};
+
+export type PropertiesVerifyResult = {
+  success: boolean;
+  totalFiles: number;
+  verifiedFiles: number;
+  corruptedFiles: number;
+  missingFiles: number;
+  manifestVersion?: string | null;
+  mismatchFiles: PropertiesHashMismatch[];
+};
+
+export type PropertiesMoveResult = {
+  success: boolean;
+  newPath: string;
+  progressToken: string;
+  message: string;
+};
+
+export type PropertiesCloudSyncResult = {
+  success: boolean;
+  filesUploaded: number;
+  filesDownloaded: number;
+  conflicts: number;
+  resolution: string[];
+  eventId?: string | null;
+};
+
+export type PropertiesSaveLocations = {
+  appId: string;
+  locations: string[];
+};
+
+export type PropertiesLaunchOptions = {
+  appId: string;
+  userId?: string | null;
+  launchOptions: Record<string, any>;
+  updatedAt?: string | null;
+};
+
+export type PropertiesDlcState = {
+  appId: string;
+  title: string;
+  installed: boolean;
+  enabled: boolean;
+  sizeBytes?: number | null;
+  headerImage?: string | null;
+};
+
 export type SearchHistoryItem = {
   query: string;
   count: number;

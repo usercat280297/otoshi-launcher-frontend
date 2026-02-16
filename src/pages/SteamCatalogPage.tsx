@@ -3,7 +3,11 @@ import { useNavigate } from "react-router-dom";
 import StoreSubnav from "../components/store/StoreSubnav";
 import SteamCard from "../components/store/SteamCard";
 import { useSteamSearchMemory } from "../hooks/useSteamSearchMemory";
-import { fetchSteamCatalog } from "../services/api";
+import {
+  fetchSteamCatalog,
+  fetchSteamIndexCatalog,
+  searchSteamIndexCatalog,
+} from "../services/api";
 import { SteamCatalogItem } from "../types";
 import { useLocale } from "../context/LocaleContext";
 
@@ -41,13 +45,32 @@ export default function SteamCatalogPage() {
       setError(null);
       try {
         const nextOffset = pageIndex * PAGE_SIZE;
-        const data = await fetchSteamCatalog({
-          limit: PAGE_SIZE,
-          offset: nextOffset,
-          search: searchValue || undefined,
-          artMode: "tiered",
-          thumbW: 460
-        });
+        let data: { total: number; offset: number; limit: number; items: SteamCatalogItem[] };
+        try {
+          if (searchValue) {
+            data = await searchSteamIndexCatalog({
+              q: searchValue,
+              limit: PAGE_SIZE,
+              offset: nextOffset,
+              source: "global",
+            });
+          } else {
+            data = await fetchSteamIndexCatalog({
+              limit: PAGE_SIZE,
+              offset: nextOffset,
+              sort: "recent",
+              scope: "all",
+            });
+          }
+        } catch {
+          data = await fetchSteamCatalog({
+            limit: PAGE_SIZE,
+            offset: nextOffset,
+            search: searchValue || undefined,
+            artMode: "tiered",
+            thumbW: 460
+          });
+        }
         const totalCount = data.total ?? 0;
         setTotal(totalCount);
         setPage(pageIndex);

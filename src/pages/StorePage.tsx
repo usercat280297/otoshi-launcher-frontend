@@ -10,14 +10,21 @@ import StoreSubnav from "../components/store/StoreSubnav";
 import GuidedTour from "../components/common/GuidedTour";
 import { useGames } from "../hooks/useGames";
 import { useSteamSearchMemory } from "../hooks/useSteamSearchMemory";
-import { fetchSteamCatalog, getApiDebugInfo, runLauncherFirstRunDiagnostics } from "../services/api";
+import {
+  fetchSteamCatalog,
+  fetchSteamIndexCatalog,
+  fetchSteamGridAssetsBatch,
+  searchSteamIndexCatalog,
+  getApiDebugInfo,
+  runLauncherFirstRunDiagnostics,
+} from "../services/api";
 import { Game, SteamCatalogItem } from "../types";
 import { useLocale } from "../context/LocaleContext";
 
 const ALL_GAMES_PAGE_SIZE = 48;
 const SEARCH_STORAGE_KEY = "otoshi.search.steam";
 const SEARCH_PREVIEW_LIMIT = 6;
-const CATALOG_CACHE_KEY = "otoshi.catalog.page1";
+const CATALOG_CACHE_KEY = "otoshi.catalog.page2";
 const CATALOG_CACHE_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours
 const CATALOG_FETCH_MAX_ATTEMPTS = 5;
 const CATALOG_FETCH_RETRY_BASE_MS = 500;
@@ -31,6 +38,39 @@ const getCatalogRetryDelayMs = (attempt: number) =>
     CATALOG_FETCH_RETRY_MAX_MS,
     CATALOG_FETCH_RETRY_BASE_MS * 2 ** Math.max(0, attempt - 1)
   );
+
+function mergeSteamGridAssets(
+  items: SteamCatalogItem[],
+  assetsByAppId: Record<string, { grid?: string | null; hero?: string | null; logo?: string | null; icon?: string | null } | null>
+): SteamCatalogItem[] {
+  return items.map((item) => {
+    const key = String(item.appId || "").trim();
+    const assets = key ? assetsByAppId[key] : null;
+    if (!assets) {
+      return item;
+    }
+
+    const grid = assets.grid || item.artwork?.t3 || item.headerImage || item.capsuleImage || null;
+    const hero = assets.hero || item.background || item.artwork?.t4 || grid;
+    const icon = assets.icon || item.artwork?.t0 || item.capsuleImage || item.headerImage || null;
+
+    return {
+      ...item,
+      headerImage: grid || item.headerImage,
+      capsuleImage: grid || item.capsuleImage,
+      background: hero || item.background,
+      artwork: {
+        ...(item.artwork || {}),
+        t0: icon,
+        t1: grid || item.artwork?.t1 || item.capsuleImage || null,
+        t2: grid || item.artwork?.t2 || item.headerImage || null,
+        t3: grid || item.artwork?.t3 || item.capsuleImage || item.headerImage || null,
+        t4: hero || item.artwork?.t4 || item.background || item.headerImage || null,
+        version: Number(item.artwork?.version || 1) + 1,
+      },
+    };
+  });
+}
 
 export default function StorePage() {
   const navigate = useNavigate();
@@ -116,14 +156,38 @@ export default function StorePage() {
       for (let attempt = 1; attempt <= CATALOG_FETCH_MAX_ATTEMPTS; attempt += 1) {
         try {
           const offset = pageIndex * ALL_GAMES_PAGE_SIZE;
-          const data = await fetchSteamCatalog({
-            limit: ALL_GAMES_PAGE_SIZE,
-            offset,
-            artMode: "tiered",
-            thumbW: 460
-          });
+          let data: { total: number; offset: number; limit: number; items: SteamCatalogItem[] };
+          try {
+            data = await fetchSteamIndexCatalog({
+              limit: ALL_GAMES_PAGE_SIZE,
+              offset,
+              sort: "recent",
+              scope: "all",
+            });
+          } catch {
+            data = await fetchSteamCatalog({
+              limit: ALL_GAMES_PAGE_SIZE,
+              offset,
+              artMode: "tiered",
+              thumbW: 460
+            });
+          }
+          let enrichedItems = data.items;
+          if (enrichedItems.length) {
+            try {
+              const batchAssets = await fetchSteamGridAssetsBatch(
+                enrichedItems.map((item) => ({
+                  appId: item.appId,
+                  title: item.name,
+                }))
+              );
+              enrichedItems = mergeSteamGridAssets(enrichedItems, batchAssets);
+            } catch {
+              // keep base Steam catalog assets on batch failure
+            }
+          }
           const totalCount = data.total ?? 0;
-          const payload = { items: data.items, total: totalCount };
+          const payload = { items: enrichedItems, total: totalCount };
           allPageCacheRef.current.set(pageIndex, payload);
           if (pageIndex === 0) {
             saveCachedCatalog(payload);
@@ -321,13 +385,25 @@ export default function StorePage() {
     }
     const requestId = (searchPreviewRequestRef.current += 1);
     const timer = window.setTimeout(() => {
-      fetchSteamCatalog({
-        limit: SEARCH_PREVIEW_LIMIT,
-        offset: 0,
-        search: trimmed,
-        artMode: "basic",
-        thumbW: 360
-      })
+      (async () => {
+        try {
+          const indexData = await searchSteamIndexCatalog({
+            q: trimmed,
+            limit: SEARCH_PREVIEW_LIMIT,
+            offset: 0,
+            source: "global",
+          });
+          return indexData;
+        } catch {
+          return fetchSteamCatalog({
+            limit: SEARCH_PREVIEW_LIMIT,
+            offset: 0,
+            search: trimmed,
+            artMode: "basic",
+            thumbW: 360
+          });
+        }
+      })()
         .then((data) => {
           if (searchPreviewRequestRef.current !== requestId) return;
           setSearchPreviewItems(data.items);
@@ -625,6 +701,10 @@ export default function StorePage() {
     const total = allTotal || allGames.length;
     return Math.max(1, Math.ceil(total / ALL_GAMES_PAGE_SIZE));
   }, [allTotal, allGames.length]);
+  const formattedAllTotal = useMemo(
+    () => (allTotal > 0 ? new Intl.NumberFormat().format(allTotal) : ""),
+    [allTotal]
+  );
 
   const visiblePages = useMemo(() => {
     const current = Math.min(allPage, totalPages - 1);
@@ -663,7 +743,7 @@ export default function StorePage() {
           <ChevronRight size={16} className="text-text-muted" />
         </div>
         <p className="text-xs uppercase tracking-[0.35em] text-text-muted">
-          {allTotal ? `${allTotal} ${t("store.titles_count")}` : t("store.loading_catalog")}
+          {allTotal ? `${formattedAllTotal} ${t("store.titles_count")}` : t("store.loading_catalog")}
         </p>
       </div>
       {allError && (

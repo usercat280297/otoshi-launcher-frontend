@@ -1,17 +1,38 @@
 import {
-  Settings,
-  Trash2,
-  FolderOpen,
+  AlertCircle,
+  CheckCircle2,
   Cloud,
   FolderInput,
-  Shield,
+  FolderOpen,
   Loader2,
-  AlertCircle,
-  CheckCircle2
+  RefreshCw,
+  Settings,
+  Shield,
+  ShieldOff,
+  Trash2,
+  UploadCloud
 } from "lucide-react";
-import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { isTauri as detectTauriRuntime, invoke } from "@tauri-apps/api/core";
+import { useEffect, useMemo, useState } from "react";
 import { useLocale } from "../../context/LocaleContext";
+import {
+  fetchPropertiesDlcState,
+  fetchPropertiesInstallInfo,
+  fetchPropertiesLaunchOptions,
+  fetchPropertiesSaveLocations,
+  movePropertiesInstall,
+  runPropertiesCloudSync,
+  setPropertiesLaunchOptions,
+  uninstallPropertiesInstall,
+  verifyPropertiesInstall
+} from "../../services/api";
+import type {
+  PropertiesCloudSyncResult,
+  PropertiesDlcState,
+  PropertiesInstallInfo,
+  PropertiesLaunchOptions,
+  PropertiesVerifyResult
+} from "../../types";
 
 type PropertiesSectionProps = {
   appId: string;
@@ -20,21 +41,45 @@ type PropertiesSectionProps = {
   isInstalled?: boolean;
 };
 
-type GameInstallInfo = {
-  installed: boolean;
-  installPath: string | null;
-  sizeBytes: number | null;
-  version: string | null;
-  lastPlayed: string | null;
+type PropertiesTab = "general" | "updates" | "installed_files" | "dlc" | "privacy" | "customization";
+
+type CustomizationState = {
+  coverPath: string;
+  backgroundPath: string;
+  logoPath: string;
 };
 
-type VerifyResult = {
-  success: boolean;
-  totalFiles: number;
-  verifiedFiles: number;
-  corruptedFiles: number;
-  missingFiles: number;
+const TABS: Array<{ id: PropertiesTab; i18nKey: string }> = [
+  { id: "general", i18nKey: "properties.tab.general" },
+  { id: "updates", i18nKey: "properties.tab.updates" },
+  { id: "installed_files", i18nKey: "properties.tab.installed_files" },
+  { id: "dlc", i18nKey: "properties.tab.dlc" },
+  { id: "privacy", i18nKey: "properties.tab.privacy" },
+  { id: "customization", i18nKey: "properties.tab.customization" },
+];
+
+const bytesToHuman = (value?: number | null): string => {
+  if (!value || value <= 0) return "-";
+  const gb = value / (1024 * 1024 * 1024);
+  if (gb >= 1) return `${gb.toFixed(2)} GB`;
+  const mb = value / (1024 * 1024);
+  if (mb >= 1) return `${mb.toFixed(2)} MB`;
+  const kb = value / 1024;
+  return `${kb.toFixed(2)} KB`;
 };
+
+const parseError = (error: unknown): string => {
+  if (!error) return "Unknown error";
+  if (typeof error === "string") return error;
+  if (error instanceof Error) return error.message;
+  return String(error);
+};
+
+const defaultCustomizationState = (): CustomizationState => ({
+  coverPath: "",
+  backgroundPath: "",
+  logoPath: "",
+});
 
 export default function PropertiesSection({
   appId,
@@ -43,404 +88,814 @@ export default function PropertiesSection({
   isInstalled: initialInstalled
 }: PropertiesSectionProps) {
   const { t } = useLocale();
-  const [installInfo, setInstallInfo] = useState<GameInstallInfo | null>(null);
+  const isTauriRuntime = detectTauriRuntime();
+
+  const [activeTab, setActiveTab] = useState<PropertiesTab>("general");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const [installInfo, setInstallInfo] = useState<PropertiesInstallInfo>({
+    installed: Boolean(initialInstalled),
+    installPath: initialPath ?? null,
+    installRoots: [],
+    sizeBytes: null,
+    version: null,
+    branch: null,
+    buildId: null,
+    lastPlayed: null,
+    playtimeLocalHours: 0,
+  });
+  const [launchOptions, setLaunchOptions] = useState<PropertiesLaunchOptions | null>(null);
+  const [saveLocations, setSaveLocations] = useState<string[]>([]);
+  const [dlcItems, setDlcItems] = useState<PropertiesDlcState[]>([]);
+  const [dlcSearch, setDlcSearch] = useState("");
+
+  const [overlayEnabled, setOverlayEnabled] = useState(true);
+  const [language, setLanguage] = useState("system");
+  const [launchArgs, setLaunchArgs] = useState("");
+  const [privacyHidden, setPrivacyHidden] = useState(false);
+  const [markPrivate, setMarkPrivate] = useState(false);
+  const [dlcOverrides, setDlcOverrides] = useState<Record<string, boolean>>({});
+  const [customization, setCustomization] = useState<CustomizationState>(defaultCustomizationState());
+
   const [verifying, setVerifying] = useState(false);
-  const [verifyProgress, setVerifyProgress] = useState(0);
-  const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
+  const [verifyResult, setVerifyResult] = useState<PropertiesVerifyResult | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "success" | "error">("idle");
+  const [syncResult, setSyncResult] = useState<PropertiesCloudSyncResult | null>(null);
+  const [savingGeneral, setSavingGeneral] = useState(false);
+  const [savingPrivacy, setSavingPrivacy] = useState(false);
+  const [savingDlc, setSavingDlc] = useState(false);
+  const [savingCustomization, setSavingCustomization] = useState(false);
+  const [moving, setMoving] = useState(false);
   const [uninstalling, setUninstalling] = useState(false);
   const [showUninstallConfirm, setShowUninstallConfirm] = useState(false);
   const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [newInstallPath, setNewInstallPath] = useState("");
-  const [moving, setMoving] = useState(false);
-  const [moveProgress, setMoveProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
 
-  // Fetch install info on mount
   useEffect(() => {
-    const fetchInstallInfo = async () => {
+    let cancelled = false;
+
+    const loadBundle = async () => {
       setLoading(true);
+      setError(null);
+      setSuccessMessage(null);
       try {
-        const info = await invoke<GameInstallInfo>("get_game_install_info", { appId });
+        const [info, launch, save, dlc] = await Promise.all([
+          fetchPropertiesInstallInfo(appId),
+          fetchPropertiesLaunchOptions(appId),
+          fetchPropertiesSaveLocations(appId),
+          fetchPropertiesDlcState(appId),
+        ]);
+        if (cancelled) return;
+
         setInstallInfo(info);
-      } catch (err) {
-        console.warn("Failed to get install info:", err);
-        setInstallInfo({
-          installed: initialInstalled ?? false,
-          installPath: initialPath ?? null,
-          sizeBytes: null,
-          version: null,
-          lastPlayed: null,
-        });
+        setLaunchOptions(launch);
+        setSaveLocations(save.locations);
+        setDlcItems(dlc);
+
+        const options = launch.launchOptions || {};
+        setOverlayEnabled(Boolean(options.overlay_enabled ?? options.overlayEnabled ?? true));
+        setLanguage(String(options.language || "system"));
+        setLaunchArgs(String(options.launch_args ?? options.launchArgs ?? ""));
+        setPrivacyHidden(Boolean(options.privacy_hidden ?? options.privacyHidden ?? false));
+        setMarkPrivate(Boolean(options.mark_private ?? options.markPrivate ?? false));
+        setDlcOverrides(
+          options.dlc_overrides && typeof options.dlc_overrides === "object"
+            ? options.dlc_overrides
+            : {}
+        );
+        const customizationRaw = options.customization;
+        if (customizationRaw && typeof customizationRaw === "object") {
+          setCustomization({
+            coverPath: String((customizationRaw as Record<string, unknown>).coverPath || ""),
+            backgroundPath: String((customizationRaw as Record<string, unknown>).backgroundPath || ""),
+            logoPath: String((customizationRaw as Record<string, unknown>).logoPath || ""),
+          });
+        } else {
+          setCustomization(defaultCustomizationState());
+        }
+      } catch (bundleError) {
+        if (cancelled) return;
+        setError(parseError(bundleError));
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
-    fetchInstallInfo();
-  }, [appId, initialPath, initialInstalled]);
 
-  // Verify game files
-  const handleVerify = async () => {
-    if (!installInfo?.installPath) return;
+    void loadBundle();
+    return () => {
+      cancelled = true;
+    };
+  }, [appId]);
 
-    setVerifying(true);
-    setVerifyProgress(0);
-    setVerifyResult(null);
+  const filteredDlc = useMemo(() => {
+    const query = dlcSearch.trim().toLowerCase();
+    if (!query) return dlcItems;
+    return dlcItems.filter((item) => item.title.toLowerCase().includes(query));
+  }, [dlcItems, dlcSearch]);
+
+  const resolvedInstallStatus = installInfo.installed;
+  const resolvedInstallPath = installInfo.installPath || initialPath || null;
+
+  const saveLaunchOptionPayload = async (
+    payload: Record<string, unknown>,
+    onDone?: (result: PropertiesLaunchOptions) => void
+  ) => {
+    const result = await setPropertiesLaunchOptions(appId, payload);
+    setLaunchOptions(result);
+    onDone?.(result);
+  };
+
+  const handleSaveGeneral = async () => {
+    setSavingGeneral(true);
     setError(null);
-
+    setSuccessMessage(null);
     try {
-      const result = await invoke<VerifyResult>("verify_game_files", {
-        appId,
-        installPath: installInfo.installPath
+      await saveLaunchOptionPayload({
+        overlay_enabled: overlayEnabled,
+        language,
+        launch_args: launchArgs,
+      });
+      setSuccessMessage(t("properties.saved_general"));
+    } catch (saveError) {
+      setError(parseError(saveError));
+    } finally {
+      setSavingGeneral(false);
+    }
+  };
+
+  const handleSavePrivacy = async () => {
+    setSavingPrivacy(true);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      await saveLaunchOptionPayload({
+        privacy_hidden: privacyHidden,
+        mark_private: markPrivate,
+      });
+      setSuccessMessage(t("properties.saved_privacy"));
+    } catch (saveError) {
+      setError(parseError(saveError));
+    } finally {
+      setSavingPrivacy(false);
+    }
+  };
+
+  const handleSaveDlc = async () => {
+    setSavingDlc(true);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      await saveLaunchOptionPayload({
+        dlc_overrides: dlcOverrides,
+      });
+      setSuccessMessage(t("properties.saved_dlc"));
+    } catch (saveError) {
+      setError(parseError(saveError));
+    } finally {
+      setSavingDlc(false);
+    }
+  };
+
+  const handleSaveCustomization = async () => {
+    setSavingCustomization(true);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      await saveLaunchOptionPayload({
+        customization,
+      });
+      setSuccessMessage(t("properties.saved_customization"));
+    } catch (saveError) {
+      setError(parseError(saveError));
+    } finally {
+      setSavingCustomization(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    if (!resolvedInstallPath) return;
+    setVerifying(true);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      const result = await verifyPropertiesInstall(appId, {
+        installPath: resolvedInstallPath,
       });
       setVerifyResult(result);
-    } catch (err: any) {
-      setError(err.message || "Verification failed");
+      if (result.success) {
+        setSuccessMessage(t("properties.verify_success"));
+      } else {
+        setSuccessMessage(t("properties.verify_issues"));
+      }
+    } catch (verifyError) {
+      setError(parseError(verifyError));
     } finally {
       setVerifying(false);
-      setVerifyProgress(100);
     }
   };
 
-  // Uninstall game
-  const handleUninstall = async () => {
-    if (!installInfo?.installPath) return;
-
-    setUninstalling(true);
-    setError(null);
-
-    try {
-      await invoke("uninstall_game", {
-        appId,
-        installPath: installInfo.installPath
-      });
-      setInstallInfo(prev => prev ? { ...prev, installed: false, installPath: null } : null);
-      setShowUninstallConfirm(false);
-    } catch (err: any) {
-      setError(err.message || "Uninstall failed");
-    } finally {
-      setUninstalling(false);
-    }
-  };
-
-  // Move game folder
-  const handleMove = async () => {
-    if (!installInfo?.installPath || !newInstallPath) return;
-
-    setMoving(true);
-    setMoveProgress(0);
-    setError(null);
-
-    try {
-      await invoke("move_game_folder", {
-        appId,
-        sourcePath: installInfo.installPath,
-        destPath: newInstallPath
-      });
-      setInstallInfo(prev => prev ? { ...prev, installPath: newInstallPath } : null);
-      setShowMoveDialog(false);
-      setNewInstallPath("");
-    } catch (err: any) {
-      setError(err.message || "Move failed");
-    } finally {
-      setMoving(false);
-    }
-  };
-
-  // Browse for folder
-  const handleBrowse = async () => {
-    try {
-      const { open } = await import("@tauri-apps/plugin-dialog");
-      const selected = await open({
-        directory: true,
-        multiple: false,
-        title: "Select new location for game"
-      });
-      if (selected && typeof selected === "string") {
-        setNewInstallPath(selected);
-      }
-    } catch (err) {
-      console.warn("Browse dialog failed:", err);
-    }
-  };
-
-  // Sync cloud saves
-  const handleCloudSync = async () => {
+  const handleSyncCloud = async () => {
     setSyncing(true);
-    setSyncStatus("syncing");
     setError(null);
-
+    setSuccessMessage(null);
     try {
-      await invoke("sync_cloud_saves", { appId });
-      setSyncStatus("success");
-      setTimeout(() => setSyncStatus("idle"), 3000);
-    } catch (err: any) {
-      setSyncStatus("error");
-      setError(err.message || "Cloud sync failed");
+      const result = await runPropertiesCloudSync(appId);
+      setSyncResult(result);
+      setSuccessMessage(t("properties.sync_done"));
+    } catch (syncError) {
+      setError(parseError(syncError));
     } finally {
       setSyncing(false);
     }
   };
 
-  // Open install folder
-  const handleOpenFolder = async () => {
-    if (!installInfo?.installPath) return;
+  const handleMoveInstall = async () => {
+    if (!resolvedInstallPath || !newInstallPath) return;
+    setMoving(true);
+    setError(null);
+    setSuccessMessage(null);
     try {
-      await invoke("open_folder", { path: installInfo.installPath });
-    } catch (err) {
-      console.warn("Failed to open folder:", err);
+      const result = await movePropertiesInstall(appId, {
+        sourcePath: resolvedInstallPath,
+        destPath: newInstallPath,
+      });
+      setInstallInfo((previous) => ({
+        ...previous,
+        installPath: result.newPath,
+      }));
+      setShowMoveDialog(false);
+      setNewInstallPath("");
+      setSuccessMessage(t("properties.move_success"));
+    } catch (moveError) {
+      setError(parseError(moveError));
+    } finally {
+      setMoving(false);
     }
   };
 
-  const formatSize = (bytes: number | null): string => {
-    if (!bytes) return "Unknown";
-    const gb = bytes / (1024 * 1024 * 1024);
-    if (gb >= 1) return `${gb.toFixed(2)} GB`;
-    const mb = bytes / (1024 * 1024);
-    return `${mb.toFixed(2)} MB`;
+  const handleUninstall = async () => {
+    if (!resolvedInstallPath) return;
+    setUninstalling(true);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      await uninstallPropertiesInstall(appId, resolvedInstallPath);
+      setInstallInfo((previous) => ({
+        ...previous,
+        installed: false,
+        installPath: null,
+        sizeBytes: null,
+      }));
+      setShowUninstallConfirm(false);
+      setSuccessMessage(t("properties.uninstall_success"));
+    } catch (uninstallError) {
+      setError(parseError(uninstallError));
+    } finally {
+      setUninstalling(false);
+    }
+  };
+
+  const handleOpenInstallFolder = async () => {
+    if (!resolvedInstallPath || !isTauriRuntime) return;
+    try {
+      await invoke("open_folder", { path: resolvedInstallPath });
+    } catch (invokeError) {
+      setError(parseError(invokeError));
+    }
+  };
+
+  const handleBrowseMoveTarget = async () => {
+    if (!isTauriRuntime) return;
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: t("properties.select_destination"),
+      });
+      if (typeof selected === "string") {
+        setNewInstallPath(selected);
+      }
+    } catch (dialogError) {
+      setError(parseError(dialogError));
+    }
+  };
+
+  const handleBrowseCustomizationFile = async (target: keyof CustomizationState) => {
+    if (!isTauriRuntime) return;
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const selected = await open({
+        directory: false,
+        multiple: false,
+        title: t("properties.select_image"),
+        filters: [
+          {
+            name: "Images",
+            extensions: ["png", "jpg", "jpeg", "webp", "bmp"],
+          },
+        ],
+      });
+      if (typeof selected === "string") {
+        setCustomization((previous) => ({ ...previous, [target]: selected }));
+      }
+    } catch (dialogError) {
+      setError(parseError(dialogError));
+    }
+  };
+
+  const toggleDlcOverride = (dlcAppId: string) => {
+    setDlcOverrides((previous) => {
+      const current = previous[dlcAppId];
+      return {
+        ...previous,
+        [dlcAppId]: !current,
+      };
+    });
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
-        <span className="ml-2 text-sm text-text-muted">Loading properties...</span>
+        <span className="ml-2 text-sm text-text-muted">{t("properties.loading")}</span>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-2">
-        <Settings size={16} className="text-text-muted" />
-        <p className="text-xs uppercase tracking-[0.3em] text-text-muted">
-          Properties
-        </p>
+    <div className="rounded-xl border border-background-border bg-background-surface overflow-hidden">
+      <div className="border-b border-background-border px-5 py-4">
+        <div className="flex items-center gap-2">
+          <Settings size={16} className="text-text-muted" />
+          <p className="text-xs uppercase tracking-[0.32em] text-text-muted">{t("properties.title")}</p>
+        </div>
       </div>
 
-      {/* Error display */}
-      {error && (
-        <div className="flex items-center gap-2 rounded-lg border border-accent-red/30 bg-accent-red/10 px-4 py-3 text-sm text-accent-red">
-          <AlertCircle size={16} />
-          {error}
-        </div>
-      )}
-
-      {/* Install Info */}
-      <div className="rounded-lg border border-background-border bg-background-surface p-4">
-        <h3 className="mb-4 text-sm font-medium text-text-primary">Installation</h3>
-        <div className="space-y-3 text-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-text-muted">Status</span>
-            <span className={`font-medium ${installInfo?.installed ? "text-accent-green" : "text-text-muted"}`}>
-              {installInfo?.installed ? "Installed" : "Not Installed"}
-            </span>
+      <div className="grid gap-0 md:grid-cols-[220px_minmax(0,1fr)]">
+        <aside className="border-r border-background-border bg-background-muted/20">
+          <div className="border-b border-background-border px-4 py-4">
+            <p className="text-sm font-semibold text-primary">{gameName}</p>
+            <p className="mt-1 text-xs text-text-muted">
+              {resolvedInstallStatus ? t("properties.status_installed") : t("properties.status_not_installed")}
+            </p>
           </div>
-          {installInfo?.installPath && (
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-text-muted">Location</span>
+          <nav className="p-2">
+            {TABS.map((tab) => (
               <button
-                onClick={handleOpenFolder}
-                className="flex items-center gap-1 truncate text-right text-primary transition hover:underline"
-                title={installInfo.installPath}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`w-full rounded-md px-3 py-2 text-left text-sm transition ${
+                  activeTab === tab.id
+                    ? "bg-background-elevated text-text-primary"
+                    : "text-text-secondary hover:bg-background-elevated/60 hover:text-text-primary"
+                }`}
               >
-                <FolderOpen size={12} />
-                <span className="max-w-[200px] truncate">{installInfo.installPath}</span>
+                {t(tab.i18nKey)}
               </button>
+            ))}
+          </nav>
+        </aside>
+
+        <section className="space-y-4 p-5">
+          {error && (
+            <div className="flex items-center gap-2 rounded-lg border border-accent-red/30 bg-accent-red/10 px-4 py-3 text-sm text-accent-red">
+              <AlertCircle size={16} />
+              <span>{error}</span>
             </div>
           )}
-          {installInfo?.sizeBytes && (
-            <div className="flex items-center justify-between">
-              <span className="text-text-muted">Size</span>
-              <span className="text-text-primary">{formatSize(installInfo.sizeBytes)}</span>
+          {successMessage && (
+            <div className="flex items-center gap-2 rounded-lg border border-accent-green/30 bg-accent-green/10 px-4 py-3 text-sm text-accent-green">
+              <CheckCircle2 size={16} />
+              <span>{successMessage}</span>
             </div>
           )}
-          {installInfo?.version && (
-            <div className="flex items-center justify-between">
-              <span className="text-text-muted">Version</span>
-              <span className="text-text-primary">{installInfo.version}</span>
+
+          {activeTab === "general" && (
+            <div className="space-y-5">
+              <h3 className="text-xl font-semibold text-text-primary">{t("properties.tab.general")}</h3>
+
+              <div className="rounded-lg border border-background-border bg-background-elevated/50 p-4">
+                <p className="text-sm font-medium text-text-primary">{t("properties.overlay_title")}</p>
+                <div className="mt-3 flex items-center justify-between">
+                  <span className="text-sm text-text-secondary">{t("properties.overlay_desc")}</span>
+                  <button
+                    onClick={() => setOverlayEnabled((value) => !value)}
+                    className={`relative h-6 w-11 rounded-full transition ${
+                      overlayEnabled ? "bg-primary" : "bg-background-border"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${
+                        overlayEnabled ? "left-5" : "left-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-background-border bg-background-elevated/50 p-4">
+                <p className="text-sm font-medium text-text-primary">{t("properties.language_title")}</p>
+                <select
+                  value={language}
+                  onChange={(event) => setLanguage(event.target.value)}
+                  className="mt-3 w-full rounded-lg border border-background-border bg-background-surface px-3 py-2 text-sm text-text-primary focus:border-primary focus:outline-none"
+                >
+                  <option value="system">{t("properties.language_system")}</option>
+                  <option value="en">{t("locale.english")}</option>
+                  <option value="vi">{t("locale.vietnamese")}</option>
+                </select>
+              </div>
+
+              <div className="rounded-lg border border-background-border bg-background-elevated/50 p-4">
+                <p className="text-sm font-medium text-text-primary">{t("properties.launch_options_title")}</p>
+                <p className="mt-1 text-xs text-text-muted">{t("properties.launch_options_desc")}</p>
+                <input
+                  value={launchArgs}
+                  onChange={(event) => setLaunchArgs(event.target.value)}
+                  placeholder={t("properties.launch_options_placeholder")}
+                  className="mt-3 w-full rounded-lg border border-background-border bg-background-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              <div className="rounded-lg border border-background-border bg-background-elevated/50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-text-primary">{t("properties.cloud_title")}</p>
+                    <p className="mt-1 text-xs text-text-muted">
+                      {t("properties.cloud_desc")} ({saveLocations.length} {t("properties.save_locations")})
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleSyncCloud}
+                    disabled={syncing}
+                    className="inline-flex items-center gap-2 rounded-lg border border-background-border px-3 py-2 text-sm text-text-secondary transition hover:text-text-primary hover:border-primary disabled:opacity-50"
+                  >
+                    {syncing ? <Loader2 size={14} className="animate-spin" /> : <Cloud size={14} />}
+                    {syncing ? t("properties.syncing") : t("properties.sync_now")}
+                  </button>
+                </div>
+                {syncResult && (
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-text-secondary">
+                    <span>{t("properties.sync_uploaded")}: {syncResult.filesUploaded}</span>
+                    <span>{t("properties.sync_downloaded")}: {syncResult.filesDownloaded}</span>
+                    <span>{t("properties.sync_conflicts")}: {syncResult.conflicts}</span>
+                    <span>{t("properties.sync_events")}: {syncResult.eventId || "-"}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={handleSaveGeneral}
+                  disabled={savingGeneral}
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-black transition hover:bg-primary/80 disabled:opacity-50"
+                >
+                  {savingGeneral ? t("properties.saving") : t("action.save")}
+                </button>
+              </div>
             </div>
           )}
-          {installInfo?.lastPlayed && (
-            <div className="flex items-center justify-between">
-              <span className="text-text-muted">Last Played</span>
-              <span className="text-text-primary">{installInfo.lastPlayed}</span>
+
+          {activeTab === "updates" && (
+            <div className="space-y-4">
+              <h3 className="text-xl font-semibold text-text-primary">{t("properties.tab.updates")}</h3>
+              <div className="grid gap-3 rounded-lg border border-background-border bg-background-elevated/50 p-4 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-text-muted">{t("properties.current_version")}</span>
+                  <span className="text-text-primary">{installInfo.version || "-"}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-text-muted">{t("properties.branch")}</span>
+                  <span className="text-text-primary">{installInfo.branch || "stable"}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-text-muted">{t("properties.build_id")}</span>
+                  <span className="text-text-primary">{installInfo.buildId || "-"}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-text-muted">{t("properties.last_played")}</span>
+                  <span className="text-text-primary">{installInfo.lastPlayed || "-"}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-text-muted">{t("properties.settings_updated")}</span>
+                  <span className="text-text-primary">{launchOptions?.updatedAt || "-"}</span>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-background-border bg-background-elevated/50 p-4">
+                <p className="text-sm text-text-secondary">{t("properties.verify_desc")}</p>
+                <button
+                  onClick={handleVerify}
+                  disabled={!resolvedInstallPath || verifying}
+                  className="mt-3 inline-flex items-center gap-2 rounded-lg border border-background-border px-3 py-2 text-sm text-text-secondary transition hover:text-text-primary hover:border-primary disabled:opacity-50"
+                >
+                  {verifying ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                  {verifying ? t("properties.verifying") : t("properties.verify_now")}
+                </button>
+              </div>
+
+              {verifyResult && (
+                <div className={`rounded-lg border p-4 text-sm ${
+                  verifyResult.success
+                    ? "border-accent-green/30 bg-accent-green/10"
+                    : "border-accent-red/30 bg-accent-red/10"
+                }`}>
+                  <p className="font-medium text-text-primary">
+                    {verifyResult.success ? t("properties.verify_success") : t("properties.verify_issues")}
+                  </p>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-text-secondary">
+                    <span>{t("properties.total_files")}: {verifyResult.totalFiles}</span>
+                    <span>{t("properties.verified_files")}: {verifyResult.verifiedFiles}</span>
+                    <span>{t("properties.corrupted_files")}: {verifyResult.corruptedFiles}</span>
+                    <span>{t("properties.missing_files")}: {verifyResult.missingFiles}</span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
-        </div>
+
+          {activeTab === "installed_files" && (
+            <div className="space-y-4">
+              <h3 className="text-xl font-semibold text-text-primary">{t("properties.tab.installed_files")}</h3>
+
+              <div className="rounded-lg border border-background-border bg-background-elevated/50 p-4">
+                <div className="grid gap-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-text-muted">{t("properties.install_status")}</span>
+                    <span className={resolvedInstallStatus ? "text-accent-green" : "text-text-muted"}>
+                      {resolvedInstallStatus ? t("properties.status_installed") : t("properties.status_not_installed")}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-text-muted">{t("properties.size_on_disk")}</span>
+                    <span className="text-text-primary">{bytesToHuman(installInfo.sizeBytes)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-text-muted">{t("properties.current_location")}</span>
+                    <span className="max-w-[280px] truncate text-right text-text-primary" title={resolvedInstallPath || "-"}>
+                      {resolvedInstallPath || "-"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <button
+                    onClick={handleOpenInstallFolder}
+                    disabled={!resolvedInstallPath || !isTauriRuntime}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-background-border px-3 py-2 text-sm text-text-secondary transition hover:text-text-primary hover:border-primary disabled:opacity-50"
+                  >
+                    <FolderOpen size={14} />
+                    {t("properties.open_folder")}
+                  </button>
+                  <button
+                    onClick={() => setShowMoveDialog(true)}
+                    disabled={!resolvedInstallPath}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-background-border px-3 py-2 text-sm text-text-secondary transition hover:text-text-primary hover:border-primary disabled:opacity-50"
+                  >
+                    <FolderInput size={14} />
+                    {t("properties.move_install")}
+                  </button>
+                  <button
+                    onClick={handleVerify}
+                    disabled={!resolvedInstallPath || verifying}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-background-border px-3 py-2 text-sm text-text-secondary transition hover:text-text-primary hover:border-primary disabled:opacity-50"
+                  >
+                    {verifying ? <Loader2 size={14} className="animate-spin" /> : <Shield size={14} />}
+                    {t("properties.verify_now")}
+                  </button>
+                  <button
+                    onClick={() => setShowUninstallConfirm(true)}
+                    disabled={!resolvedInstallPath || uninstalling}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-accent-red/30 px-3 py-2 text-sm text-accent-red transition hover:bg-accent-red/10 disabled:opacity-50"
+                  >
+                    {uninstalling ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                    {t("action.uninstall")}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "dlc" && (
+            <div className="space-y-4">
+              <h3 className="text-xl font-semibold text-text-primary">{t("properties.tab.dlc")}</h3>
+              <input
+                value={dlcSearch}
+                onChange={(event) => setDlcSearch(event.target.value)}
+                placeholder={t("properties.search_dlc")}
+                className="w-full rounded-lg border border-background-border bg-background-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none"
+              />
+              <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
+                {filteredDlc.length === 0 && (
+                  <div className="rounded-lg border border-background-border bg-background-elevated/50 px-4 py-3 text-sm text-text-muted">
+                    {t("properties.no_dlc")}
+                  </div>
+                )}
+                {filteredDlc.map((item) => {
+                  const override = dlcOverrides[item.appId];
+                  const enabled = override ?? item.enabled;
+                  return (
+                    <label
+                      key={item.appId}
+                      className="flex items-center justify-between gap-4 rounded-lg border border-background-border bg-background-elevated/50 px-4 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-text-primary">{item.title}</p>
+                        <p className="text-xs text-text-muted">{bytesToHuman(item.sizeBytes)}</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(enabled)}
+                        onChange={() => toggleDlcOverride(item.appId)}
+                        className="h-4 w-4 rounded border-background-border bg-background-surface text-primary focus:ring-primary"
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="flex justify-end">
+                <button
+                  onClick={handleSaveDlc}
+                  disabled={savingDlc}
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-black transition hover:bg-primary/80 disabled:opacity-50"
+                >
+                  {savingDlc ? t("properties.saving") : t("action.save")}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "privacy" && (
+            <div className="space-y-5">
+              <h3 className="text-xl font-semibold text-text-primary">{t("properties.tab.privacy")}</h3>
+              <div className="rounded-lg border border-background-border bg-background-elevated/50 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-text-primary">{t("properties.hide_in_library")}</p>
+                    <p className="text-xs text-text-muted">{t("properties.hide_in_library_desc")}</p>
+                  </div>
+                  <button
+                    onClick={() => setPrivacyHidden((value) => !value)}
+                    className={`relative h-6 w-11 rounded-full transition ${
+                      privacyHidden ? "bg-primary" : "bg-background-border"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${
+                        privacyHidden ? "left-5" : "left-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-background-border bg-background-elevated/50 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-text-primary">{t("properties.mark_private")}</p>
+                    <p className="text-xs text-text-muted">{t("properties.mark_private_desc")}</p>
+                  </div>
+                  <button
+                    onClick={() => setMarkPrivate((value) => !value)}
+                    className={`relative h-6 w-11 rounded-full transition ${
+                      markPrivate ? "bg-primary" : "bg-background-border"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${
+                        markPrivate ? "left-5" : "left-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-background-border bg-background-elevated/50 p-4">
+                <p className="text-sm font-medium text-text-primary">{t("properties.overlay_data")}</p>
+                <p className="mt-1 text-xs text-text-muted">{t("properties.overlay_data_desc")}</p>
+                <button
+                  onClick={() => {
+                    setLaunchArgs("");
+                    setSuccessMessage(t("properties.overlay_data_cleared"));
+                  }}
+                  className="mt-3 inline-flex items-center gap-2 rounded-lg border border-background-border px-3 py-2 text-sm text-text-secondary transition hover:text-text-primary hover:border-primary"
+                >
+                  <ShieldOff size={14} />
+                  {t("properties.clear_overlay_data")}
+                </button>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={handleSavePrivacy}
+                  disabled={savingPrivacy}
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-black transition hover:bg-primary/80 disabled:opacity-50"
+                >
+                  {savingPrivacy ? t("properties.saving") : t("action.save")}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "customization" && (
+            <div className="space-y-4">
+              <h3 className="text-xl font-semibold text-text-primary">{t("properties.tab.customization")}</h3>
+              <div className="space-y-3 rounded-lg border border-background-border bg-background-elevated/50 p-4">
+                <p className="text-xs uppercase tracking-[0.26em] text-text-muted">{t("properties.artwork_title")}</p>
+
+                {(["coverPath", "backgroundPath", "logoPath"] as Array<keyof CustomizationState>).map((field) => {
+                  const labelKey =
+                    field === "coverPath"
+                      ? "properties.artwork_cover"
+                      : field === "backgroundPath"
+                        ? "properties.artwork_background"
+                        : "properties.artwork_logo";
+                  return (
+                    <div key={field} className="rounded-lg border border-background-border bg-background-surface p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-text-primary">{t(labelKey)}</p>
+                          <p className="truncate text-xs text-text-muted" title={customization[field] || "-"}>
+                            {customization[field] || t("properties.no_custom_asset")}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => void handleBrowseCustomizationFile(field)}
+                            disabled={!isTauriRuntime}
+                            className="inline-flex items-center gap-1 rounded-md border border-background-border px-2.5 py-1.5 text-xs text-text-secondary transition hover:text-text-primary hover:border-primary disabled:opacity-50"
+                          >
+                            <UploadCloud size={12} />
+                            {t("properties.change")}
+                          </button>
+                          <button
+                            onClick={() =>
+                              setCustomization((previous) => ({
+                                ...previous,
+                                [field]: "",
+                              }))
+                            }
+                            className="inline-flex items-center gap-1 rounded-md border border-background-border px-2.5 py-1.5 text-xs text-text-secondary transition hover:text-text-primary hover:border-primary"
+                          >
+                            {t("properties.reset")}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex justify-end">
+                <button
+                  onClick={handleSaveCustomization}
+                  disabled={savingCustomization}
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-black transition hover:bg-primary/80 disabled:opacity-50"
+                >
+                  {savingCustomization ? t("properties.saving") : t("action.save")}
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
       </div>
 
-      {/* Actions */}
-      {installInfo?.installed && (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {/* Verify Game Files */}
-          <button
-            onClick={handleVerify}
-            disabled={verifying}
-            className="flex items-center gap-3 rounded-lg border border-background-border bg-background-surface p-4 transition hover:border-primary hover:bg-primary/5 disabled:opacity-50"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-blue/10">
-              {verifying ? (
-                <Loader2 size={20} className="animate-spin text-accent-blue" />
-              ) : (
-                <Shield size={20} className="text-accent-blue" />
-              )}
-            </div>
-            <div className="text-left">
-              <p className="font-medium text-text-primary">Verify Integrity</p>
-              <p className="text-xs text-text-muted">
-                {verifying ? `Verifying... ${verifyProgress}%` : "Check game files"}
-              </p>
-            </div>
-          </button>
-
-          {/* Move Game */}
-          <button
-            onClick={() => setShowMoveDialog(true)}
-            disabled={moving}
-            className="flex items-center gap-3 rounded-lg border border-background-border bg-background-surface p-4 transition hover:border-primary hover:bg-primary/5 disabled:opacity-50"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-amber/10">
-              {moving ? (
-                <Loader2 size={20} className="animate-spin text-accent-amber" />
-              ) : (
-                <FolderInput size={20} className="text-accent-amber" />
-              )}
-            </div>
-            <div className="text-left">
-              <p className="font-medium text-text-primary">Move Install</p>
-              <p className="text-xs text-text-muted">
-                {moving ? `Moving... ${moveProgress}%` : "Change location"}
-              </p>
-            </div>
-          </button>
-
-          {/* Cloud Sync */}
-          <button
-            onClick={handleCloudSync}
-            disabled={syncing}
-            className="flex items-center gap-3 rounded-lg border border-background-border bg-background-surface p-4 transition hover:border-primary hover:bg-primary/5 disabled:opacity-50"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-green/10">
-              {syncing ? (
-                <Loader2 size={20} className="animate-spin text-accent-green" />
-              ) : syncStatus === "success" ? (
-                <CheckCircle2 size={20} className="text-accent-green" />
-              ) : (
-                <Cloud size={20} className="text-accent-green" />
-              )}
-            </div>
-            <div className="text-left">
-              <p className="font-medium text-text-primary">Cloud Sync</p>
-              <p className="text-xs text-text-muted">
-                {syncing ? "Syncing..." : syncStatus === "success" ? "Synced!" : "Sync save data"}
-              </p>
-            </div>
-          </button>
-
-          {/* Uninstall */}
-          <button
-            onClick={() => setShowUninstallConfirm(true)}
-            disabled={uninstalling}
-            className="flex items-center gap-3 rounded-lg border border-background-border bg-background-surface p-4 transition hover:border-accent-red hover:bg-accent-red/5 disabled:opacity-50"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-red/10">
-              {uninstalling ? (
-                <Loader2 size={20} className="animate-spin text-accent-red" />
-              ) : (
-                <Trash2 size={20} className="text-accent-red" />
-              )}
-            </div>
-            <div className="text-left">
-              <p className="font-medium text-text-primary">Uninstall</p>
-              <p className="text-xs text-text-muted">
-                {uninstalling ? "Uninstalling..." : "Remove game files"}
-              </p>
-            </div>
-          </button>
-        </div>
-      )}
-
-      {/* Verify Result */}
-      {verifyResult && (
-        <div className={`rounded-lg border p-4 ${
-          verifyResult.corruptedFiles > 0 || verifyResult.missingFiles > 0
-            ? "border-accent-red/30 bg-accent-red/10"
-            : "border-accent-green/30 bg-accent-green/10"
-        }`}>
-          <div className="flex items-center gap-2">
-            {verifyResult.corruptedFiles > 0 || verifyResult.missingFiles > 0 ? (
-              <AlertCircle size={16} className="text-accent-red" />
-            ) : (
-              <CheckCircle2 size={16} className="text-accent-green" />
-            )}
-            <p className="font-medium text-text-primary">
-              {verifyResult.corruptedFiles > 0 || verifyResult.missingFiles > 0
-                ? "Issues Found"
-                : "All Files Verified"}
-            </p>
-          </div>
-          <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-text-muted">
-            <span>Total Files: {verifyResult.totalFiles}</span>
-            <span>Verified: {verifyResult.verifiedFiles}</span>
-            {verifyResult.corruptedFiles > 0 && (
-              <span className="text-accent-red">Corrupted: {verifyResult.corruptedFiles}</span>
-            )}
-            {verifyResult.missingFiles > 0 && (
-              <span className="text-accent-red">Missing: {verifyResult.missingFiles}</span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Uninstall Confirm Dialog */}
       {showUninstallConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
           <div className="w-full max-w-md rounded-xl border border-background-border bg-background-elevated p-6 shadow-xl">
-            <h3 className="text-lg font-semibold text-text-primary">Uninstall {gameName}?</h3>
-            <p className="mt-2 text-sm text-text-secondary">
-              This will remove all game files from your computer. Save data stored in the cloud will not be affected.
-            </p>
-            {installInfo?.installPath && (
-              <p className="mt-2 text-xs text-text-muted">
-                Location: {installInfo.installPath}
-              </p>
-            )}
+            <h3 className="text-lg font-semibold text-text-primary">{t("properties.uninstall_confirm_title")}</h3>
+            <p className="mt-2 text-sm text-text-secondary">{t("properties.uninstall_confirm_desc")}</p>
             <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={() => setShowUninstallConfirm(false)}
                 className="rounded-lg border border-background-border px-4 py-2 text-sm font-medium text-text-secondary transition hover:bg-background-muted"
               >
-                Cancel
+                {t("action.cancel")}
               </button>
               <button
-                onClick={handleUninstall}
+                onClick={() => void handleUninstall()}
                 disabled={uninstalling}
                 className="rounded-lg bg-accent-red px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-red/80 disabled:opacity-50"
               >
-                {uninstalling ? "Uninstalling..." : "Uninstall"}
+                {uninstalling ? t("properties.uninstalling") : t("action.uninstall")}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Move Dialog */}
       {showMoveDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
           <div className="w-full max-w-md rounded-xl border border-background-border bg-background-elevated p-6 shadow-xl">
-            <h3 className="text-lg font-semibold text-text-primary">Move {gameName}</h3>
-            <p className="mt-2 text-sm text-text-secondary">
-              Select a new location for the game files. The game will be moved to the selected folder.
-            </p>
+            <h3 className="text-lg font-semibold text-text-primary">{t("properties.move_title")}</h3>
+            <p className="mt-2 text-sm text-text-secondary">{t("properties.move_desc")}</p>
 
             <div className="mt-4">
               <label className="text-xs text-text-muted">{t("properties.current_location")}</label>
               <p className="mt-1 truncate rounded-lg border border-background-border bg-background-muted px-3 py-2 text-sm text-text-secondary">
-                {installInfo?.installPath}
+                {resolvedInstallPath || "-"}
               </p>
             </div>
 
@@ -450,30 +905,19 @@ export default function PropertiesSection({
                 <input
                   type="text"
                   value={newInstallPath}
-                  onChange={(e) => setNewInstallPath(e.target.value)}
+                  onChange={(event) => setNewInstallPath(event.target.value)}
                   placeholder={t("properties.select_destination")}
                   className="flex-1 rounded-lg border border-background-border bg-background-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none"
                 />
                 <button
-                  onClick={handleBrowse}
-                  className="rounded-lg border border-background-border px-3 py-2 text-sm text-text-secondary transition hover:bg-background-muted"
+                  onClick={() => void handleBrowseMoveTarget()}
+                  disabled={!isTauriRuntime}
+                  className="rounded-lg border border-background-border px-3 py-2 text-sm text-text-secondary transition hover:bg-background-muted disabled:opacity-50"
                 >
                   {t("common.browse")}
                 </button>
               </div>
             </div>
-
-            {moving && (
-              <div className="mt-4">
-                <div className="h-2 overflow-hidden rounded-full bg-background-muted">
-                  <div
-                    className="h-full rounded-full bg-primary transition-all"
-                    style={{ width: `${moveProgress}%` }}
-                  />
-                </div>
-                <p className="mt-1 text-center text-xs text-text-muted">Moving... {moveProgress}%</p>
-              </div>
-            )}
 
             <div className="mt-6 flex justify-end gap-3">
               <button
@@ -481,17 +925,23 @@ export default function PropertiesSection({
                   setShowMoveDialog(false);
                   setNewInstallPath("");
                 }}
-                disabled={moving}
-                className="rounded-lg border border-background-border px-4 py-2 text-sm font-medium text-text-secondary transition hover:bg-background-muted disabled:opacity-50"
+                className="rounded-lg border border-background-border px-4 py-2 text-sm font-medium text-text-secondary transition hover:bg-background-muted"
               >
-                Cancel
+                {t("action.cancel")}
               </button>
               <button
-                onClick={handleMove}
+                onClick={() => void handleMoveInstall()}
                 disabled={moving || !newInstallPath}
                 className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-black transition hover:bg-primary/80 disabled:opacity-50"
               >
-                {moving ? "Moving..." : "Move"}
+                {moving ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 size={14} className="animate-spin" />
+                    {t("properties.moving")}
+                  </span>
+                ) : (
+                  t("properties.move_install")
+                )}
               </button>
             </div>
           </div>

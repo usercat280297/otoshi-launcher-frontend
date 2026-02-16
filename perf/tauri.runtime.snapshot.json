@@ -1,27 +1,28 @@
 {
-    "cold_start_p95_ms":  35,
-    "warm_start_p95_ms":  6,
-    "store_first_interactive_ms":  35,
+    "cold_start_p95_ms":  12444,
+    "warm_start_p95_ms":  12404,
+    "store_first_interactive_ms":  12444,
     "long_tasks":  0,
     "fps_avg":  60,
     "idle_cpu_pct":  0,
-    "idle_ram_mb":  32.74,
+    "idle_ram_mb":  21.41,
     "details":  {
                     "source":  "tauri_desktop_smoke",
                     "cold_start_samples_ms":  [
-                                                  35
+                                                  12444
                                               ],
                     "warm_start_samples_ms":  [
-                                                  6
+                                                  12404
                                               ],
                     "launch_timeout_sec":  45,
                     "health_url":  "http://127.0.0.1:8000/health",
-                    "launcher_exe":  "E:\\OTOSHI LAUNCHER\\frontend\\src-tauri\\target\\release\\otoshi_launcher.exe",
+                    "launcher_exe":  "E:\\OTOSHI LAUNCHER\\dist\\OtoshiLauncher-Portable-v20\\OtoshiLauncher.exe",
                     "ready_modes":  [
-                                        "backend_health",
-                                        "backend_health",
+                                        "process_alive",
+                                        "process_alive",
+                                        "process_alive",
                                         "process_alive"
                                     ]
                 },
-    "generated_at":  "2026-02-16T11:05:14.1510902+07:00"
+    "generated_at":  "2026-02-16T22:01:27.2551661+07:00"
 }

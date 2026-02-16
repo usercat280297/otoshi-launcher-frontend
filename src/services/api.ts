@@ -36,6 +36,17 @@ import {
   SteamPrice,
   SystemRequirements,
   ImageQualityMode,
+  PropertiesCloudSyncResult,
+  PropertiesDlcState,
+  PropertiesInstallInfo,
+  PropertiesLaunchOptions,
+  PropertiesMoveResult,
+  PropertiesSaveLocations,
+  PropertiesVerifyResult,
+  SteamIndexAssetInfo,
+  SteamIndexAssetPrefetchResult,
+  SteamIndexIngestRebuildResult,
+  SteamIndexIngestStatus,
   TradeOffer,
   UserProfile,
   WishlistEntry,
@@ -69,21 +80,55 @@ const desktopApiBase =
 const webApiBase =
   import.meta.env.VITE_API_URL || (isDev ? desktopDefaultBase : "");
 const API_URL = isDesktop ? desktopApiBase : webApiBase;
+
+const toLocalFallbacks = (base: string): string[] => {
+  const trimmed = String(base || "").trim().replace(/\/+$/, "");
+  if (!trimmed) return [];
+  const out = [trimmed];
+  try {
+    const u = new URL(trimmed);
+    if (u.hostname === "127.0.0.1" || u.hostname === "localhost") {
+      const hostVariants = ["127.0.0.1", "localhost"];
+      const ports = [u.port || "8000", "8000", "8001", "8002", "8003"];
+      for (const host of hostVariants) {
+        for (const port of ports) {
+          out.push(`${u.protocol}//${host}:${port}`);
+        }
+      }
+    }
+  } catch {
+    // ignore malformed base values
+  }
+  return out;
+};
+
+const envFallbackBases = String(import.meta.env.VITE_API_FALLBACKS || "")
+  .split(",")
+  .map((item) => item.trim())
+  .filter(Boolean);
 const desktopFallbackBases = isDesktop
   ? Array.from(
-      new Set(
-        [
-          desktopApiBase,
-          desktopApiBase.replace("127.0.0.1", "localhost"),
-          "http://127.0.0.1:8000",
-          "http://localhost:8000",
-          "http://127.0.0.1:8001",
-          "http://localhost:8001"
-        ].filter(Boolean)
-      )
+      new Set([
+        ...toLocalFallbacks(desktopApiBase),
+        ...toLocalFallbacks("http://127.0.0.1:8000"),
+        ...toLocalFallbacks("http://127.0.0.1:8001"),
+        ...toLocalFallbacks("http://127.0.0.1:8002"),
+        ...toLocalFallbacks("http://127.0.0.1:8003"),
+        ...envFallbackBases
+      ])
     )
   : [];
-const API_FALLBACKS = isDesktop ? desktopFallbackBases : [API_URL];
+const webFallbackBases = Array.from(
+  new Set([
+    ...toLocalFallbacks(API_URL),
+    ...(isDev ? toLocalFallbacks("http://127.0.0.1:8000") : []),
+    ...(isDev ? toLocalFallbacks("http://127.0.0.1:8001") : []),
+    ...(isDev ? toLocalFallbacks("http://127.0.0.1:8002") : []),
+    ...(isDev ? toLocalFallbacks("http://127.0.0.1:8003") : []),
+    ...envFallbackBases
+  ])
+);
+const API_FALLBACKS = isDesktop ? desktopFallbackBases : webFallbackBases;
 const API_BASES = Array.from(new Set(API_FALLBACKS.filter(Boolean)));
 if (!API_BASES.length && !isDev) {
   console.warn("[API] VITE_API_URL is not set; API calls will fail in production.");
@@ -544,11 +589,15 @@ async function requestJson<T>(
 
       if (!response.ok) {
         const rawMessage = await response.text();
-        console.error(`[API] Error from ${base}:`, { status: response.status, message: rawMessage });
         const parsedError = parseApiError(rawMessage);
 
         const retryableStatus = canFallback && shouldRetry(path, response.status);
         if (retryableStatus) {
+          debugLog(`[API] Retryable HTTP error from ${base}:`, {
+            path,
+            status: response.status,
+            message: parsedError.message
+          });
           lastError = new ApiHttpError(
             parsedError.message,
             response.status,
@@ -557,6 +606,11 @@ async function requestJson<T>(
           );
           continue;
         }
+        console.error(`[API] Error from ${base}:`, {
+          path,
+          status: response.status,
+          message: parsedError.message
+        });
         throw new ApiHttpError(
           parsedError.message,
           response.status,
@@ -570,17 +624,18 @@ async function requestJson<T>(
       debugLog(`[API] Success from ${base}`, { path, resolvedApiBase });
       return data;
     } catch (err: any) {
-      console.error(`[API] Exception from ${base}:`, err);
       if (canFallback) {
         const retryable =
           Boolean(err?.retryable) ||
           shouldRetry(path, typeof err?.status === "number" ? err.status : undefined) ||
           isNetworkLikeError(err);
         if (retryable) {
+          debugLog(`[API] Retryable exception from ${base}:`, { path, error: err });
           lastError = err instanceof Error ? err : new Error("Request failed");
           continue;
         }
       }
+      console.error(`[API] Exception from ${base}:`, { path, error: err });
       throw err;
     }
   }
@@ -770,6 +825,143 @@ export async function fetchSteamCatalog(params: {
     offset: data.offset ?? 0,
     limit: data.limit ?? params.limit ?? 0,
     items: Array.isArray(data.items) ? data.items.map(mapSteamCatalogItem) : []
+  };
+}
+
+export async function fetchSteamIndexCatalog(params: {
+  limit?: number;
+  offset?: number;
+  sort?: string;
+  scope?: "all" | "library" | "owned";
+}): Promise<{ total: number; offset: number; limit: number; items: SteamCatalogItem[] }> {
+  const query = new URLSearchParams();
+  if (params.limit) query.set("limit", String(params.limit));
+  if (params.offset) query.set("offset", String(params.offset));
+  if (params.sort) query.set("sort", params.sort);
+  if (params.scope) query.set("scope", params.scope);
+  const data = await requestJson<any>(`/steam/index/catalog?${query.toString()}`);
+  return {
+    total: data.total ?? 0,
+    offset: data.offset ?? 0,
+    limit: data.limit ?? params.limit ?? 0,
+    items: Array.isArray(data.items) ? data.items.map(mapSteamCatalogItem) : [],
+  };
+}
+
+export async function searchSteamIndexCatalog(params: {
+  q: string;
+  limit?: number;
+  offset?: number;
+  source?: "global";
+}): Promise<{ total: number; offset: number; limit: number; items: SteamCatalogItem[] }> {
+  const query = new URLSearchParams();
+  query.set("q", params.q);
+  if (params.limit) query.set("limit", String(params.limit));
+  if (params.offset) query.set("offset", String(params.offset));
+  if (params.source) query.set("source", params.source);
+  const data = await requestJson<any>(`/steam/index/search?${query.toString()}`);
+  return {
+    total: data.total ?? 0,
+    offset: data.offset ?? 0,
+    limit: data.limit ?? params.limit ?? 0,
+    items: Array.isArray(data.items) ? data.items.map(mapSteamCatalogItem) : [],
+  };
+}
+
+export async function fetchSteamIndexGameDetail(appId: string): Promise<SteamGameDetail> {
+  const data = await requestJson<any>(`/steam/index/games/${appId}`);
+  return mapSteamGameDetail(data);
+}
+
+export async function fetchSteamIndexAssets(
+  appId: string,
+  forceRefresh = false
+): Promise<SteamIndexAssetInfo> {
+  const query = forceRefresh ? "?force_refresh=1" : "";
+  const data = await requestJson<any>(`/steam/index/assets/${appId}${query}`);
+  return {
+    appId: String(data.app_id ?? appId),
+    selectedSource: String(data.selected_source ?? "steam"),
+    assets: {
+      grid: data.assets?.grid ?? null,
+      hero: data.assets?.hero ?? null,
+      logo: data.assets?.logo ?? null,
+      icon: data.assets?.icon ?? null,
+    },
+    qualityScore: data.quality_score ?? null,
+    version: data.version ?? null,
+  };
+}
+
+export async function prefetchSteamIndexAssets(payload: {
+  appIds: string[];
+  forceRefresh?: boolean;
+}): Promise<SteamIndexAssetPrefetchResult> {
+  const data = await requestJson<any>("/steam/index/assets/prefetch", {
+    method: "POST",
+    body: JSON.stringify({
+      app_ids: payload.appIds,
+      force_refresh: Boolean(payload.forceRefresh),
+    }),
+  });
+  return {
+    total: Number(data.total ?? 0),
+    processed: Number(data.processed ?? 0),
+    success: Number(data.success ?? 0),
+    failed: Number(data.failed ?? 0),
+  };
+}
+
+export async function fetchSteamIndexIngestStatus(): Promise<SteamIndexIngestStatus> {
+  const data = await requestJson<any>("/steam/index/ingest/status");
+  return {
+    latestJob: {
+      id: data.latest_job?.id ?? null,
+      status: data.latest_job?.status ?? "idle",
+      processedCount: Number(data.latest_job?.processed_count ?? 0),
+      successCount: Number(data.latest_job?.success_count ?? 0),
+      failureCount: Number(data.latest_job?.failure_count ?? 0),
+      startedAt: data.latest_job?.started_at ?? null,
+      completedAt: data.latest_job?.completed_at ?? null,
+      errorMessage: data.latest_job?.error_message ?? null,
+      externalEnrichment: {
+        steamdbSuccess: Number(data.latest_job?.external_enrichment?.steamdb_success ?? 0),
+        steamdbFailed: Number(data.latest_job?.external_enrichment?.steamdb_failed ?? 0),
+        crossStoreSuccess: Number(data.latest_job?.external_enrichment?.cross_store_success ?? 0),
+        crossStoreFailed: Number(data.latest_job?.external_enrichment?.cross_store_failed ?? 0),
+      },
+    },
+    totals: {
+      titles: Number(data.totals?.titles ?? 0),
+      assets: Number(data.totals?.assets ?? 0),
+      steamdbEnrichment: Number(data.totals?.steamdb_enrichment ?? 0),
+      crossStoreMappings: Number(data.totals?.cross_store_mappings ?? 0),
+    },
+  };
+}
+
+export async function rebuildSteamIndex(params?: {
+  maxItems?: number | null;
+  enrichDetails?: boolean;
+}): Promise<SteamIndexIngestRebuildResult> {
+  const data = await requestJson<any>("/steam/index/ingest/rebuild", {
+    method: "POST",
+    body: JSON.stringify({
+      max_items: params?.maxItems ?? null,
+      enrich_details: params?.enrichDetails ?? true,
+    }),
+  });
+  return {
+    jobId: String(data.job_id ?? ""),
+    processed: Number(data.processed ?? 0),
+    success: Number(data.success ?? 0),
+    failed: Number(data.failed ?? 0),
+    steamdbSuccess: Number(data.steamdb_success ?? 0),
+    steamdbFailed: Number(data.steamdb_failed ?? 0),
+    crossStoreSuccess: Number(data.cross_store_success ?? 0),
+    crossStoreFailed: Number(data.cross_store_failed ?? 0),
+    startedAt: String(data.started_at ?? ""),
+    completedAt: String(data.completed_at ?? ""),
   };
 }
 
@@ -1050,6 +1242,159 @@ export async function fetchSteamExtended(appId: string, skipCache = false): Prom
     playerCount: data.player_count ?? null,
     reviews: mapSteamReviewSummary(data.reviews),
   };
+}
+
+export async function fetchPropertiesInstallInfo(appId: string): Promise<PropertiesInstallInfo> {
+  const data = await requestJson<any>(`/properties/${appId}/info`);
+  return {
+    installed: Boolean(data.installed),
+    installPath: data.install_path ?? data.installPath ?? null,
+    installRoots: Array.isArray(data.install_roots ?? data.installRoots)
+      ? (data.install_roots ?? data.installRoots)
+      : [],
+    sizeBytes: data.size_bytes ?? data.sizeBytes ?? null,
+    version: data.version ?? null,
+    branch: data.branch ?? null,
+    buildId: data.build_id ?? data.buildId ?? null,
+    lastPlayed: data.last_played ?? data.lastPlayed ?? null,
+    playtimeLocalHours: Number(data.playtime_local_hours ?? data.playtimeLocalHours ?? 0),
+  };
+}
+
+export async function uninstallPropertiesInstall(
+  appId: string,
+  installPath: string
+): Promise<{ success: boolean; message?: string | null }> {
+  const data = await requestJson<any>(`/properties/${appId}/uninstall`, {
+    method: "POST",
+    body: JSON.stringify({
+      install_path: installPath,
+    }),
+  });
+  return {
+    success: Boolean(data.success ?? true),
+    message: typeof data.message === "string" ? data.message : null,
+  };
+}
+
+export async function verifyPropertiesInstall(
+  appId: string,
+  payload: { installPath: string; manifestVersion?: string | null; maxMismatches?: number }
+): Promise<PropertiesVerifyResult> {
+  const data = await requestJson<any>(`/properties/${appId}/verify`, {
+    method: "POST",
+    body: JSON.stringify({
+      install_path: payload.installPath,
+      manifest_version: payload.manifestVersion ?? null,
+      max_mismatches: payload.maxMismatches ?? 200,
+    }),
+  });
+  return {
+    success: Boolean(data.success),
+    totalFiles: Number(data.total_files ?? data.totalFiles ?? 0),
+    verifiedFiles: Number(data.verified_files ?? data.verifiedFiles ?? 0),
+    corruptedFiles: Number(data.corrupted_files ?? data.corruptedFiles ?? 0),
+    missingFiles: Number(data.missing_files ?? data.missingFiles ?? 0),
+    manifestVersion: data.manifest_version ?? data.manifestVersion ?? null,
+    mismatchFiles: Array.isArray(data.mismatch_files ?? data.mismatchFiles)
+      ? (data.mismatch_files ?? data.mismatchFiles).map((item: any) => ({
+          path: String(item.path ?? ""),
+          expectedHash: item.expected_hash ?? item.expectedHash ?? null,
+          actualHash: item.actual_hash ?? item.actualHash ?? null,
+          reason: String(item.reason ?? "unknown"),
+        }))
+      : [],
+  };
+}
+
+export async function movePropertiesInstall(
+  appId: string,
+  payload: { sourcePath: string; destPath: string }
+): Promise<PropertiesMoveResult> {
+  const data = await requestJson<any>(`/properties/${appId}/move`, {
+    method: "POST",
+    body: JSON.stringify({
+      source_path: payload.sourcePath,
+      dest_path: payload.destPath,
+    }),
+  });
+  return {
+    success: Boolean(data.success),
+    newPath: String(data.new_path ?? data.newPath ?? payload.destPath),
+    progressToken: String(data.progress_token ?? data.progressToken ?? ""),
+    message: String(data.message ?? ""),
+  };
+}
+
+export async function runPropertiesCloudSync(appId: string): Promise<PropertiesCloudSyncResult> {
+  const data = await requestJson<any>(`/properties/${appId}/cloud-sync`, {
+    method: "POST",
+  });
+  return {
+    success: Boolean(data.success),
+    filesUploaded: Number(data.files_uploaded ?? data.filesUploaded ?? 0),
+    filesDownloaded: Number(data.files_downloaded ?? data.filesDownloaded ?? 0),
+    conflicts: Number(data.conflicts ?? 0),
+    resolution: Array.isArray(data.resolution) ? data.resolution : [],
+    eventId: data.event_id ?? data.eventId ?? null,
+  };
+}
+
+export async function fetchPropertiesSaveLocations(appId: string): Promise<PropertiesSaveLocations> {
+  const data = await requestJson<any>(`/properties/${appId}/save-locations`);
+  return {
+    appId: String(data.app_id ?? data.appId ?? appId),
+    locations: Array.isArray(data.locations) ? data.locations : [],
+  };
+}
+
+export async function fetchPropertiesLaunchOptions(appId: string): Promise<PropertiesLaunchOptions> {
+  const data = await requestJson<any>(`/properties/${appId}/launch-options`);
+  return {
+    appId: String(data.app_id ?? data.appId ?? appId),
+    userId: data.user_id ?? data.userId ?? null,
+    launchOptions:
+      data.launch_options && typeof data.launch_options === "object"
+        ? data.launch_options
+        : data.launchOptions && typeof data.launchOptions === "object"
+          ? data.launchOptions
+          : {},
+    updatedAt: data.updated_at ?? data.updatedAt ?? null,
+  };
+}
+
+export async function setPropertiesLaunchOptions(
+  appId: string,
+  payload: Record<string, any>
+): Promise<PropertiesLaunchOptions> {
+  const data = await requestJson<any>(`/properties/${appId}/launch-options`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  return {
+    appId: String(data.app_id ?? data.appId ?? appId),
+    userId: data.user_id ?? data.userId ?? null,
+    launchOptions:
+      data.launch_options && typeof data.launch_options === "object"
+        ? data.launch_options
+        : data.launchOptions && typeof data.launchOptions === "object"
+          ? data.launchOptions
+          : {},
+    updatedAt: data.updated_at ?? data.updatedAt ?? null,
+  };
+}
+
+export async function fetchPropertiesDlcState(appId: string): Promise<PropertiesDlcState[]> {
+  const data = await requestJson<any>(`/properties/${appId}/dlc`);
+  const items = Array.isArray(data) ? data : [];
+  return items.map((item: any) => ({
+    appId: String(item.app_id ?? item.appId ?? ""),
+    title: String(item.title ?? "Unknown DLC"),
+    installed: Boolean(item.installed),
+    enabled: Boolean(item.enabled ?? true),
+    sizeBytes: item.size_bytes ?? item.sizeBytes ?? null,
+    headerImage: item.header_image ?? item.headerImage ?? null,
+  }));
 }
 
 function mapSteamDLC(item: any): SteamDLC {
@@ -1368,36 +1713,107 @@ function mapSteamPrice(raw?: any): SteamPrice | null {
   };
 }
 
-  function mapSteamCatalogItem(raw: any): SteamCatalogItem {
-    const toThumb = (url?: string | null, width = 460) => toBackendThumbnail(url, width, "adaptive");
-    const rawArtwork = raw?.artwork && typeof raw.artwork === "object" ? raw.artwork : {};
-    const artwork = {
-      t0: toThumb(rawArtwork.t0 ?? null, 120),
-      t1: toThumb(rawArtwork.t1 ?? null, 200),
-      t2: toThumb(rawArtwork.t2 ?? null, 320),
-      t3: toThumb(rawArtwork.t3 ?? raw.background ?? raw.background_raw ?? null, 460),
-      t4: toThumb(rawArtwork.t4 ?? raw.header_image ?? raw.headerImage ?? null, 640),
-      version: Number.isFinite(Number(rawArtwork.version)) ? Number(rawArtwork.version) : 1,
-    };
-    const dlcCountRaw = raw.dlc_count ?? raw.dlcCount;
-    const dlcCount = Number.isFinite(Number(dlcCountRaw)) ? Number(dlcCountRaw) : 0;
-    return {
-      appId: String(raw.app_id ?? raw.appId ?? raw.id ?? ""),
-      name: raw.name ?? "",
-      shortDescription: raw.short_description ?? raw.shortDescription ?? null,
-      headerImage: toThumb(raw.header_image ?? raw.headerImage ?? raw.tiny_image ?? null, 460),
-      capsuleImage: toThumb(raw.capsule_image ?? raw.capsuleImage ?? null, 360),
-      background: raw.background ?? null,
-      artwork,
-      requiredAge: raw.required_age ?? raw.requiredAge ?? null,
-      denuvo: Boolean(raw.denuvo ?? raw.has_denuvo ?? raw.hasDenuvo ?? false),
-      price: mapSteamPrice(raw.price ?? raw.price_overview),
-      genres: raw.genres ?? [],
-      releaseDate: raw.release_date ?? raw.releaseDate ?? null,
-      platforms: raw.platforms ?? [],
-      dlcCount
-    };
+function inferSteamAppId(raw: any): string {
+  const direct = raw?.app_id ?? raw?.appId ?? raw?.id;
+  if (direct !== undefined && direct !== null) {
+    const normalized = String(direct).trim();
+    if (
+      normalized &&
+      normalized.toLowerCase() !== "null" &&
+      normalized.toLowerCase() !== "none"
+    ) {
+      return normalized;
+    }
   }
+
+  const candidates = [
+    raw?.name,
+    raw?.header_image,
+    raw?.headerImage,
+    raw?.capsule_image,
+    raw?.capsuleImage,
+    raw?.background,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string") {
+      continue;
+    }
+    const fromName = candidate.match(/^steam app\s+(\d+)$/i);
+    if (fromName?.[1]) {
+      return fromName[1];
+    }
+    const fromUrl = candidate.match(/\/steam\/apps\/(\d+)\//i);
+    if (fromUrl?.[1]) {
+      return fromUrl[1];
+    }
+  }
+  return "";
+}
+
+function mapSteamCatalogItem(raw: any): SteamCatalogItem {
+  const toThumb = (
+    url?: string | null,
+    width = 460,
+    mode: ImageQualityMode = "adaptive"
+  ) => toBackendThumbnail(url, width, mode);
+  const rawArtwork = raw?.artwork && typeof raw.artwork === "object" ? raw.artwork : {};
+  const appId = inferSteamAppId(raw);
+  const cardImageSource =
+    rawArtwork.t3 ??
+    raw.capsule_image ??
+    raw.capsuleImage ??
+    raw.header_image ??
+    raw.headerImage ??
+    raw.background ??
+    raw.background_raw ??
+    null;
+  const heroImageSource =
+    rawArtwork.t4 ??
+    raw.background ??
+    raw.background_image ??
+    raw.hero_image ??
+    raw.header_image ??
+    raw.headerImage ??
+    cardImageSource;
+  const backgroundSource =
+    raw.background ??
+    raw.background_image ??
+    raw.hero_image ??
+    heroImageSource ??
+    null;
+  const artwork = {
+    t0: toThumb(rawArtwork.t0 ?? null, 120),
+    t1: toThumb(rawArtwork.t1 ?? null, 220),
+    t2: toThumb(rawArtwork.t2 ?? null, 360),
+    t3: toThumb(cardImageSource, 560, "adaptive"),
+    t4: toThumb(heroImageSource, 1600, "high"),
+    version: Number.isFinite(Number(rawArtwork.version)) ? Number(rawArtwork.version) : 1,
+  };
+  const dlcCountRaw = raw.dlc_count ?? raw.dlcCount;
+  const dlcCount = Number.isFinite(Number(dlcCountRaw)) ? Number(dlcCountRaw) : 0;
+  return {
+    appId,
+    name: raw.name ?? (appId ? `Steam App ${appId}` : ""),
+    shortDescription: raw.short_description ?? raw.shortDescription ?? null,
+    headerImage: toThumb(
+      raw.header_image ?? raw.headerImage ?? raw.tiny_image ?? cardImageSource ?? null,
+      560
+    ),
+    capsuleImage: toThumb(
+      raw.capsule_image ?? raw.capsuleImage ?? raw.header_image ?? raw.headerImage ?? null,
+      420
+    ),
+    background: backgroundSource,
+    artwork,
+    requiredAge: raw.required_age ?? raw.requiredAge ?? null,
+    denuvo: Boolean(raw.denuvo ?? raw.has_denuvo ?? raw.hasDenuvo ?? false),
+    price: mapSteamPrice(raw.price ?? raw.price_overview),
+    genres: raw.genres ?? [],
+    releaseDate: raw.release_date ?? raw.releaseDate ?? null,
+    platforms: raw.platforms ?? [],
+    dlcCount
+  };
+}
 
 function mapSteamGameDetail(raw: any): SteamGameDetail {
   const base = mapSteamCatalogItem(raw);

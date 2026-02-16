@@ -25,14 +25,65 @@ const prefetchedAhead = new Set<string>();
 const PREFETCH_AHEAD_LIMIT = 10;
 const FALLBACK_DELAY_MS = 1800;
 
+function decodeThumbnailSource(value: string): string {
+  try {
+    const parsed = new URL(value, window.location.origin);
+    const embedded = parsed.searchParams.get("url");
+    if (embedded) {
+      return decodeURIComponent(embedded);
+    }
+  } catch {
+    // ignore malformed URL and keep original value
+  }
+  return value;
+}
+
+function scorePosterCandidate(value: string): number {
+  const source = decodeThumbnailSource(value).toLowerCase();
+  let score = 0;
+  if (/library_600x900|\/grids\/|\/grid\//.test(source)) score += 20;
+  if (/\/logo\.png|\/icon\.jpg/.test(source)) score -= 20;
+  if (/header|capsule_616x353|library_hero|hero/.test(source)) score -= 8;
+  if (source.includes("steamgriddb.com")) score += 4;
+  return score;
+}
+
+function pickBestPoster(candidates: Array<string | null | undefined>): string | null {
+  const valid = candidates
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter((value) => value.length > 0);
+  if (!valid.length) return null;
+
+  let selected = valid[0];
+  let best = scorePosterCandidate(selected);
+  for (const candidate of valid.slice(1)) {
+    const score = scorePosterCandidate(candidate);
+    if (score > best) {
+      best = score;
+      selected = candidate;
+    }
+  }
+  return selected;
+}
+
 function mapArtworkSources(item: SteamCatalogItem, fallback: string) {
   const art = item.artwork ?? {};
+  const poster = pickBestPoster([
+    art.t3,
+    art.t2,
+    art.t1,
+    fallback,
+    item.capsuleImage,
+    item.headerImage,
+    art.t4,
+  ]);
+  const hero = pickBestPoster([art.t4, item.background, item.headerImage, fallback]);
   return {
-    t0: art.t0 ?? item.capsuleImage ?? fallback,
-    t1: art.t1 ?? item.capsuleImage ?? fallback,
-    t2: art.t2 ?? item.headerImage ?? item.capsuleImage ?? fallback,
-    t3: art.t3 ?? item.headerImage ?? fallback,
-    t4: art.t4 ?? item.headerImage ?? fallback,
+    t0: art.t0 ?? item.capsuleImage ?? item.headerImage ?? poster ?? fallback,
+    t1: poster ?? fallback,
+    t2: poster ?? fallback,
+    t3: poster ?? fallback,
+    t4: hero ?? poster ?? fallback,
   };
 }
 
@@ -42,7 +93,8 @@ export default function SteamCard({ item, onOpen, prefetchItems = [] }: SteamCar
   const [displayImage, setDisplayImage] = useState<string | null>(null);
   const fallbackTimerRef = useRef<number | null>(null);
   const fallbackGrid = `https://cdn.cloudflare.steamstatic.com/steam/apps/${item.appId}/library_600x900.jpg`;
-  const steamFallback = item.capsuleImage || item.headerImage || fallbackGrid;
+  const steamFallback =
+    pickBestPoster([fallbackGrid, item.capsuleImage, item.headerImage]) || fallbackGrid;
   const artworkSources = useMemo(
     () => mapArtworkSources(item, steamFallback),
     [item, steamFallback]

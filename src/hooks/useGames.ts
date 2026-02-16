@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   fetchGames,
   fetchSteamCatalog,
+  fetchSteamIndexCatalog,
   fetchSteamGridAssets,
   fetchSteamGridAssetsBatch,
 } from "../services/api";
@@ -210,15 +211,44 @@ export function useGames() {
           artMode: "tiered",
           thumbW: 460,
         });
-        const filtered = steamCatalog.items.filter(
+        const withAppId = steamCatalog.items.filter(
+          (item) => Boolean(String(item.appId || "").trim())
+        );
+        const preferred = withAppId.filter(
           (item) => !isPlaceholderSteamTitle(item.name)
         );
-        if (!filtered.length) {
+        const sourceItems = preferred.length ? preferred : withAppId;
+        if (!sourceItems.length) {
           return [];
         }
-        const mapped = filtered.map((item, index) => {
+        const mapped = sourceItems.map((item, index) => {
           const game = mapSteamItemToGame(item, index);
           return { ...game, studio: "Otoshi" };
+        });
+        return mapped;
+      };
+
+      const loadFromGlobalIndexCatalog = async () => {
+        debugLog("[useGames] Loading global index catalog from /steam/index/catalog...");
+        const steamCatalog = await fetchSteamIndexCatalog({
+          limit: 80,
+          offset: 0,
+          sort: "recent",
+          scope: "all"
+        });
+        const withAppId = steamCatalog.items.filter(
+          (item) => Boolean(String(item.appId || "").trim())
+        );
+        const preferred = withAppId.filter(
+          (item) => !isPlaceholderSteamTitle(item.name)
+        );
+        const sourceItems = preferred.length ? preferred : withAppId;
+        if (!sourceItems.length) {
+          return [];
+        }
+        const mapped = sourceItems.map((item, index) => {
+          const game = mapSteamItemToGame(item, index);
+          return { ...game, studio: "Steam" };
         });
         return mapped;
       };
@@ -227,8 +257,17 @@ export function useGames() {
         for (let attempt = 1; attempt <= STARTUP_MAX_ATTEMPTS; attempt += 1) {
           try {
           let data: Game[] = [];
-          data = await loadFromLuaCatalog();
-          debugLog("[useGames] Lua catalog response:", data.length);
+          try {
+            data = await loadFromGlobalIndexCatalog();
+            debugLog("[useGames] Global index catalog response:", data.length);
+          } catch (indexErr) {
+            debugLog("[useGames] Global index failed, fallback to lua catalog.", indexErr);
+          }
+
+          if (!data.length) {
+            data = await loadFromLuaCatalog();
+            debugLog("[useGames] Lua catalog response:", data.length);
+          }
 
           if (!data.length && allowDbFallback) {
             debugLog("[useGames] Fetching Otoshi games...");
