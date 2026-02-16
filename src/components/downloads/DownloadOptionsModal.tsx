@@ -63,6 +63,8 @@ const getDefaultVersion = (options: DownloadOptions | null) => {
   return latest?.id || options.versions[0]?.id || "latest";
 };
 
+const HF_UNAVAILABLE_CODES = new Set(["hf_manifest_missing", "hf_repo_not_configured"]);
+
 export default function DownloadOptionsModal({
   open,
   options,
@@ -130,6 +132,33 @@ export default function DownloadOptionsModal({
       activeTask.status === "paused" ||
       activeTask.status === "verifying");
 
+  const resolveMethodNote = (item: DownloadMethod) => {
+    if (item.noteKey) {
+      const translated = t(`download_options.note.${item.noteKey}`);
+      if (translated !== `download_options.note.${item.noteKey}`) {
+        return translated;
+      }
+    }
+
+    if (item.availabilityCode && HF_UNAVAILABLE_CODES.has(item.availabilityCode)) {
+      return t("download_options.hf_unavailable_banner");
+    }
+
+    return item.note || null;
+  };
+
+  const hfUnavailableMethod = useMemo(() => {
+    if (!options) return null;
+    return (
+      options.methods.find(
+        (item) =>
+          item.id === "hf_chunks" &&
+          item.enabled === false &&
+          (!!item.availabilityCode && HF_UNAVAILABLE_CODES.has(item.availabilityCode))
+      ) || null
+    );
+  }, [options]);
+
   const handleBrowse = async () => {
     setBrowseError(null);
     try {
@@ -142,7 +171,7 @@ export default function DownloadOptionsModal({
       }
     } catch (browseErr) {
       console.warn("Browse directory failed", browseErr);
-      setBrowseError("Folder picker is available in the desktop app.");
+      setBrowseError(t("download_options.browse_unavailable"));
     }
   };
 
@@ -158,22 +187,28 @@ export default function DownloadOptionsModal({
 
   return (
     <Modal isOpen={open} onClose={onClose} title={t("download_options.title")} size="lg">
-      {loading && <div className="glass-panel p-6 text-sm text-text-secondary">Loading options...</div>}
+      {loading && <div className="glass-panel p-6 text-sm text-text-secondary">{t("download_options.loading")}</div>}
       {!loading && error && <div className="glass-panel p-6 text-sm text-accent-red">{error}</div>}
       {!loading && !error && options && (
         <div className="space-y-6">
+          {hfUnavailableMethod && (
+            <div className="glass-panel border-accent-amber/50 bg-accent-amber/10 p-4 text-sm text-accent-amber">
+              {resolveMethodNote(hfUnavailableMethod)}
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-3">
-            <Badge label="Steam download" tone="secondary" />
+            <Badge label={t("download_options.badge_steam")} tone="secondary" />
             <p className="text-sm text-text-secondary">{options.name}</p>
           </div>
 
           <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
             <div className="space-y-6">
               <div className="space-y-3">
-                <p className="text-xs uppercase tracking-[0.3em] text-text-muted">Download method</p>
+                <p className="text-xs uppercase tracking-[0.3em] text-text-muted">{t("download_options.section.method")}</p>
                 <div className="space-y-2">
                   {options.methods.map((item) => {
                     const isDisabled = item.enabled === false;
+                    const note = resolveMethodNote(item);
                     return (
                       <label
                         key={item.id}
@@ -195,12 +230,12 @@ export default function DownloadOptionsModal({
                           <div>
                             <p className="text-sm font-semibold">{item.label}</p>
                             {item.description && <p className="text-xs text-text-muted">{item.description}</p>}
-                            {isDisabled && item.note && <p className="text-xs text-accent-amber">{item.note}</p>}
+                            {isDisabled && note && <p className="text-xs text-accent-amber">{note}</p>}
                           </div>
                         </div>
                         {item.recommended && (
                           <span className="flex items-center gap-1 text-xs text-primary">
-                            <CheckCircle2 size={14} /> Recommended
+                            <CheckCircle2 size={14} /> {t("download_options.method_recommended")}
                           </span>
                         )}
                       </label>
@@ -210,7 +245,7 @@ export default function DownloadOptionsModal({
               </div>
 
               <div className="space-y-3">
-                <p className="text-xs uppercase tracking-[0.3em] text-text-muted">Version</p>
+                <p className="text-xs uppercase tracking-[0.3em] text-text-muted">{t("download_options.section.version")}</p>
                 <select
                   value={version}
                   onChange={(event) => setVersion(event.target.value)}
@@ -226,7 +261,7 @@ export default function DownloadOptionsModal({
               </div>
 
               <div className="space-y-3">
-                <p className="text-xs uppercase tracking-[0.3em] text-text-muted">Install location</p>
+                <p className="text-xs uppercase tracking-[0.3em] text-text-muted">{t("download_options.section.install_location")}</p>
                 <div className="flex flex-wrap gap-3">
                   <input
                     value={installPath}
@@ -235,7 +270,7 @@ export default function DownloadOptionsModal({
                     className="input-field flex-1"
                   />
                   <Button size="md" variant="secondary" icon={<FolderOpen size={16} />} onClick={handleBrowse}>
-                    Browse
+                    {t("download_options.browse")}
                   </Button>
                 </div>
                 <label className="flex items-center gap-2 text-xs text-text-secondary">
@@ -244,9 +279,9 @@ export default function DownloadOptionsModal({
                     checked={createSubfolder}
                     onChange={(event) => setCreateSubfolder(event.target.checked)}
                   />
-                  Create a game subfolder automatically
+                  {t("download_options.create_subfolder")}
                 </label>
-                <p className="text-xs text-text-muted">Final path: {finalPath}</p>
+                <p className="text-xs text-text-muted">{t("download_options.install_path_final")}: {finalPath}</p>
                 {browseError && <p className="text-xs text-text-muted">{browseError}</p>}
               </div>
 
@@ -266,7 +301,7 @@ export default function DownloadOptionsModal({
                   <div className="h-16 w-16 rounded-lg border border-background-border bg-background-muted" />
                 )}
                 <div className="min-w-0">
-                  <p className="text-xs uppercase tracking-[0.3em] text-text-muted">Preparing install</p>
+                  <p className="text-xs uppercase tracking-[0.3em] text-text-muted">{t("download_options.section.preparing")}</p>
                   <p className="truncate text-lg font-semibold text-text-primary">{gameTitle || options.name}</p>
                   <p className="truncate text-xs text-text-muted">{sizeLabel}</p>
                 </div>
@@ -275,7 +310,7 @@ export default function DownloadOptionsModal({
               {activeTask && (
                 <div className="glass-panel space-y-3 p-4">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs uppercase tracking-[0.3em] text-text-muted">Current task</p>
+                    <p className="text-xs uppercase tracking-[0.3em] text-text-muted">{t("download_options.section.current_task")}</p>
                     <span className="text-xs text-text-secondary">{Math.round(activeTask.progress || 0)}%</span>
                   </div>
                   <div className="h-1.5 rounded-full bg-background-muted">
@@ -299,7 +334,7 @@ export default function DownloadOptionsModal({
                         }
                       }}
                     >
-                      {activeTask.status === "paused" ? "Resume" : "Pause"}
+                      {activeTask.status === "paused" ? t("download_options.resume") : t("download_options.pause")}
                     </Button>
                     <Button
                       size="sm"
@@ -308,7 +343,7 @@ export default function DownloadOptionsModal({
                       disabled={!canStopTask}
                       onClick={() => activeTask && onCancelTask?.(activeTask.id)}
                     >
-                      Stop
+                      {t("download_options.stop")}
                     </Button>
                   </div>
                 </div>
@@ -317,48 +352,48 @@ export default function DownloadOptionsModal({
               <div className="glass-panel space-y-3 p-4">
                 <div className="flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-text-muted">
                   <HardDrive size={14} />
-                  Storage
+                  {t("download_options.section.storage")}
                 </div>
                 <div className="space-y-2 text-sm text-text-secondary">
                   <div className="flex items-center justify-between">
-                    <span>Required</span>
+                    <span>{t("download_options.storage_required")}</span>
                     <span className="text-text-primary">{sizeLabel}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span>Free space</span>
+                    <span>{t("download_options.storage_free")}</span>
                     <span className="text-text-primary">{freeLabel}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span>Total</span>
+                    <span>{t("download_options.storage_total")}</span>
                     <span className="text-text-primary">{totalLabel}</span>
                   </div>
                 </div>
-                {!hasSpace && <p className="text-xs text-accent-red">Not enough free space for this download.</p>}
+                {!hasSpace && <p className="text-xs text-accent-red">{t("download_options.storage_not_enough")}</p>}
               </div>
 
               <div className="glass-panel space-y-3 p-4">
-                <p className="text-xs uppercase tracking-[0.3em] text-text-muted">Fixes</p>
+                <p className="text-xs uppercase tracking-[0.3em] text-text-muted">{t("download_options.section.fixes")}</p>
                 <div className="space-y-3 text-sm text-text-secondary">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <ShieldCheck size={16} className="text-emerald-400" />
-                      <span>Online Fix</span>
+                      <span>{t("download_options.fix_online")}</span>
                     </div>
-                    <span>{options.onlineFix.length > 0 ? "Available" : "Not available"}</span>
+                    <span>{options.onlineFix.length > 0 ? t("download_options.available") : t("download_options.not_available")}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <ShieldOff size={16} className="text-amber-400" />
-                      <span>Bypass</span>
+                      <span>{t("download_options.fix_bypass")}</span>
                     </div>
-                    <span>{options.bypass ? "Available" : "Not available"}</span>
+                    <span>{options.bypass ? t("download_options.available") : t("download_options.not_available")}</span>
                   </div>
                   <div className="flex gap-3">
                     <Link to="/fixes/online" className="text-xs text-primary hover:underline">
-                      Open Online Fix
+                      {t("download_options.open_online_fix")}
                     </Link>
                     <Link to="/fixes/bypass" className="text-xs text-primary hover:underline">
-                      Open Bypass
+                      {t("download_options.open_bypass")}
                     </Link>
                   </div>
                 </div>
@@ -368,14 +403,14 @@ export default function DownloadOptionsModal({
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-background-border pt-4">
             <p className="text-xs text-text-muted">
-              Download size uses manifests when available, otherwise Steam requirements.
+              {t("download_options.summary_manifest")}
             </p>
             <div className="flex gap-3">
               <Button variant="ghost" onClick={onClose}>
-                Cancel
+                {t("download_options.cancel")}
               </Button>
               <Button onClick={handleSubmit} disabled={!method || submitting || !hasSpace}>
-                {submitting ? "Preparing..." : "Download"}
+                {submitting ? t("download_options.preparing_button") : t("download_options.download")}
               </Button>
             </div>
           </div>

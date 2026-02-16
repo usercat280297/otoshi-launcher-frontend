@@ -29,11 +29,35 @@ export type GameLaunchPref = {
   updatedAt: number;
 };
 
+export type RunningGame = {
+  gameId: string;
+  title: string;
+  pid: number;
+  startedAt: number;
+  sessionId: string;
+  launchedAsAdmin: boolean;
+  overlayEnabled: boolean;
+};
+
 export async function launchGame(payload: LaunchRequest): Promise<LaunchResult> {
   if (!isTauri()) {
     throw new Error("Launch is only available in the desktop app.");
   }
   return invoke<LaunchResult>("launch_game", payload);
+}
+
+export async function getRunningGames(): Promise<RunningGame[]> {
+  if (!isTauri()) {
+    return [];
+  }
+  return invoke<RunningGame[]>("get_running_games");
+}
+
+export async function stopGame(gameId: string): Promise<void> {
+  if (!isTauri()) {
+    return;
+  }
+  await invoke("stop_game", { gameId });
 }
 
 export async function getGameLaunchPref(gameId: string): Promise<GameLaunchPref | null> {

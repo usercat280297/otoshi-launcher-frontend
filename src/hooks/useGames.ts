@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { fetchGames, fetchSteamCatalog, fetchSteamGridAssets } from "../services/api";
+import {
+  fetchGames,
+  fetchSteamCatalog,
+  fetchSteamGridAssets,
+  fetchSteamGridAssetsBatch,
+} from "../services/api";
 import { Game, SteamCatalogItem, SystemRequirements } from "../types";
 
 const steamSpotlightPalette = [
@@ -62,9 +67,17 @@ async function mapWithLimit<T, R>(
 }
 
 const ART_CONCURRENCY = 4;
+const ART_BATCH_FLUSH_MS = 120;
 const STARTUP_MAX_ATTEMPTS = 8;
 const STARTUP_RETRY_BASE_MS = 700;
 const STARTUP_RETRY_MAX_MS = 4000;
+const isDev = Boolean(import.meta.env.DEV);
+
+const debugLog = (...args: unknown[]) => {
+  if (isDev) {
+    console.log(...args);
+  }
+};
 
 const wait = (ms: number) =>
   new Promise<void>((resolve) => window.setTimeout(resolve, ms));
@@ -76,8 +89,9 @@ const mapSteamItemToGame = (item: SteamCatalogItem, index: number): Game => {
   const priceCents = item.price?.final ?? item.price?.initial ?? 0;
   const price = priceCents ? priceCents / 100 : 0;
   const discountPercent = item.price?.discountPercent ?? 0;
-  const headerImage = item.headerImage || item.capsuleImage || "";
-  const heroImage = item.background || headerImage;
+  const headerImage = item.artwork?.t3 || item.headerImage || item.capsuleImage || "";
+  const heroImage = item.artwork?.t4 || item.background || headerImage;
+  const iconImage = item.artwork?.t0 || null;
   return {
     id: `steam-${item.appId}`,
     slug: `steam-${item.appId}`,
@@ -97,6 +111,7 @@ const mapSteamItemToGame = (item: SteamCatalogItem, index: number): Game => {
     headerImage,
     heroImage,
     backgroundImage: item.background || heroImage,
+    iconImage: iconImage || undefined,
     screenshots: item.background ? [item.background] : [],
     videos: [],
     systemRequirements: steamDefaultRequirements,
@@ -117,22 +132,51 @@ export function useGames() {
 
   useEffect(() => {
     let mounted = true;
+    const artPatchQueueRef = { current: new Map<string, Partial<Game>>() };
+    const flushTimerRef = { current: null as number | null };
 
-    const applyArt = (gameId: string, art: { grid?: string | null; hero?: string | null; logo?: string | null; icon?: string | null }) => {
-      setGames((prev) =>
-        prev.map((game) =>
-          game.id === gameId
-            ? {
-                ...game,
-                headerImage: art.grid || game.headerImage,
-                heroImage: art.hero || game.heroImage,
-                backgroundImage: art.hero || game.backgroundImage,
-                logoImage: art.logo || game.logoImage,
-                iconImage: art.icon || game.iconImage
-              }
-            : game
-        )
-      );
+    const flushArtPatches = () => {
+      flushTimerRef.current = null;
+      if (!mounted) {
+        artPatchQueueRef.current.clear();
+        return;
+      }
+      const queued = artPatchQueueRef.current;
+      if (!queued.size) {
+        return;
+      }
+      artPatchQueueRef.current = new Map<string, Partial<Game>>();
+      setGames((prev) => {
+        let changed = false;
+        const next = prev.map((game) => {
+          const patch = queued.get(game.id);
+          if (!patch) {
+            return game;
+          }
+          changed = true;
+          return { ...game, ...patch };
+        });
+        return changed ? next : prev;
+      });
+    };
+
+    const queueArtPatch = (
+      gameId: string,
+      art: { grid?: string | null; hero?: string | null; logo?: string | null; icon?: string | null }
+    ) => {
+      const existing = artPatchQueueRef.current.get(gameId) || {};
+      artPatchQueueRef.current.set(gameId, {
+        ...existing,
+        headerImage: art.grid || existing.headerImage,
+        heroImage: art.hero || existing.heroImage,
+        backgroundImage: art.hero || existing.backgroundImage,
+        logoImage: art.logo || existing.logoImage,
+        iconImage: art.icon || existing.iconImage,
+      });
+
+      if (flushTimerRef.current == null) {
+        flushTimerRef.current = window.setTimeout(flushArtPatches, ART_BATCH_FLUSH_MS);
+      }
     };
 
     const notifyLuaMissing = () => {
@@ -149,7 +193,7 @@ export function useGames() {
     };
 
     const load = async () => {
-      console.log("[useGames] Starting to load games...");
+      debugLog("[useGames] Starting to load games...");
       let lastError: Error | null = null;
 
       if (mounted) {
@@ -159,8 +203,13 @@ export function useGames() {
       }
 
       const loadFromLuaCatalog = async () => {
-        console.log("[useGames] Loading lua catalog from /steam/catalog...");
-        const steamCatalog = await fetchSteamCatalog({ limit: 80, offset: 0 });
+        debugLog("[useGames] Loading lua catalog from /steam/catalog...");
+        const steamCatalog = await fetchSteamCatalog({
+          limit: 80,
+          offset: 0,
+          artMode: "tiered",
+          thumbW: 460,
+        });
         const filtered = steamCatalog.items.filter(
           (item) => !isPlaceholderSteamTitle(item.name)
         );
@@ -179,12 +228,12 @@ export function useGames() {
           try {
           let data: Game[] = [];
           data = await loadFromLuaCatalog();
-          console.log("[useGames] Lua catalog response:", data.length);
+          debugLog("[useGames] Lua catalog response:", data.length);
 
           if (!data.length && allowDbFallback) {
-            console.log("[useGames] Fetching Otoshi games...");
+            debugLog("[useGames] Fetching Otoshi games...");
             data = await fetchGames();
-            console.log("[useGames] Otoshi games response:", data.length);
+            debugLog("[useGames] Otoshi games response:", data.length);
           }
 
           if (mounted && data.length > 0) {
@@ -192,14 +241,39 @@ export function useGames() {
             setError(null);
             setErrorCode(null);
             notifyLuaLoaded();
-            void mapWithLimit(data, ART_CONCURRENCY, async (game) => {
-              const art = await fetchSteamGridAssets(game.title, game.steamAppId);
-              if (!mounted || !art) {
-                return game;
+            void (async () => {
+              const batchPayload = data
+                .filter((game) => Boolean(game.steamAppId))
+                .map((game) => ({
+                  appId: game.steamAppId || null,
+                  title: game.title,
+                }));
+              const batchResult = await fetchSteamGridAssetsBatch(batchPayload).catch(() => ({}));
+              const missingBatch: Game[] = [];
+
+              for (const game of data) {
+                const appId = game.steamAppId ? String(game.steamAppId) : "";
+                const artFromBatch = appId ? batchResult[appId] : null;
+                if (artFromBatch) {
+                  queueArtPatch(game.id, artFromBatch);
+                } else {
+                  missingBatch.push(game);
+                }
               }
-              applyArt(game.id, art);
-              return game;
-            });
+
+              if (!missingBatch.length) {
+                return;
+              }
+
+              await mapWithLimit(missingBatch, ART_CONCURRENCY, async (game) => {
+                const art = await fetchSteamGridAssets(game.title, game.steamAppId);
+                if (!mounted || !art) {
+                  return game;
+                }
+                queueArtPatch(game.id, art);
+                return game;
+              });
+            })();
             return;
           }
 
@@ -247,6 +321,10 @@ export function useGames() {
 
     return () => {
       mounted = false;
+      if (flushTimerRef.current != null) {
+        window.clearTimeout(flushTimerRef.current);
+      }
+      artPatchQueueRef.current.clear();
     };
   }, []);
 

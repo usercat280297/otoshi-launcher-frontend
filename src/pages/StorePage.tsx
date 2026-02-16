@@ -118,7 +118,9 @@ export default function StorePage() {
           const offset = pageIndex * ALL_GAMES_PAGE_SIZE;
           const data = await fetchSteamCatalog({
             limit: ALL_GAMES_PAGE_SIZE,
-            offset
+            offset,
+            artMode: "tiered",
+            thumbW: 460
           });
           const totalCount = data.total ?? 0;
           const payload = { items: data.items, total: totalCount };
@@ -218,25 +220,43 @@ export default function StorePage() {
     }
 
     let cancelled = false;
-    setFirstRunPending(true);
-    setFirstRunError(null);
+    const runDeferredDiagnostics = () => {
+      setFirstRunPending(true);
+      setFirstRunError(null);
+      runLauncherFirstRunDiagnostics({ preloadLimit: 72, deferred: true })
+        .then((result) => {
+          if (cancelled) return;
+          setFirstRunResult(result);
+        })
+        .catch((err: any) => {
+          if (cancelled) return;
+          setFirstRunError(err?.message || "First-run diagnostics failed");
+        })
+        .finally(() => {
+          if (cancelled) return;
+          setFirstRunPending(false);
+        });
+    };
 
-    runLauncherFirstRunDiagnostics({ preloadLimit: 72 })
-      .then((result) => {
-        if (cancelled) return;
-        setFirstRunResult(result);
-      })
-      .catch((err: any) => {
-        if (cancelled) return;
-        setFirstRunError(err?.message || "First-run diagnostics failed");
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setFirstRunPending(false);
-      });
+    let idleId: number | null = null;
+    let timeoutId: number | null = null;
+    const requestIdle = (window as Window & { requestIdleCallback?: Function }).requestIdleCallback;
+    const cancelIdle = (window as Window & { cancelIdleCallback?: Function }).cancelIdleCallback;
+
+    if (typeof requestIdle === "function") {
+      idleId = requestIdle(() => runDeferredDiagnostics(), { timeout: 2500 }) as number;
+    } else {
+      timeoutId = window.setTimeout(() => runDeferredDiagnostics(), 1200);
+    }
 
     return () => {
       cancelled = true;
+      if (timeoutId != null) {
+        window.clearTimeout(timeoutId);
+      }
+      if (idleId != null && typeof cancelIdle === "function") {
+        cancelIdle(idleId);
+      }
     };
   }, []);
 
@@ -304,7 +324,9 @@ export default function StorePage() {
       fetchSteamCatalog({
         limit: SEARCH_PREVIEW_LIMIT,
         offset: 0,
-        search: trimmed
+        search: trimmed,
+        artMode: "basic",
+        thumbW: 360
       })
         .then((data) => {
           if (searchPreviewRequestRef.current !== requestId) return;
@@ -481,11 +503,10 @@ export default function StorePage() {
 
   useEffect(() => {
     if (!introLoading) return;
-    if (firstRunPending) return;
     if (!initialStoreContentReady) return;
     const timer = window.setTimeout(() => setIntroLoading(false), 400);
     return () => window.clearTimeout(timer);
-  }, [introLoading, firstRunPending, initialStoreContentReady]);
+  }, [introLoading, initialStoreContentReady]);
 
   const tourSteps = useMemo(
     () => [
@@ -652,8 +673,13 @@ export default function StorePage() {
       )}
       <div className="relative min-h-[360px]">
         <div className={`grid gap-6 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 ${allLoading ? "opacity-60" : ""}`}>
-          {allGames.map((item) => (
-            <SteamCard key={item.appId} item={item} onOpen={handleOpenSteam} />
+          {allGames.map((item, index) => (
+            <SteamCard
+              key={item.appId}
+              item={item}
+              onOpen={handleOpenSteam}
+              prefetchItems={allGames.slice(index + 1, index + 11)}
+            />
           ))}
         </div>
         {allLoading && (
@@ -752,7 +778,7 @@ export default function StorePage() {
     </section>
   );
 
-  const showIntroLoading = introLoading || firstRunPending;
+  const showIntroLoading = introLoading;
   const showFirstRunWizard =
     !firstRunDismissed && !firstRunPending && (Boolean(firstRunResult) || Boolean(firstRunError));
 

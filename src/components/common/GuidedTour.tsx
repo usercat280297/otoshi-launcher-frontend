@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 type TourStep = {
@@ -104,13 +104,103 @@ export default function GuidedTour({
     return { top, left };
   }, [open, targetRect]);
 
+  const mask = useMemo(() => {
+    if (!open || !targetRect) return null;
+    const padding = 14;
+    const top = clamp(targetRect.top - padding, 0, window.innerHeight);
+    const left = clamp(targetRect.left - padding, 0, window.innerWidth);
+    const right = clamp(targetRect.right + padding, 0, window.innerWidth);
+    const bottom = clamp(targetRect.bottom + padding, 0, window.innerHeight);
+    const width = Math.max(0, right - left);
+    const height = Math.max(0, bottom - top);
+    return {
+      top,
+      left,
+      right,
+      bottom,
+      width,
+      height,
+      radius: 14
+    };
+  }, [open, targetRect]);
+
+  const spotlightStyle = useMemo(() => {
+    if (!open || !targetRect) return undefined;
+    const cx = clamp(targetRect.left + targetRect.width / 2, 0, window.innerWidth);
+    const cy = clamp(targetRect.top + targetRect.height / 2, 0, window.innerHeight);
+    return {
+      background: `radial-gradient(circle at ${cx}px ${cy}px, rgba(38, 187, 255, 0.14), transparent 42%)`
+    } as CSSProperties;
+  }, [open, targetRect]);
+
   if (!open || !step) return null;
 
   return createPortal(
     <>
-      <div className="tour-root">
-        <div className="tour-backdrop" onClick={onClose} />
-        <div className="tour-spotlight" />
+      <div className="tour-root" aria-hidden="true">
+        {mask ? (
+          <>
+            {/* Blur/dim everything EXCEPT the active target area. */}
+            {mask.top > 0 && (
+              <div
+                className="tour-mask-segment"
+                style={{ top: 0, left: 0, width: "100%", height: mask.top }}
+                onClick={onClose}
+              />
+            )}
+            {mask.bottom < window.innerHeight && (
+              <div
+                className="tour-mask-segment"
+                style={{
+                  top: mask.bottom,
+                  left: 0,
+                  width: "100%",
+                  height: window.innerHeight - mask.bottom
+                }}
+                onClick={onClose}
+              />
+            )}
+            {mask.left > 0 && (
+              <div
+                className="tour-mask-segment"
+                style={{
+                  top: mask.top,
+                  left: 0,
+                  width: mask.left,
+                  height: mask.height
+                }}
+                onClick={onClose}
+              />
+            )}
+            {mask.right < window.innerWidth && (
+              <div
+                className="tour-mask-segment"
+                style={{
+                  top: mask.top,
+                  left: mask.right,
+                  width: window.innerWidth - mask.right,
+                  height: mask.height
+                }}
+                onClick={onClose}
+              />
+            )}
+
+            {/* Visual ring around the spotlight cutout. */}
+            <div
+              className="tour-hole"
+              style={{
+                top: mask.top,
+                left: mask.left,
+                width: mask.width,
+                height: mask.height,
+                borderRadius: mask.radius
+              }}
+            />
+          </>
+        ) : (
+          <div className="tour-backdrop" onClick={onClose} />
+        )}
+        <div className="tour-spotlight" style={spotlightStyle} />
       </div>
       <div ref={tooltipRef} className="tour-tooltip" style={tooltipStyle}>
         <div className="flex items-center justify-between">

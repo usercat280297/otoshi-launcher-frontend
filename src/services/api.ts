@@ -25,6 +25,7 @@ import {
   LaunchConfig,
   OAuthProvider,
   Preorder,
+  PerformanceSnapshot,
   RemoteDownload,
   Review,
   SearchHistoryItem,
@@ -34,6 +35,7 @@ import {
   SteamGridDBAsset,
   SteamPrice,
   SystemRequirements,
+  ImageQualityMode,
   TradeOffer,
   UserProfile,
   WishlistEntry,
@@ -52,6 +54,11 @@ const isTauri = isTauriRuntimeFn;
 
 const isDev = Boolean(import.meta.env.DEV);
 const isDesktop = isTauri();
+const debugLog = (...args: unknown[]) => {
+  if (isDev) {
+    console.log(...args);
+  }
+};
 // Default backend port is 8000 (primary) with additional dev fallbacks.
 const BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || import.meta.env.BACKEND_PORT;
 const desktopDefaultBase = BACKEND_PORT
@@ -209,7 +216,7 @@ async function selectBestDesktopApiBase() {
   if (compatible) {
     if (resolvedApiBase !== compatible.base) {
       resolvedApiBase = compatible.base;
-      console.log("[API] Selected compatible desktop backend:", compatible.base, {
+      debugLog("[API] Selected compatible desktop backend:", compatible.base, {
         observedLimit: compatible.observedLimit
       });
     }
@@ -229,7 +236,7 @@ async function ensureDesktopRuntimeApiBase() {
     const runtimeBase = await invoke<string>("get_runtime_api_base");
     if (runtimeBase && /^https?:\/\//i.test(runtimeBase)) {
       resolvedApiBase = runtimeBase.replace(/\/+$/, "");
-      console.log("[API] Runtime base resolved from Tauri:", resolvedApiBase);
+      debugLog("[API] Runtime base resolved from Tauri:", resolvedApiBase);
     }
   } catch (error) {
     console.warn("[API] Runtime base discovery failed, using probes/fallbacks.", error);
@@ -264,11 +271,59 @@ const shouldRetry = (path: string, status?: number) => {
 class ApiHttpError extends Error {
   status?: number;
   retryable: boolean;
-  constructor(message: string, status?: number, retryable = false) {
+  code?: string;
+  constructor(message: string, status?: number, retryable = false, code?: string) {
     super(message);
     this.name = "ApiHttpError";
     this.status = status;
     this.retryable = retryable;
+    this.code = code;
+  }
+}
+
+type ParsedApiError = {
+  message: string;
+  code?: string;
+};
+
+function parseApiError(rawBody: string): ParsedApiError {
+  const fallback: ParsedApiError = {
+    message: rawBody || "Request failed",
+  };
+
+  if (!rawBody) {
+    return fallback;
+  }
+
+  try {
+    const parsed = JSON.parse(rawBody);
+    if (!parsed || typeof parsed !== "object") {
+      return fallback;
+    }
+
+    const detail = (parsed as { detail?: unknown }).detail;
+    if (typeof detail === "string") {
+      return { message: detail };
+    }
+    if (detail && typeof detail === "object") {
+      const detailObj = detail as { message?: unknown; code?: unknown };
+      return {
+        message:
+          typeof detailObj.message === "string" && detailObj.message.trim().length > 0
+            ? detailObj.message
+            : fallback.message,
+        code: typeof detailObj.code === "string" ? detailObj.code : undefined,
+      };
+    }
+
+    const message = (parsed as { message?: unknown }).message;
+    if (typeof message === "string") {
+      return { message };
+    }
+
+    return fallback;
+  } catch {
+    return fallback;
   }
 }
 
@@ -284,6 +339,50 @@ const isNetworkLikeError = (err: unknown) => {
     lower.includes("aborted")
   );
 };
+
+const HF_UNAVAILABLE_CODES = new Set(["hf_manifest_missing", "hf_repo_not_configured"]);
+
+const extractErrorMessage = (error: unknown): string => {
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object" && "message" in error) {
+    const value = (error as { message?: unknown }).message;
+    if (typeof value === "string") return value;
+  }
+  return String(error || "");
+};
+
+const extractErrorCode = (error: unknown): string | undefined => {
+  if (!error || typeof error !== "object") return undefined;
+  const value = (error as { code?: unknown }).code;
+  return typeof value === "string" ? value : undefined;
+};
+
+export function resolveDownloadErrorI18nKey(error: unknown): string {
+  const code = extractErrorCode(error);
+  if (code && HF_UNAVAILABLE_CODES.has(code)) {
+    return "download.error.game_not_updated";
+  }
+
+  const message = extractErrorMessage(error).toLowerCase();
+  if (message.includes("authentication required") || message.includes("please login") || message.includes("401")) {
+    return "download.error.auth_required";
+  }
+  if (message.includes("security policy blocked") || message.includes("debugger") || message.includes("reverse engineering")) {
+    return "download.error.security_blocked";
+  }
+  if (
+    message.includes("hf_manifest_missing") ||
+    message.includes("hf_repo_not_configured") ||
+    message.includes("manifest not available") ||
+    message.includes("download method unavailable")
+  ) {
+    return "download.error.game_not_updated";
+  }
+  if (message.includes("method unavailable")) {
+    return "download.error.method_unavailable";
+  }
+  return "download.error.start_failed";
+}
 
 const spotlightPalette = [
   "from-blue-500/30 to-cyan-300/20",
@@ -368,11 +467,16 @@ function canProxyThumbnail(url: string) {
   }
 }
 
-function toBackendThumbnail(url?: string | null, width = 460) {
+function toBackendThumbnail(
+  url?: string | null,
+  width = 460,
+  mode: ImageQualityMode = "adaptive"
+) {
   if (!url) return null;
   const baseUrl = getPreferredApiBase();
   if (!baseUrl || !canProxyThumbnail(url)) return url;
-  return `${baseUrl}/steamgriddb/thumbnail?url=${encodeURIComponent(url)}&w=${width}&q=52`;
+  const quality = mode === "fast" ? 42 : mode === "high" ? 68 : 52;
+  return `${baseUrl}/steamgriddb/thumbnail?url=${encodeURIComponent(url)}&w=${width}&q=${quality}&mode=${mode}`;
 }
 
 function runSteamGridQueue() {
@@ -424,48 +528,46 @@ async function requestJson<T>(
       : API_BASES;
   let lastError: Error | null = null;
 
-  console.log(`[API] Requesting: ${path}`, { bases, method: options.method || 'GET' });
+  debugLog(`[API] Requesting: ${path}`, { bases, method: options.method || 'GET' });
 
   for (const base of bases) {
     try {
       const url = `${base}${path}`;
-      console.log(`[API] Trying base: ${base}`);
+      debugLog(`[API] Trying base: ${base}`);
 
       const response = await fetch(url, {
         ...options,
         headers
       });
 
-      console.log(`[API] Response from ${base}: status=${response.status}`);
+      debugLog(`[API] Response from ${base}: status=${response.status}`);
 
       if (!response.ok) {
         const rawMessage = await response.text();
         console.error(`[API] Error from ${base}:`, { status: response.status, message: rawMessage });
-        
-        // Parse error message from JSON if possible
-        let userMessage = rawMessage || "Request failed";
-        try {
-          const parsed = JSON.parse(rawMessage);
-          if (parsed && typeof parsed.detail === "string") {
-            userMessage = parsed.detail;
-          } else if (parsed && typeof parsed.message === "string") {
-            userMessage = parsed.message;
-          }
-        } catch {
-          // Not JSON, use raw message
-        }
-        
+        const parsedError = parseApiError(rawMessage);
+
         const retryableStatus = canFallback && shouldRetry(path, response.status);
         if (retryableStatus) {
-          lastError = new ApiHttpError(userMessage, response.status, true);
+          lastError = new ApiHttpError(
+            parsedError.message,
+            response.status,
+            true,
+            parsedError.code
+          );
           continue;
         }
-        throw new ApiHttpError(userMessage, response.status, false);
+        throw new ApiHttpError(
+          parsedError.message,
+          response.status,
+          false,
+          parsedError.code
+        );
       }
 
       const data = await response.json();
       resolvedApiBase = base;
-      console.log(`[API] Success from ${base}`, { path, resolvedApiBase });
+      debugLog(`[API] Success from ${base}`, { path, resolvedApiBase });
       return data;
     } catch (err: any) {
       console.error(`[API] Exception from ${base}:`, err);
@@ -620,17 +722,48 @@ export async function fetchSteamGridAssets(
   }
 }
 
+export async function fetchSteamGridAssetsBatch(
+  requests: Array<{ appId?: string | null; title: string }>
+): Promise<Record<string, SteamGridDBAsset | null>> {
+  const items = requests
+    .map((item) => ({
+      app_id: item.appId ? String(item.appId) : null,
+      title: String(item.title || "").trim(),
+    }))
+    .filter((item) => item.app_id || item.title.length > 0);
+
+  if (!items.length) {
+    return {};
+  }
+
+  const data = await requestJson<any>("/steamgriddb/lookup/batch", {
+    method: "POST",
+    body: JSON.stringify({ items }),
+  });
+
+  const rawItems = data?.items && typeof data.items === "object" ? data.items : {};
+  const result: Record<string, SteamGridDBAsset | null> = {};
+  for (const [appId, raw] of Object.entries(rawItems)) {
+    result[String(appId)] = raw ? (raw as SteamGridDBAsset) : null;
+  }
+  return result;
+}
+
 export async function fetchSteamCatalog(params: {
   limit?: number;
   offset?: number;
   search?: string;
   sort?: string;
+  artMode?: "none" | "basic" | "tiered";
+  thumbW?: number;
 }): Promise<{ total: number; offset: number; limit: number; items: SteamCatalogItem[] }> {
   const query = new URLSearchParams();
   if (params.limit) query.set("limit", String(params.limit));
   if (params.offset) query.set("offset", String(params.offset));
   if (params.search) query.set("search", params.search);
   if (params.sort) query.set("sort", params.sort);
+  if (params.artMode) query.set("art_mode", params.artMode);
+  if (params.thumbW) query.set("thumb_w", String(params.thumbW));
   const data = await requestJson<any>(`/steam/catalog?${query.toString()}`);
   return {
     total: data.total ?? 0,
@@ -643,6 +776,7 @@ export async function fetchSteamCatalog(params: {
 export async function runLauncherFirstRunDiagnostics(payload?: {
   preloadLimit?: number;
   installPath?: string;
+  deferred?: boolean;
   requirements?: {
     min_cpu_cores?: number;
     min_ram_gb?: number;
@@ -653,12 +787,114 @@ export async function runLauncherFirstRunDiagnostics(payload?: {
   const body = {
     preload_limit: payload?.preloadLimit ?? 48,
     install_path: payload?.installPath ?? null,
+    deferred: payload?.deferred ?? false,
     requirements: payload?.requirements ?? null
   };
   return requestJson<any>("/launcher-diagnostics/first-run", {
     method: "POST",
     body: JSON.stringify(body)
   });
+}
+
+export async function fetchPerformanceSnapshot(): Promise<PerformanceSnapshot> {
+  if (isTauri()) {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const data = await invoke<any>("perf_snapshot");
+    return {
+      startupMs: Number(data?.startup_ms ?? data?.startupMs ?? 0),
+      interactiveMs: Number(data?.interactive_ms ?? data?.interactiveMs ?? 0),
+      longTasks: Number(data?.long_tasks ?? data?.longTasks ?? 0),
+      fpsAvg: Number(data?.fps_avg ?? data?.fpsAvg ?? 0),
+      cacheHitRate: Number(data?.cache_hit_rate ?? data?.cacheHitRate ?? 0),
+      decodeMs: Number(data?.decode_ms ?? data?.decodeMs ?? 0),
+      uploadMs: Number(data?.upload_ms ?? data?.uploadMs ?? 0),
+    };
+  }
+
+  const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+  const startupMs = nav ? Math.max(0, nav.domInteractive - nav.startTime) : 0;
+  return {
+    startupMs,
+    interactiveMs: startupMs,
+    longTasks: 0,
+    fpsAvg: 0,
+    cacheHitRate: 0,
+    decodeMs: 0,
+    uploadMs: 0,
+  };
+}
+
+export async function artworkGet(
+  gameId: string,
+  tier: number,
+  dpi = 1,
+  sources?: {
+    t0?: string | null;
+    t1?: string | null;
+    t2?: string | null;
+    t3?: string | null;
+    t4?: string | null;
+  }
+): Promise<string | null> {
+  if (!isTauri()) {
+    return null;
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  const value = await invoke<string | null>("artwork_get", {
+    gameId,
+    tier,
+    dpi,
+    sources: sources ?? null,
+  });
+  return value || null;
+}
+
+export async function artworkPrefetch(
+  items: Array<{
+    gameId: string;
+    sources?: {
+      t0?: string | null;
+      t1?: string | null;
+      t2?: string | null;
+      t3?: string | null;
+      t4?: string | null;
+    } | null;
+  }>,
+  tierHint = 2
+): Promise<boolean> {
+  if (!isTauri()) {
+    return false;
+  }
+  const payload = items
+    .filter((item) => item && item.gameId)
+    .map((item) => ({
+      game_id: String(item.gameId),
+      sources: {
+        t0: item.sources?.t0 ?? null,
+        t1: item.sources?.t1 ?? null,
+        t2: item.sources?.t2 ?? null,
+        t3: item.sources?.t3 ?? null,
+        t4: item.sources?.t4 ?? null,
+      },
+    }));
+  if (!payload.length) {
+    return false;
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  return Boolean(
+    await invoke<boolean>("artwork_prefetch", {
+      items: payload,
+      tierHint,
+    })
+  );
+}
+
+export async function artworkRelease(gameId: string): Promise<boolean> {
+  if (!isTauri()) {
+    return false;
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  return Boolean(await invoke<boolean>("artwork_release", { gameId }));
 }
 
 export async function fetchSteamSearchHistory(limit = 12): Promise<SearchHistoryItem[]> {
@@ -945,6 +1181,22 @@ export async function fetchLocaleSettings(): Promise<{
   };
 }
 
+export async function fetchLocaleBundle(locale: string): Promise<Record<string, string>> {
+  const data = await requestJson<any>(`/settings/locales/${encodeURIComponent(locale)}`);
+  const messages = data?.messages;
+  if (!messages || typeof messages !== "object") {
+    return {};
+  }
+
+  const normalized: Record<string, string> = {};
+  Object.entries(messages).forEach(([key, value]) => {
+    if (typeof value === "string") {
+      normalized[key] = value;
+    }
+  });
+  return normalized;
+}
+
 export async function updateLocaleSettings(locale: string): Promise<{
   locale: string;
   source: string;
@@ -1012,7 +1264,16 @@ export async function fetchBypassCategories(): Promise<BypassCategory[]> {
         description: cat.description ?? "",
         icon: cat.icon ?? "",
         total: cat.total ?? 0,
-        games: Array.isArray(cat.games) ? cat.games.map(mapFixEntry) : []
+        games: Array.isArray(cat.games)
+          ? cat.games.map((raw: any) => {
+              const entry = mapFixEntry(raw);
+              // Some legacy rows omit the explicit denuvo flag, but the category already implies it.
+              if (String(cat.id).toLowerCase() === "denuvo") {
+                entry.denuvo = true;
+              }
+              return entry;
+            })
+          : []
       }))
     : [];
 }
@@ -1108,7 +1369,16 @@ function mapSteamPrice(raw?: any): SteamPrice | null {
 }
 
   function mapSteamCatalogItem(raw: any): SteamCatalogItem {
-    const toThumb = (url?: string | null, width = 460) => toBackendThumbnail(url, width);
+    const toThumb = (url?: string | null, width = 460) => toBackendThumbnail(url, width, "adaptive");
+    const rawArtwork = raw?.artwork && typeof raw.artwork === "object" ? raw.artwork : {};
+    const artwork = {
+      t0: toThumb(rawArtwork.t0 ?? null, 120),
+      t1: toThumb(rawArtwork.t1 ?? null, 200),
+      t2: toThumb(rawArtwork.t2 ?? null, 320),
+      t3: toThumb(rawArtwork.t3 ?? raw.background ?? raw.background_raw ?? null, 460),
+      t4: toThumb(rawArtwork.t4 ?? raw.header_image ?? raw.headerImage ?? null, 640),
+      version: Number.isFinite(Number(rawArtwork.version)) ? Number(rawArtwork.version) : 1,
+    };
     const dlcCountRaw = raw.dlc_count ?? raw.dlcCount;
     const dlcCount = Number.isFinite(Number(dlcCountRaw)) ? Number(dlcCountRaw) : 0;
     return {
@@ -1118,6 +1388,7 @@ function mapSteamPrice(raw?: any): SteamPrice | null {
       headerImage: toThumb(raw.header_image ?? raw.headerImage ?? raw.tiny_image ?? null, 460),
       capsuleImage: toThumb(raw.capsule_image ?? raw.capsuleImage ?? null, 360),
       background: raw.background ?? null,
+      artwork,
       requiredAge: raw.required_age ?? raw.requiredAge ?? null,
       denuvo: Boolean(raw.denuvo ?? raw.has_denuvo ?? raw.hasDenuvo ?? false),
       price: mapSteamPrice(raw.price ?? raw.price_overview),
@@ -1337,8 +1608,11 @@ function mapFixEntry(raw: any): FixEntry {
 
 function mapFixEntryDetail(raw: any, fallbackKind: "online-fix" | "bypass"): FixEntryDetail {
   const base = mapFixEntry(raw);
+  const categoryId = String(raw?.category?.id ?? "").toLowerCase();
+  const denuvo = base.denuvo || categoryId === "denuvo";
   return {
     ...base,
+    denuvo,
     kind: raw?.kind ?? fallbackKind,
     category: raw?.category
       ? {
@@ -1364,6 +1638,8 @@ function mapDownloadOptions(raw: any): DownloadOptions {
           label: method.label ?? method.id ?? "",
           description: method.description ?? null,
           note: method.note ?? null,
+          noteKey: method.note_key ?? method.noteKey ?? null,
+          availabilityCode: method.availability_code ?? method.availabilityCode ?? null,
           recommended: Boolean(method.recommended),
           enabled: method.enabled ?? true
         }))
@@ -2674,6 +2950,16 @@ export function clearGameCache(appId?: string): void {
       // Ignore backend cache clear failures; frontend cache already cleared.
     });
   }
+}
+
+/**
+ * Clear ONLY backend-side Steam cache for a given appId.
+ * Use this when we detect incomplete/stale Steam detail payloads (missing screenshots/movies).
+ */
+export async function clearSteamGameBackendCache(appId: string): Promise<void> {
+  await requestJson(`/steam/games/${encodeURIComponent(appId)}/cache/clear`, {
+    method: "POST"
+  });
 }
 
 export async function buildOAuthStartUrl(provider: string, next: string = "/"): Promise<{url: string; requestId?: string}> {

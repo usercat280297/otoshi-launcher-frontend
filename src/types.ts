@@ -88,6 +88,14 @@ export type SteamCatalogItem = {
   headerImage?: string | null;
   capsuleImage?: string | null;
   background?: string | null;
+  artwork?: {
+    t0?: string | null;
+    t1?: string | null;
+    t2?: string | null;
+    t3?: string | null;
+    t4?: string | null;
+    version?: number;
+  } | null;
   requiredAge?: number | null;
   denuvo?: boolean;
   price?: SteamPrice | null;
@@ -253,6 +261,8 @@ export type DownloadMethod = {
   label: string;
   description?: string | null;
   note?: string | null;
+  noteKey?: string | null;
+  availabilityCode?: string | null;
   recommended?: boolean;
   enabled?: boolean;
 };
@@ -277,6 +287,18 @@ export type DownloadOptions = {
   installPath: string;
   freeBytes?: number | null;
   totalBytes?: number | null;
+};
+
+export type ImageQualityMode = "fast" | "adaptive" | "high";
+
+export type PerformanceSnapshot = {
+  startupMs: number;
+  interactiveMs: number;
+  longTasks: number;
+  fpsAvg: number;
+  cacheHitRate: number;
+  decodeMs: number;
+  uploadMs: number;
 };
 
 export type GraphicsConfig = {

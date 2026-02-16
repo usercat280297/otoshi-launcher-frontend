@@ -1,3 +1,4 @@
+// cspell:ignore denuvo
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, Download, ListChecks } from "lucide-react";
@@ -11,16 +12,6 @@ type Props = {
   kind: "online-fix" | "bypass";
 };
 
-const FIX_LABELS: Record<"online-fix" | "bypass", string> = {
-  "online-fix": "Online Fix",
-  bypass: "Bypass",
-};
-
-const FIX_PATHS: Record<"online-fix" | "bypass", string> = {
-  "online-fix": "/fixes/online",
-  bypass: "/fixes/bypass",
-};
-
 export default function FixDetailPage({ kind }: Props) {
   const { t } = useLocale();
   const navigate = useNavigate();
@@ -30,6 +21,18 @@ export default function FixDetailPage({ kind }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
+
+  // Get labels from i18n
+  const fixLabelKey = kind === "online-fix" ? "fix_detail.online_fix_label" : "fix_detail.bypass_label";
+  const FIX_LABELS: Record<"online-fix" | "bypass", string> = {
+    "online-fix": t("fix_detail.online_fix_label"),
+    bypass: t("fix_detail.bypass_label"),
+  };
+
+  const FIX_PATHS: Record<"online-fix" | "bypass", string> = {
+    "online-fix": "/fixes/online",
+    bypass: "/fixes/bypass",
+  };
 
   useEffect(() => {
     if (!appId) {
@@ -100,7 +103,7 @@ export default function FixDetailPage({ kind }: Props) {
         className="inline-flex items-center gap-2 text-sm text-text-secondary transition hover:text-text-primary"
       >
         <ArrowLeft size={14} />
-        Back to {FIX_LABELS[kind]}
+        {t("fix_detail.back_to")} {FIX_LABELS[kind]}
       </button>
 
       {loading && (
@@ -134,17 +137,20 @@ export default function FixDetailPage({ kind }: Props) {
             <div className="grid gap-5 p-5 lg:grid-cols-[1.1fr_1fr]">
               <div className="space-y-4">
                 <div className="rounded-xl border border-background-border bg-background-surface p-4">
-                  <p className="text-xs uppercase tracking-[0.26em] text-text-muted">Download source</p>
+                  <p className="text-xs uppercase tracking-[0.26em] text-text-muted">{t("fix_detail.download_source")}</p>
                   <div className="mt-3 space-y-3">
                     {detail.options.length > 1 && (
                       <select
+                        id="fix-download-source"
+                        aria-label={t("fix_detail.download_source")}
+                        title={t("fix_detail.download_source")}
                         value={selectedIndex}
                         onChange={(event) => setSelectedIndex(Number(event.target.value))}
                         className="w-full rounded-lg border border-background-border bg-background px-3 py-2 text-sm text-text-primary focus:border-primary focus:outline-none"
                       >
                         {detail.options.map((option, index) => (
                           <option key={`${detail.appId}-${index}`} value={index}>
-                            {option.name || `Link ${index + 1}`}
+                            {option.name || t("fix_detail.link_number").replace("{index}", `${index + 1}`)}
                             {option.version ? ` (${option.version})` : ""}
                           </option>
                         ))}
@@ -154,9 +160,9 @@ export default function FixDetailPage({ kind }: Props) {
                     {selectedOption && (
                       <div className="rounded-lg border border-background-border bg-background px-3 py-2 text-xs text-text-secondary">
                         <p className="font-semibold text-text-primary">
-                          {selectedOption.name || "Download link"}
+                          {selectedOption.name || t("fix_detail.download_link")}
                         </p>
-                        {selectedOption.version && <p>Version: {selectedOption.version}</p>}
+                        {selectedOption.version && <p>{t("fix_detail.version_label")}: {selectedOption.version}</p>}
                         {selectedOption.note && <p className="mt-1">{selectedOption.note}</p>}
                       </div>
                     )}
@@ -168,7 +174,7 @@ export default function FixDetailPage({ kind }: Props) {
                         className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <Download size={15} />
-                        Open download popup
+                        {t("fix_detail.open_download_popup")}
                       </button>
                     </div>
                   </div>
@@ -176,7 +182,7 @@ export default function FixDetailPage({ kind }: Props) {
 
                 {detail.guide.summary && (
                   <div className="rounded-xl border border-background-border bg-background-surface p-4">
-                    <p className="text-sm text-text-secondary">{detail.guide.summary}</p>
+                    <p className="text-sm text-text-secondary">{t(detail.guide.summary)}</p>
                   </div>
                 )}
               </div>
@@ -185,14 +191,14 @@ export default function FixDetailPage({ kind }: Props) {
                 <div className="flex items-center gap-2">
                   <ListChecks size={16} className="text-primary" />
                   <h2 className="text-sm font-semibold uppercase tracking-[0.22em] text-text-muted">
-                    {detail.guide.title}
+                    {t(detail.guide.title)}
                   </h2>
                 </div>
                 <div className="mt-4 space-y-3">
                   {detail.guide.steps.map((step, index) => (
                     <div key={`${step.title}-${index}`} className="rounded-lg border border-background-border bg-background p-3">
-                      <p className="text-xs uppercase tracking-[0.2em] text-primary">{step.title}</p>
-                      <p className="mt-1 text-sm text-text-secondary">{step.description}</p>
+                      <p className="text-xs uppercase tracking-[0.2em] text-primary">{t(step.title)}</p>
+                      <p className="mt-1 text-sm text-text-secondary">{t(step.description)}</p>
                     </div>
                   ))}
                 </div>
@@ -206,11 +212,11 @@ export default function FixDetailPage({ kind }: Props) {
                 <div className="glass-panel p-4">
                   <div className="mb-2 flex items-center gap-2 text-accent-amber">
                     <AlertTriangle size={15} />
-                    <h3 className="text-sm font-semibold uppercase tracking-[0.2em]">Warnings</h3>
+                    <h3 className="text-sm font-semibold uppercase tracking-[0.2em]">{t("fix_detail.warnings")}</h3>
                   </div>
                   <ul className="space-y-2 text-sm text-text-secondary">
                     {detail.guide.warnings.map((warning, index) => (
-                      <li key={`warning-${index}`}>• {warning}</li>
+                      <li key={`warning-${index}`}>• {t(warning)}</li>
                     ))}
                   </ul>
                 </div>
@@ -218,10 +224,10 @@ export default function FixDetailPage({ kind }: Props) {
 
               {detail.guide.notes.length > 0 && (
                 <div className="glass-panel p-4">
-                  <h3 className="mb-2 text-sm font-semibold uppercase tracking-[0.2em] text-text-muted">Notes</h3>
+                  <h3 className="mb-2 text-sm font-semibold uppercase tracking-[0.2em] text-text-muted">{t("fix_detail.notes")}</h3>
                   <ul className="space-y-2 text-sm text-text-secondary">
                     {detail.guide.notes.map((note, index) => (
-                      <li key={`note-${index}`}>• {note}</li>
+                      <li key={`note-${index}`}>• {t(note)}</li>
                     ))}
                   </ul>
                 </div>

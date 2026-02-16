@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchSteamGameDetail, fetchSteamGridAssets } from "../services/api";
+import { clearSteamGameBackendCache, fetchSteamGameDetail, fetchSteamGridAssets } from "../services/api";
 import { SteamGameDetail } from "../types";
 
 export function useSteamGame(appId?: string) {
@@ -15,7 +15,46 @@ export function useSteamGame(appId?: string) {
       setLoading(true);
       setError(null);
       try {
-        const detail = await fetchSteamGameDetail(appId);
+        const scoreMedia = (detail: SteamGameDetail) => {
+          const shots = Array.isArray(detail.screenshots) ? detail.screenshots.length : 0;
+          const movies = Array.isArray(detail.movies) ? detail.movies.length : 0;
+          return shots + movies * 3;
+        };
+        const looksLikeFallbackMedia = (detail: SteamGameDetail) => {
+          const shots = Array.isArray(detail.screenshots) ? detail.screenshots.filter(Boolean) : [];
+          const movies = Array.isArray(detail.movies) ? detail.movies.filter(Boolean) : [];
+          if (movies.length > 0 && shots.length > 3) return false;
+          const fallbackCandidates = new Set(
+            [
+              detail.headerImage,
+              detail.capsuleImage,
+              detail.background,
+              detail.heroImage
+            ].filter((value): value is string => typeof value === "string" && value.length > 0)
+          );
+          const shotsAreFallback =
+            shots.length > 0 && shots.every((shot) => fallbackCandidates.has(shot));
+          const moviesMissing = movies.length === 0;
+          // If both are missing, or shots look like fallback set, treat it as suspicious/stale cache.
+          return moviesMissing || shotsAreFallback;
+        };
+
+        let detail = await fetchSteamGameDetail(appId);
+
+        // If Steam cache returned a minimal payload (common when upstream fetch failed once),
+        // auto-clear backend cache and retry once so users don't need to manually reload.
+        if (looksLikeFallbackMedia(detail)) {
+          try {
+            await clearSteamGameBackendCache(appId);
+            const refreshed = await fetchSteamGameDetail(appId);
+            if (scoreMedia(refreshed) > scoreMedia(detail)) {
+              detail = refreshed;
+            }
+          } catch {
+            // Ignore refresh failures; we still show whatever we have.
+          }
+        }
+
         const initial = { ...detail };
         if (!initial.heroImage) {
           initial.heroImage = initial.background ?? initial.headerImage ?? initial.gridImage ?? null;

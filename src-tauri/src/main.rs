@@ -19,6 +19,8 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
+use sha2::{Digest, Sha256};
+
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::webview::PageLoadEvent;
@@ -27,13 +29,14 @@ use tauri::{Emitter, Manager, WindowEvent};
 use crate::db::Database;
 use crate::errors::{LauncherError, Result};
 use crate::services::{
-    AchievementService, ApiClient, AuthService, CloudSaveService, CrackManager, DiscoveryService,
-    DownloadManager, DownloadManagerV2, DownloadService, InventoryService, LibraryService,
-    LicenseService, ManifestService, OverlayService, RemoteDownloadService, SecurityGuardService,
-    SelfHealService, StreamingService, TelemetryService, WorkshopService,
+    AchievementService, ApiClient, ArtworkCacheService, AuthService, CloudSaveService, CrackManager,
+    DiscoveryService, DownloadManager, DownloadManagerV2, DownloadService, GameRuntimeService,
+    InventoryService, LibraryService, LicenseService, ManifestService, OverlayService,
+    RemoteDownloadService, SecurityGuardService, SelfHealService, StreamingService, TelemetryService,
+    WorkshopService,
 };
 use crate::utils::file::FileManager;
-use crate::utils::paths::{resolve_data_dir, resolve_games_dir};
+use crate::utils::paths::{resolve_cache_dir, resolve_data_dir, resolve_games_dir};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -44,6 +47,7 @@ pub struct AppState {
     pub downloads: DownloadService,
     pub download_manager: DownloadManager,
     pub download_manager_v2: DownloadManagerV2,
+    pub game_runtime: GameRuntimeService,
     pub self_heal: SelfHealService,
     pub security_guard_v2: SecurityGuardService,
     pub crack_manager: CrackManager,
@@ -58,6 +62,7 @@ pub struct AppState {
     pub remote_downloads: RemoteDownloadService,
     pub streaming: StreamingService,
     pub overlay: OverlayService,
+    pub artwork_cache: ArtworkCacheService,
     pub files: FileManager,
 }
 
@@ -269,6 +274,7 @@ fn build_state(app: &tauri::AppHandle) -> Result<AppState> {
 
     let key_path = app_data.join("secret.key");
     let key = utils::crypto::load_or_create_key(&key_path)?;
+    let artwork_cache = ArtworkCacheService::new(resolve_cache_dir(app), &key)?;
 
     let auth = AuthService::new(api_url.clone(), db.clone(), key);
     let api = ApiClient::new(api_url, auth.clone());
@@ -284,6 +290,7 @@ fn build_state(app: &tauri::AppHandle) -> Result<AppState> {
     );
     let download_manager_v2 =
         DownloadManagerV2::new(download_manager.clone(), downloads.clone(), db.clone());
+    let game_runtime = GameRuntimeService::new();
     let self_heal = SelfHealService::new(db.clone());
     let security_guard_v2 = SecurityGuardService::new();
     let crack_manager = CrackManager::new(db.clone(), api.clone());
@@ -308,6 +315,7 @@ fn build_state(app: &tauri::AppHandle) -> Result<AppState> {
         downloads,
         download_manager,
         download_manager_v2,
+        game_runtime,
         self_heal,
         security_guard_v2,
         crack_manager,
@@ -322,6 +330,7 @@ fn build_state(app: &tauri::AppHandle) -> Result<AppState> {
         remote_downloads,
         streaming,
         overlay,
+        artwork_cache,
         files,
     })
 }
@@ -344,17 +353,25 @@ fn ensure_web_assets(app: &tauri::AppHandle) -> Result<()> {
 
     let pack_stamp = pack_signature(&pack_path)?;
     let current_stamp = read_web_stamp(&web_dir);
-    let needs_restore =
-        !index_path.exists() || current_stamp.as_deref() != Some(pack_stamp.as_str());
+    let force_restore = std::env::var("OTOSHI_FORCE_WEB_RESTORE")
+        .map(|value| {
+            let normalized = value.trim().to_ascii_lowercase();
+            normalized == "1" || normalized == "true" || normalized == "yes"
+        })
+        .unwrap_or(!cfg!(debug_assertions));
+    let needs_restore = force_restore
+        || !index_path.exists()
+        || current_stamp.as_deref() != Some(pack_stamp.as_str());
     if !needs_restore {
         return Ok(());
     }
 
     tracing::info!(
-        "Restoring web assets from {:?} (stamp={} previous={:?})",
+        "Restoring web assets from {:?} (stamp={} previous={:?} force_restore={})",
         pack_path,
         pack_stamp,
-        current_stamp
+        current_stamp,
+        force_restore
     );
     if web_dir.exists() {
         if let Err(err) = fs::remove_dir_all(&web_dir) {
@@ -461,6 +478,120 @@ fn safe_pack_path(base: &Path, name: &str) -> Option<PathBuf> {
     Some(out)
 }
 
+fn resolve_integrity_target(base: &Path, relative: &str) -> Option<PathBuf> {
+    let mut output = PathBuf::from(base);
+    for component in Path::new(relative).components() {
+        match component {
+            Component::Normal(value) => output.push(value),
+            Component::CurDir => {}
+            _ => return None,
+        }
+    }
+    Some(output)
+}
+
+fn sha256_file(path: &Path) -> Result<String> {
+    let mut file = fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 8192];
+
+    loop {
+        let bytes = file.read(&mut buffer)?;
+        if bytes == 0 {
+            break;
+        }
+        hasher.update(&buffer[..bytes]);
+    }
+
+    Ok(hex::encode(hasher.finalize()))
+}
+
+fn verify_runtime_integrity() -> Result<()> {
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|value| value.parent().map(Path::to_path_buf))
+        .ok_or_else(|| LauncherError::Config("unable to resolve executable directory".to_string()))?;
+
+    let checksum_file = exe_dir.join("checksums.sha256");
+    if !checksum_file.exists() {
+        return Err(LauncherError::Config(format!(
+            "integrity manifest missing: {}",
+            checksum_file.display()
+        )));
+    }
+
+    let content = fs::read_to_string(&checksum_file)?;
+    for (index, line) in content.lines().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        let parts: Vec<&str> = trimmed.split_whitespace().collect();
+        if parts.len() < 2 {
+            return Err(LauncherError::Config(format!(
+                "invalid integrity manifest line {}",
+                index + 1
+            )));
+        }
+
+        let expected_hash = parts[0].trim().to_ascii_lowercase();
+        let relative = parts[1..].join(" ");
+        let target = resolve_integrity_target(&exe_dir, &relative).ok_or_else(|| {
+            LauncherError::Config(format!(
+                "invalid integrity target path at line {}: {}",
+                index + 1,
+                relative
+            ))
+        })?;
+
+        if !target.exists() {
+            return Err(LauncherError::Config(format!(
+                "integrity target missing: {}",
+                target.display()
+            )));
+        }
+
+        let actual_hash = sha256_file(&target)?;
+        if actual_hash.to_ascii_lowercase() != expected_hash {
+            return Err(LauncherError::Config(format!(
+                "integrity mismatch: {}",
+                relative
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+fn configure_native_guard_env(app: &tauri::AppHandle) {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    if let Ok(current_exe) = std::env::current_exe() {
+        if let Some(parent) = current_exe.parent() {
+            candidates.push(parent.join("win_guard.dll"));
+            candidates.push(parent.join("libs").join("win_guard.dll"));
+            candidates.push(parent.join("win64").join("win_guard.dll"));
+        }
+    }
+
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        candidates.push(resource_dir.join("win_guard.dll"));
+        candidates.push(resource_dir.join("libs").join("win_guard.dll"));
+        if let Some(parent) = resource_dir.parent() {
+            candidates.push(parent.join("win_guard.dll"));
+            candidates.push(parent.join("libs").join("win_guard.dll"));
+        }
+    }
+
+    if let Some(found) = candidates.into_iter().find(|value| value.exists()) {
+        std::env::set_var("WIN_GUARD_DLL_PATH", found.to_string_lossy().to_string());
+        tracing::info!("WIN_GUARD_DLL_PATH set to {}", found.display());
+    } else {
+        tracing::warn!("win_guard.dll not found; native guard checks will be skipped");
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -505,7 +636,6 @@ fn main() {
             if let Some(silentui) = app.get_webview_window("silentui") {
                 let _ = silentui.close();
             }
-            ensure_web_assets(&handle)?;
             // Optional: use hosted backend in production when explicitly requested.
             if !cfg!(debug_assertions)
                 && std::env::var("LAUNCHER_API_URL").is_err()
@@ -530,6 +660,9 @@ fn main() {
             // Initialize logging as early as possible so setup failures are recorded.
             let log_dir = utils::paths::resolve_log_dir(&handle);
             logging::init(&log_dir)?;
+            configure_native_guard_env(&handle);
+            verify_runtime_integrity()?;
+            ensure_web_assets(&handle)?;
 
             // Register deep link handler for OAuth callbacks
             #[cfg(desktop)]
@@ -584,6 +717,8 @@ fn main() {
             commands::game::get_game_launch_pref,
             commands::game::set_game_launch_pref,
             commands::game::launch_game,
+            commands::game::get_running_games,
+            commands::game::stop_game,
             commands::download::start_download,
             commands::download::start_steam_download,
             commands::download::pause_download,
@@ -604,6 +739,10 @@ fn main() {
             commands::system::build_local_manifest,
             commands::system::set_download_limit,
             commands::system::get_default_install_root,
+            commands::system::artwork_get,
+            commands::system::artwork_prefetch,
+            commands::system::artwork_release,
+            commands::system::perf_snapshot,
             commands::security::get_hardware_id,
             commands::security::validate_license,
             commands::security_v2::inspect_security_v2,

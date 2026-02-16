@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -316,9 +316,12 @@ impl CrackManager {
         // Update status to backing up
         self.set_status(app_id, CrackDownloadStatus::BackingUp);
 
+        // Detect archive nesting level so fixes are applied relative to the actual game root.
+        let strip_depth = self.determine_archive_root_strip_depth(&temp_archive, &game_path)?;
+
         // Backup original files before installing crack
         let backup_count = self
-            .backup_original_files(app_id, &game_path, &temp_archive)
+            .backup_original_files(app_id, &game_path, &temp_archive, strip_depth)
             .await?;
 
         // Update status to extracting
@@ -326,7 +329,7 @@ impl CrackManager {
 
         // Extract crack files to game directory
         let install_count = self
-            .extract_to_game_dir(&temp_archive, &game_path, app_id)
+            .extract_to_game_dir(&temp_archive, &game_path, app_id, strip_depth)
             .await?;
 
         // Cleanup temp files
@@ -414,6 +417,7 @@ impl CrackManager {
         app_id: &str,
         game_path: &Path,
         archive_path: &Path,
+        strip_depth: usize,
     ) -> Result<u32> {
         let backup_dir = game_path.join(BACKUP_DIR_NAME);
         std::fs::create_dir_all(&backup_dir).map_err(LauncherError::Io)?;
@@ -430,18 +434,24 @@ impl CrackManager {
             let file = archive
                 .by_index(i)
                 .map_err(|e| LauncherError::Config(e.to_string()))?;
+            if file.is_dir() {
+                continue;
+            }
             let file_path = file
                 .enclosed_name()
                 .ok_or_else(|| LauncherError::Config("Invalid file path in archive".to_string()))?;
 
-            let target_path = game_path.join(&file_path);
+            let Some(relative_path) = self.map_archive_path(&file_path, strip_depth) else {
+                continue;
+            };
+            let target_path = game_path.join(&relative_path);
 
             if target_path.exists() && target_path.is_file() {
                 // Calculate hash of original file
                 let hash = self.calculate_file_hash(&target_path)?;
 
                 // Backup the file
-                let backup_path = backup_dir.join(&file_path);
+                let backup_path = backup_dir.join(&relative_path);
                 if let Some(parent) = backup_path.parent() {
                     std::fs::create_dir_all(parent).map_err(LauncherError::Io)?;
                 }
@@ -452,7 +462,7 @@ impl CrackManager {
                     .unwrap_or(0);
 
                 backup_entries.push(BackupFileEntry {
-                    relative_path: file_path.to_string_lossy().to_string(),
+                    relative_path: relative_path.to_string_lossy().to_string(),
                     original_hash: hash,
                     size,
                     backed_up: true,
@@ -499,6 +509,7 @@ impl CrackManager {
         archive_path: &Path,
         game_path: &Path,
         app_id: &str,
+        strip_depth: usize,
     ) -> Result<u32> {
         let archive_file = File::open(archive_path).map_err(LauncherError::Io)?;
         let mut archive =
@@ -516,7 +527,10 @@ impl CrackManager {
                 .enclosed_name()
                 .ok_or_else(|| LauncherError::Config("Invalid file path in archive".to_string()))?;
 
-            let target_path = game_path.join(&file_path);
+            let Some(relative_path) = self.map_archive_path(&file_path, strip_depth) else {
+                continue;
+            };
+            let target_path = game_path.join(&relative_path);
 
             // Update progress
             let progress = CrackDownloadProgress {
@@ -527,7 +541,7 @@ impl CrackManager {
                 total_bytes: 0,
                 speed_bps: 0,
                 eta_seconds: 0,
-                current_file: Some(file_path.to_string_lossy().to_string()),
+                current_file: Some(relative_path.to_string_lossy().to_string()),
             };
             self.update_progress(&progress);
 
@@ -545,6 +559,202 @@ impl CrackManager {
         }
 
         Ok(extracted)
+    }
+
+    fn determine_archive_root_strip_depth(
+        &self,
+        archive_path: &Path,
+        game_path: &Path,
+    ) -> Result<usize> {
+        let archive_file = File::open(archive_path).map_err(LauncherError::Io)?;
+        let mut archive =
+            ZipArchive::new(archive_file).map_err(|e| LauncherError::Config(e.to_string()))?;
+
+        let mut entries: Vec<PathBuf> = Vec::new();
+        let mut max_depth = 0usize;
+
+        for i in 0..archive.len() {
+            let file = archive
+                .by_index(i)
+                .map_err(|e| LauncherError::Config(e.to_string()))?;
+            if file.is_dir() {
+                continue;
+            }
+            let Some(path) = file.enclosed_name().map(|p| p.to_path_buf()) else {
+                continue;
+            };
+            if self.is_ignored_archive_path(&path) {
+                continue;
+            }
+            let components = self.normal_components(&path).count();
+            if components == 0 {
+                continue;
+            }
+            max_depth = max_depth.max(components.saturating_sub(1));
+            entries.push(path);
+            if entries.len() >= 1200 {
+                break;
+            }
+        }
+
+        if entries.is_empty() {
+            return Ok(0);
+        }
+
+        let max_test_depth = max_depth.min(4);
+        let mut scores: Vec<(usize, i64)> = Vec::new();
+        for depth in 0..=max_test_depth {
+            let score = self.score_strip_depth(&entries, game_path, depth);
+            scores.push((depth, score));
+        }
+
+        let mut best_depth = 0usize;
+        let mut best_score = i64::MIN;
+        for (depth, score) in &scores {
+            if *score > best_score {
+                best_score = *score;
+                best_depth = *depth;
+            }
+        }
+
+        // Common package layout: single top-level wrapper folder.
+        // If wrapper folder doesn't exist in game root and depth=1 is at least as good,
+        // prefer stripping one level.
+        if let Some(wrapper) = self.common_top_level_folder(&entries) {
+            if !game_path.join(&wrapper).exists() {
+                let score0 = scores
+                    .iter()
+                    .find(|(depth, _)| *depth == 0)
+                    .map(|(_, score)| *score)
+                    .unwrap_or(i64::MIN);
+                let score1 = scores
+                    .iter()
+                    .find(|(depth, _)| *depth == 1)
+                    .map(|(_, score)| *score)
+                    .unwrap_or(i64::MIN);
+                if score1 >= score0 && best_depth == 0 {
+                    best_depth = 1;
+                }
+            }
+        }
+
+        Ok(best_depth)
+    }
+
+    fn score_strip_depth(&self, entries: &[PathBuf], game_path: &Path, depth: usize) -> i64 {
+        let mut score = 0i64;
+        for entry in entries {
+            let Some(mapped) = self.strip_components(entry, depth) else {
+                continue;
+            };
+            if self.is_ignored_archive_path(&mapped) {
+                continue;
+            }
+
+            let target = game_path.join(&mapped);
+            if target.exists() {
+                score += 12;
+                if self.looks_like_game_runtime_file(&mapped) {
+                    score += 8;
+                }
+            } else if let Some(parent) = target.parent() {
+                if parent.exists() {
+                    score += 4;
+                    if self.looks_like_game_runtime_file(&mapped) {
+                        score += 2;
+                    }
+                } else {
+                    score -= 1;
+                }
+            }
+        }
+        score
+    }
+
+    fn map_archive_path(&self, path: &Path, strip_depth: usize) -> Option<PathBuf> {
+        let mapped = self.strip_components(path, strip_depth)?;
+        if self.is_ignored_archive_path(&mapped) {
+            return None;
+        }
+        Some(mapped)
+    }
+
+    fn strip_components(&self, path: &Path, depth: usize) -> Option<PathBuf> {
+        let mut out = PathBuf::new();
+        let mut skipped = 0usize;
+        for component in path.components() {
+            let Component::Normal(segment) = component else {
+                continue;
+            };
+            if skipped < depth {
+                skipped += 1;
+                continue;
+            }
+            out.push(segment);
+        }
+        if out.as_os_str().is_empty() {
+            None
+        } else {
+            Some(out)
+        }
+    }
+
+    fn normal_components<'a>(&self, path: &'a Path) -> impl Iterator<Item = &'a std::ffi::OsStr> {
+        path.components().filter_map(|component| match component {
+            Component::Normal(seg) => Some(seg),
+            _ => None,
+        })
+    }
+
+    fn common_top_level_folder(&self, entries: &[PathBuf]) -> Option<String> {
+        let mut shared: Option<String> = None;
+        for entry in entries {
+            let first = self
+                .normal_components(entry)
+                .next()
+                .map(|seg| seg.to_string_lossy().to_string())?;
+            match &shared {
+                None => shared = Some(first),
+                Some(current) if current == &first => {}
+                Some(_) => return None,
+            }
+        }
+        shared
+    }
+
+    fn is_ignored_archive_path(&self, path: &Path) -> bool {
+        let first = match self.normal_components(path).next() {
+            Some(value) => value.to_string_lossy().to_ascii_lowercase(),
+            None => return true,
+        };
+        if first == "__macosx" {
+            return true;
+        }
+        if let Some(name) = path.file_name() {
+            let lower = name.to_string_lossy().to_ascii_lowercase();
+            if lower == ".ds_store" || lower == "thumbs.db" {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn looks_like_game_runtime_file(&self, path: &Path) -> bool {
+        let ext = path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| ext.to_ascii_lowercase());
+        matches!(
+            ext.as_deref(),
+            Some("exe")
+                | Some("dll")
+                | Some("ini")
+                | Some("json")
+                | Some("cfg")
+                | Some("pak")
+                | Some("bin")
+                | Some("dat")
+        )
     }
 
     /// Uninstall crack and restore original files

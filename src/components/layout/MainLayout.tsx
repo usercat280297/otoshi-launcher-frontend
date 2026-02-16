@@ -1,5 +1,6 @@
 import { Outlet } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { isTauri as isTauriRuntimeFn } from "@tauri-apps/api/core";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
 import MobileNav from "./MobileNav";
@@ -9,6 +10,13 @@ import { useLocale } from "../../context/LocaleContext";
 export default function MainLayout() {
   const { t } = useLocale();
   const [luaMissing, setLuaMissing] = useState(false);
+  const isTauriRuntime = (() => {
+    try {
+      return isTauriRuntimeFn();
+    } catch {
+      return false;
+    }
+  })();
 
   useEffect(() => {
     const handleMissing = () => setLuaMissing(true);
@@ -22,12 +30,30 @@ export default function MainLayout() {
   }, []);
 
   return (
-    <div className="min-h-[100dvh] w-screen overflow-hidden bg-background text-text-primary">
-      <div className="flex min-h-[100dvh] w-full">
+    <div
+      className={
+        isTauriRuntime
+          ? "h-[100dvh] w-screen overflow-hidden bg-background text-text-primary"
+          : "min-h-screen w-screen overflow-x-hidden bg-background text-text-primary"
+      }
+    >
+      <div className={isTauriRuntime ? "flex h-full min-h-0 w-full" : "flex min-h-screen w-full"}>
         <Sidebar />
-        <div className="relative z-0 flex flex-1 flex-col overflow-hidden bg-background">
+        <div
+          className={
+            isTauriRuntime
+              ? "relative z-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background lg:ml-64"
+              : "relative z-0 flex min-w-0 flex-1 flex-col bg-background lg:ml-64"
+          }
+        >
           <TopBar />
-          <main className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-elegant">
+          <main
+            className={
+              isTauriRuntime
+                ? "min-h-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-elegant"
+                : "flex-1 overflow-x-hidden"
+            }
+          >
             <div className="mx-auto w-full max-w-[1400px] px-4 pb-24 pt-4 sm:px-6 md:px-10 md:pb-12 md:pt-6">
               <Outlet />
             </div>

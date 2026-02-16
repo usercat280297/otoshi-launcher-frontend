@@ -1,36 +1,10 @@
-import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { Routes, Route, useNavigate } from "react-router-dom";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { isTauri as isTauriRuntime } from "@tauri-apps/api/core";
 import MainLayout from "./components/layout/MainLayout";
 import AuthLayout from "./components/layout/AuthLayout";
 import RequireAuth from "./components/common/RequireAuth";
 import RequireAdmin from "./components/common/RequireAdmin";
-import StorePage from "./pages/StorePage";
-import DiscoverPage from "./pages/DiscoverPage";
-import LibraryPage from "./pages/LibraryPage";
-import GameDetailPage from "./pages/GameDetailPage";
-import DownloadsPage from "./pages/DownloadsPage";
-import DownloadLauncherPage from "./pages/DownloadLauncherPage";
-import SettingsPage from "./pages/SettingsPage";
-import WorkshopPage from "./pages/WorkshopPage";
-import CommunityPage from "./pages/CommunityPage";
-import WishlistPage from "./pages/WishlistPage";
-import InventoryPage from "./pages/InventoryPage";
-import ProfilePage from "./pages/ProfilePage";
-import DeveloperPage from "./pages/DeveloperPage";
-import SteamCatalogPage from "./pages/SteamCatalogPage";
-import SteamGameDetailPage from "./pages/SteamGameDetailPage";
-import LoginPage from "./pages/LoginPage";
-import RegisterPage from "./pages/RegisterPage";
-import BigPicturePage from "./pages/BigPicturePage";
-import OAuthCallbackPage from "./pages/OAuthCallbackPage";
-import OnlineFixPage from "./pages/OnlineFixPage";
-import BypassPage from "./pages/BypassPage";
-import FixDetailPage from "./pages/FixDetailPage";
-import OverlayPage from "./pages/OverlayPage";
-import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
-import TermsOfServicePage from "./pages/TermsOfServicePage";
-import IntroPage from "./pages/IntroPage";
 import { initMediaProtection } from "./utils/mediaProtection";
 import { useOAuthDeepLink } from "./hooks/useOAuthDeepLink";
 import GlobalRipple from "./components/common/GlobalRipple";
@@ -53,9 +27,36 @@ type TrayActionPayload = {
   locale?: string;
 };
 
+const StorePage = lazy(() => import("./pages/StorePage"));
+const LibraryPage = lazy(() => import("./pages/LibraryPage"));
+const GameDetailPage = lazy(() => import("./pages/GameDetailPage"));
+const DownloadsPage = lazy(() => import("./pages/DownloadsPage"));
+const DownloadLauncherPage = lazy(() => import("./pages/DownloadLauncherPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const WorkshopPage = lazy(() => import("./pages/WorkshopPage"));
+const CommunityPage = lazy(() => import("./pages/CommunityPage"));
+const WishlistPage = lazy(() => import("./pages/WishlistPage"));
+const InventoryPage = lazy(() => import("./pages/InventoryPage"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const DeveloperPage = lazy(() => import("./pages/DeveloperPage"));
+const SteamCatalogPage = lazy(() => import("./pages/SteamCatalogPage"));
+const SteamGameDetailPage = lazy(() => import("./pages/SteamGameDetailPage"));
+const DiscoverPausedPage = lazy(() => import("./pages/DiscoverPausedPage"));
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const RegisterPage = lazy(() => import("./pages/RegisterPage"));
+const BigPicturePage = lazy(() => import("./pages/BigPicturePage"));
+const OAuthCallbackPage = lazy(() => import("./pages/OAuthCallbackPage"));
+const OnlineFixPage = lazy(() => import("./pages/OnlineFixPage"));
+const BypassPage = lazy(() => import("./pages/BypassPage"));
+const FixDetailPage = lazy(() => import("./pages/FixDetailPage"));
+const OverlayPage = lazy(() => import("./pages/OverlayPage"));
+const PrivacyPolicyPage = lazy(() => import("./pages/PrivacyPolicyPage"));
+const TermsOfServicePage = lazy(() => import("./pages/TermsOfServicePage"));
+const IntroPage = lazy(() => import("./pages/IntroPage"));
+
 function AppContent() {
   const navigate = useNavigate();
-  const { setLocale } = useLocale();
+  const { setLocale, t } = useLocale();
   const [downloadToast, setDownloadToast] = useState<DownloadToastPayload | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
 
@@ -113,21 +114,22 @@ function AppContent() {
   useEffect(() => {
     const onStarted = (event: Event) => {
       const detail = (event as CustomEvent<{ title?: string; iconUrl?: string }>).detail;
-      const title = detail?.title?.trim() || "Game";
+      const title = detail?.title?.trim() || t("common.game");
       setDownloadToast({
         type: "success",
-        title: "Download started",
+        title: t("download.toast.started_title"),
         message: title,
         iconUrl: detail?.iconUrl?.trim() || null,
       });
     };
 
     const onError = (event: Event) => {
-      const detail = (event as CustomEvent<{ message?: string; iconUrl?: string }>).detail;
-      const message = detail?.message?.trim() || "Download failed to start.";
+      const detail = (event as CustomEvent<{ message?: string; messageKey?: string; iconUrl?: string }>).detail;
+      const localizedByKey = detail?.messageKey ? t(detail.messageKey) : null;
+      const message = localizedByKey || detail?.message?.trim() || t("download.toast.failed_default");
       setDownloadToast({
         type: "error",
-        title: "Download failed",
+        title: t("download.toast.failed_title"),
         message,
         iconUrl: detail?.iconUrl || null,
       });
@@ -140,7 +142,7 @@ function AppContent() {
       window.removeEventListener("otoshi:download-started", onStarted as EventListener);
       window.removeEventListener("otoshi:download-error", onError as EventListener);
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!isTauriRuntime()) {
@@ -162,7 +164,7 @@ function AppContent() {
           const detail = event.payload || {};
           const message =
             detail.message?.trim() ||
-            `Download failed${detail.slug ? ` (${detail.slug})` : ""}.`;
+            `${t("download.toast.failed_default")}${detail.slug ? ` (${detail.slug})` : ""}`;
           window.dispatchEvent(
             new CustomEvent("otoshi:download-error", {
               detail: {
@@ -193,7 +195,7 @@ function AppContent() {
         unlisten();
       }
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!isTauriRuntime()) {
@@ -267,24 +269,24 @@ function AppContent() {
     <>
       <GlobalRipple />
       <CookieConsentBanner />
-      <Modal isOpen={aboutOpen} onClose={() => setAboutOpen(false)} title="About Otoshi Launcher" size="sm">
+      <Modal isOpen={aboutOpen} onClose={() => setAboutOpen(false)} title={t("app.about.title")} size="sm">
         <div className="space-y-4">
           <p className="text-sm text-text-secondary">
-            Otoshi Launcher desktop client with high-performance downloads, patching, and workshop integration.
+            {t("app.about.description")}
           </p>
           <div className="rounded-lg border border-background-border bg-background-muted px-3 py-2 text-xs text-text-muted">
-            Version: {import.meta.env.VITE_APP_VERSION || "desktop build"}
+            {t("app.about.version_label")}: {import.meta.env.VITE_APP_VERSION || t("app.about.desktop_build")}
           </div>
           <div className="flex justify-end gap-3">
             <Button variant="ghost" onClick={() => setAboutOpen(false)}>
-              Close
+              {t("app.about.close")}
             </Button>
             <Button
               onClick={() => {
                 void openExternal("https://otoshi-launcher.me");
               }}
             >
-              Open Official Website
+              {t("app.about.open_website")}
             </Button>
           </div>
         </div>
@@ -331,95 +333,103 @@ function AppContent() {
           </div>
         </div>
       )}
-      <Routes>
-        <Route path="/" element={<IntroPage />} />
-        <Route path="/overlay" element={<OverlayPage />} />
-        <Route
-          path="/big-picture"
-          element={
-            <RequireAuth>
-              <BigPicturePage />
-            </RequireAuth>
-          }
-        />
-        <Route path="/download-launcher" element={<DownloadLauncherPage />} />
-        <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
-        <Route path="/terms-of-service" element={<TermsOfServicePage />} />
-        <Route element={<MainLayout />}>
-          <Route path="/store" element={<StorePage />} />
-          <Route path="/steam" element={<SteamCatalogPage />} />
-          <Route path="/steam/:appId" element={<SteamGameDetailPage />} />
-          <Route path="/discover" element={<DiscoverPage />} />
-          <Route path="/fixes/online" element={<OnlineFixPage />} />
-          <Route path="/fixes/online/:appId" element={<FixDetailPage kind="online-fix" />} />
-          <Route path="/fixes/bypass" element={<BypassPage />} />
-          <Route path="/fixes/bypass/:appId" element={<FixDetailPage kind="bypass" />} />
-          <Route path="/workshop" element={<WorkshopPage />} />
-          <Route path="/community" element={<CommunityPage />} />
-          <Route path="/games/:slug" element={<GameDetailPage />} />
+      <Suspense
+        fallback={
+          <div className="fixed inset-0 z-[90] flex items-center justify-center bg-background text-sm text-text-secondary">
+            {t("common.loading")}
+          </div>
+        }
+      >
+        <Routes>
+          <Route path="/" element={<IntroPage />} />
+          <Route path="/overlay" element={<OverlayPage />} />
           <Route
-            path="/wishlist"
+            path="/big-picture"
             element={
               <RequireAuth>
-                <WishlistPage />
+                <BigPicturePage />
               </RequireAuth>
             }
           />
-          <Route
-            path="/inventory"
-            element={
-              <RequireAuth>
-                <InventoryPage />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/profile"
-            element={
-              <RequireAuth>
-                <ProfilePage />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/library"
-            element={
-              <RequireAuth>
-                <LibraryPage />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/downloads"
-            element={
-              <RequireAuth>
-                <DownloadsPage />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              <RequireAuth>
-                <SettingsPage />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/developer"
-            element={
-              <RequireAdmin>
-                <DeveloperPage />
-              </RequireAdmin>
-            }
-          />
-        </Route>
-        <Route element={<AuthLayout />}>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
-        </Route>
-      </Routes>
+          <Route path="/download-launcher" element={<DownloadLauncherPage />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+          <Route path="/terms-of-service" element={<TermsOfServicePage />} />
+          <Route element={<MainLayout />}>
+            <Route path="/store" element={<StorePage />} />
+            <Route path="/steam" element={<SteamCatalogPage />} />
+            <Route path="/steam/:appId" element={<SteamGameDetailPage />} />
+            <Route path="/discover" element={<DiscoverPausedPage />} />
+            <Route path="/fixes/online" element={<OnlineFixPage />} />
+            <Route path="/fixes/online/:appId" element={<FixDetailPage kind="online-fix" />} />
+            <Route path="/fixes/bypass" element={<BypassPage />} />
+            <Route path="/fixes/bypass/:appId" element={<FixDetailPage kind="bypass" />} />
+            <Route path="/workshop" element={<WorkshopPage />} />
+            <Route path="/community" element={<CommunityPage />} />
+            <Route path="/games/:slug" element={<GameDetailPage />} />
+            <Route
+              path="/wishlist"
+              element={
+                <RequireAuth>
+                  <WishlistPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/inventory"
+              element={
+                <RequireAuth>
+                  <InventoryPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <RequireAuth>
+                  <ProfilePage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/library"
+              element={
+                <RequireAuth>
+                  <LibraryPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/downloads"
+              element={
+                <RequireAuth>
+                  <DownloadsPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <RequireAuth>
+                  <SettingsPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/developer"
+              element={
+                <RequireAdmin>
+                  <DeveloperPage />
+                </RequireAdmin>
+              }
+            />
+          </Route>
+          <Route element={<AuthLayout />}>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
+          </Route>
+        </Routes>
+      </Suspense>
     </>
   );
 }

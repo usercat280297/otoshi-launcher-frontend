@@ -31,6 +31,10 @@ const DOWNLOAD_META_CACHE_KEY = "otoshi.download.meta.v2";
 const ACTIVE_STATUSES = new Set<DownloadTask["status"]>(["queued", "downloading", "verifying", "paused"]);
 const DOWNLOAD_SNAPSHOT_DEDUPE_MS = 1800;
 const RUNTIME_ERROR_GRACE_MS = 10000;
+const POLL_FAST_MS = 900;
+const POLL_IDLE_MS = 3200;
+const POLL_HIDDEN_ACTIVE_MS = 2200;
+const POLL_HIDDEN_IDLE_MS = 9000;
 
 const statusOrder: Record<DownloadTask["status"], number> = {
   downloading: 0,
@@ -410,7 +414,11 @@ export function useDownloads() {
             if (!hasRecentRuntimeError) {
               window.dispatchEvent(
                 new CustomEvent("otoshi:download-error", {
-                  detail: { message: `${task.title}: download failed.`, iconUrl: task.iconUrl || task.imageUrl },
+                  detail: {
+                    messageKey: "download.error.start_failed",
+                    message: `${task.title}: download failed.`,
+                    iconUrl: task.iconUrl || task.imageUrl,
+                  },
                 })
               );
             }
@@ -515,10 +523,56 @@ export function useDownloads() {
   }, [refresh]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      refresh({ silent: true });
-    }, 1200);
-    return () => window.clearInterval(interval);
+    let disposed = false;
+    let timer: number | null = null;
+
+    const schedule = (delay: number) => {
+      if (disposed) return;
+      if (timer != null) {
+        window.clearTimeout(timer);
+      }
+      timer = window.setTimeout(() => {
+        void tick();
+      }, delay);
+    };
+
+    const tick = async () => {
+      if (disposed) return;
+      const isVisible = typeof document === "undefined" ? true : document.visibilityState === "visible";
+      const hasActiveTasks = tasksRef.current.some((task) => ACTIVE_STATUSES.has(task.status));
+      if (isVisible || hasActiveTasks) {
+        await refresh({ silent: true });
+      }
+      const nextDelay = isVisible
+        ? hasActiveTasks
+          ? POLL_FAST_MS
+          : POLL_IDLE_MS
+        : hasActiveTasks
+          ? POLL_HIDDEN_ACTIVE_MS
+          : POLL_HIDDEN_IDLE_MS;
+      schedule(nextDelay);
+    };
+
+    const onVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        void refresh({ silent: true });
+      }
+    };
+
+    schedule(POLL_FAST_MS);
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisibilityChange);
+    }
+
+    return () => {
+      disposed = true;
+      if (timer != null) {
+        window.clearTimeout(timer);
+      }
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+      }
+    };
   }, [refresh]);
 
   useEffect(() => {

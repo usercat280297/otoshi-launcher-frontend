@@ -5,8 +5,9 @@ import VirtualGameGrid from "../components/library/VirtualGameGrid";
 import VirtualGameList from "../components/library/VirtualGameList";
 import { useLibrary } from "../hooks/useLibrary";
 import { useDownloads } from "../hooks/useDownloads";
+import { useRunningGames } from "../hooks/useRunningGames";
 import PlayOptionsModal from "../components/launcher/PlayOptionsModal";
-import { getGameLaunchPref, launchGame, setGameLaunchPref, type GameLaunchPref } from "../services/launcher";
+import { getGameLaunchPref, launchGame, setGameLaunchPref, stopGame, type GameLaunchPref } from "../services/launcher";
 import { fetchLaunchConfig } from "../services/api";
 import {
   derivePlayOptions,
@@ -21,6 +22,7 @@ export default function LibraryPage() {
   const [view, setView] = useState<"grid" | "list">("grid");
   const { entries, loading, error, markInstalled } = useLibrary();
   const { start } = useDownloads();
+  const { running } = useRunningGames();
   const [playEntry, setPlayEntry] = useState<LibraryEntry | null>(null);
   const [playOptionsOpen, setPlayOptionsOpen] = useState(false);
   const [playBusy, setPlayBusy] = useState(false);
@@ -37,6 +39,14 @@ export default function LibraryPage() {
       await markInstalled(entry.id);
     } catch {
       // No-op for now, surfaced by hook error states if needed.
+    }
+  };
+
+  const handleStop = async (entry: LibraryEntry) => {
+    try {
+      await stopGame(entry.game.id);
+    } catch {
+      // No-op for now; stop failures are surfaced via toast/error UI elsewhere if needed.
     }
   };
 
@@ -129,6 +139,8 @@ export default function LibraryPage() {
     );
   }, [entries, search]);
 
+  const runningIds = useMemo(() => new Set(Object.keys(running)), [running]);
+
   return (
     <div className="flex min-h-[calc(100vh-220px)] flex-col gap-6">
       <PlayOptionsModal
@@ -178,12 +190,16 @@ export default function LibraryPage() {
               entries={filtered}
               onInstall={handleInstall}
               onPlay={handlePlay}
+              onStop={handleStop}
+              runningIds={runningIds}
             />
           ) : (
             <VirtualGameList
               entries={filtered}
               onInstall={handleInstall}
               onPlay={handlePlay}
+              onStop={handleStop}
+              runningIds={runningIds}
             />
           )}
         </div>

@@ -3,19 +3,27 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useLocale } from "../context/LocaleContext";
 
-const INTRO_DURATION_MS = 1600;
+const COLD_START_DURATION_MS = 1600;
+const WARM_START_DURATION_MS = 180;
+const WARM_START_WINDOW_MS = 1000 * 60 * 15;
+const LAST_LAUNCH_TS_KEY = "otoshi.last_launch_ts";
 
 export default function IntroPage() {
   const navigate = useNavigate();
   const { t } = useLocale();
+  const lastLaunch = Number(window.localStorage.getItem(LAST_LAUNCH_TS_KEY) || "0");
+  const elapsed = Date.now() - lastLaunch;
+  const warmStart = Number.isFinite(lastLaunch) && elapsed > 0 && elapsed <= WARM_START_WINDOW_MS;
+  const introDurationMs = warmStart ? WARM_START_DURATION_MS : COLD_START_DURATION_MS;
 
   useEffect(() => {
+    window.localStorage.setItem(LAST_LAUNCH_TS_KEY, String(Date.now()));
     const timer = window.setTimeout(() => {
       navigate("/store", { replace: true });
-    }, INTRO_DURATION_MS);
+    }, introDurationMs);
 
     return () => window.clearTimeout(timer);
-  }, [navigate]);
+  }, [introDurationMs, navigate]);
 
   return (
     <button
@@ -56,7 +64,7 @@ export default function IntroPage() {
             className="h-full rounded-full bg-cyan-300/90"
             initial={{ width: "0%" }}
             animate={{ width: "100%" }}
-            transition={{ duration: INTRO_DURATION_MS / 1000, ease: "linear" }}
+            transition={{ duration: introDurationMs / 1000, ease: "linear" }}
           />
         </motion.div>
       </div>

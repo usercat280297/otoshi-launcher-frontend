@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { ShoppingCart } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { artworkGet, artworkPrefetch } from "../../services/api";
 import { Game } from "../../types";
 import Button from "../common/Button";
 import { useLocale } from "../../context/LocaleContext";
@@ -50,6 +51,19 @@ export default function Hero({
 
   const [activeIndex, setActiveIndex] = useState(0);
   const prefetchedRef = useRef(new Set<string>());
+  const [heroImageSrc, setHeroImageSrc] = useState(game.heroImage);
+  const [railImages, setRailImages] = useState<Record<string, string>>({});
+
+  const mapSources = (item: Game) => ({
+    t0: item.iconImage || item.capsuleImage || item.headerImage || item.heroImage || null,
+    t1: item.capsuleImage || item.headerImage || item.heroImage || null,
+    t2: item.headerImage || item.capsuleImage || item.heroImage || null,
+    t3: item.heroImage || item.headerImage || item.capsuleImage || null,
+    t4: item.heroImage || item.headerImage || item.capsuleImage || null,
+  });
+
+  const resolveId = (item: Game) => item.steamAppId || item.id;
+
   useEffect(() => {
     const idx = playlist.findIndex((item) => item.id === game.id);
     setActiveIndex(idx >= 0 ? idx : 0);
@@ -70,13 +84,67 @@ export default function Hero({
   const slidesForRail = playlist.slice(0, 5);
 
   useEffect(() => {
-    slidesForRail.forEach((item) => {
-      const src = item.iconImage || item.headerImage || item.capsuleImage || item.heroImage;
-      if (!src || prefetchedRef.current.has(src)) return;
-      prefetchedRef.current.add(src);
-      const img = new Image();
-      img.src = src;
+    setHeroImageSrc(activeGame.headerImage || activeGame.capsuleImage || activeGame.heroImage);
+    let cancelled = false;
+    const dpr = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+
+    const run = async () => {
+      const sources = mapSources(activeGame);
+      const gameId = resolveId(activeGame);
+      const lowTier = await artworkGet(gameId, 2, dpr, sources).catch(() => null);
+      if (!cancelled && lowTier) {
+        setHeroImageSrc(lowTier);
+      }
+
+      const highTier = await artworkGet(gameId, 4, dpr, sources).catch(() => null);
+      if (!cancelled && highTier) {
+        setHeroImageSrc(highTier);
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeGame]);
+
+  useEffect(() => {
+    const prefetchPayload = slidesForRail
+      .filter((item) => {
+        const key = resolveId(item);
+        if (!key || prefetchedRef.current.has(`hero:${key}`)) return false;
+        prefetchedRef.current.add(`hero:${key}`);
+        return true;
+      })
+      .map((item) => ({
+        gameId: resolveId(item),
+        sources: mapSources(item),
+      }));
+
+    if (prefetchPayload.length) {
+      void artworkPrefetch(prefetchPayload, 2).catch(() => undefined);
+    }
+
+    const dpr = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+    let disposed = false;
+    void Promise.all(
+      slidesForRail.map(async (item) => {
+        const key = item.id;
+        const src = await artworkGet(resolveId(item), 1, dpr, mapSources(item)).catch(() => null);
+        return src ? [key, src] : null;
+      })
+    ).then((pairs) => {
+      if (disposed) return;
+      const updates = Object.fromEntries(
+        pairs.filter((entry): entry is [string, string] => Array.isArray(entry))
+      );
+      if (!Object.keys(updates).length) return;
+      setRailImages((prev) => ({ ...prev, ...updates }));
     });
+
+    return () => {
+      disposed = true;
+    };
   }, [slidesForRail]);
 
   return (
@@ -90,8 +158,8 @@ export default function Hero({
       <div className="relative min-h-[360px] overflow-hidden rounded-2xl border border-background-border bg-background-elevated shadow-panel">
         <AnimatePresence mode="wait">
           <motion.img
-            key={activeGame.id}
-            src={activeGame.heroImage}
+            key={`${activeGame.id}:${heroImageSrc}`}
+            src={heroImageSrc}
             alt={activeGame.title}
             className="absolute inset-0 h-full w-full object-cover"
             initial={{ opacity: 0, scale: 1.02 }}
@@ -188,7 +256,12 @@ export default function Hero({
                 )}
                 <div className="relative z-10 flex w-full items-center gap-3">
                   <img
-                    src={item.iconImage || item.headerImage || item.capsuleImage}
+                    src={
+                      railImages[item.id] ||
+                      item.iconImage ||
+                      item.headerImage ||
+                      item.capsuleImage
+                    }
                     alt={item.title}
                     className="h-14 w-14 rounded-lg object-cover"
                     loading="eager"

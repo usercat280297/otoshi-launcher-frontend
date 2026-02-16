@@ -18,8 +18,13 @@ export default function FeaturedRow({ title, games, onOpen }: FeaturedRowProps) 
         </div>
       </div>
       <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-elegant">
-        {games.map((game) => (
-          <GameCard key={game.id} game={game} onOpen={onOpen} />
+        {games.map((game, index) => (
+          <GameCard
+            key={game.id}
+            game={game}
+            onOpen={onOpen}
+            prefetchGames={games.slice(index + 1, index + 9)}
+          />
         ))}
       </div>
     </section>

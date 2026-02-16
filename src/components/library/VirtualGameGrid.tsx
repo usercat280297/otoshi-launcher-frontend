@@ -12,6 +12,8 @@ type VirtualGameGridProps = {
   entries: LibraryEntry[];
   onInstall: (entry: LibraryEntry) => void;
   onPlay?: (entry: LibraryEntry) => void;
+  onStop?: (entry: LibraryEntry) => void;
+  runningIds?: Set<string>;
 };
 
 type GridData = {
@@ -19,16 +21,20 @@ type GridData = {
   columnCount: number;
   onInstall: (entry: LibraryEntry) => void;
   onPlay?: (entry: LibraryEntry) => void;
+  onStop?: (entry: LibraryEntry) => void;
+  runningIds?: Set<string>;
 };
 
 export default function VirtualGameGrid({
   entries,
   onInstall,
-  onPlay
+  onPlay,
+  onStop,
+  runningIds
 }: VirtualGameGridProps) {
   const itemData = useMemo<GridData>(
-    () => ({ entries, columnCount: 1, onInstall, onPlay }),
-    [entries, onInstall, onPlay]
+    () => ({ entries, columnCount: 1, onInstall, onPlay, onStop, runningIds }),
+    [entries, onInstall, onPlay, onStop, runningIds]
   );
 
   return (
@@ -61,7 +67,7 @@ export default function VirtualGameGrid({
 }
 
 function GridCell({ columnIndex, rowIndex, style, data }: GridChildComponentProps<GridData>) {
-  const { entries, columnCount, onInstall, onPlay } = data;
+  const { entries, columnCount, onInstall, onPlay, onStop, runningIds } = data;
   const index = rowIndex * columnCount + columnIndex;
 
   if (index >= entries.length) {
@@ -69,6 +75,7 @@ function GridCell({ columnIndex, rowIndex, style, data }: GridChildComponentProp
   }
 
   const entry = entries[index];
+  const running = Boolean(runningIds?.has(entry.game.id));
 
   return (
     <div
@@ -82,8 +89,10 @@ function GridCell({ columnIndex, rowIndex, style, data }: GridChildComponentProp
     >
       <LibraryCard
         game={entry.game}
+        running={running}
         onInstall={() => onInstall(entry)}
         onPlay={onPlay ? () => onPlay(entry) : undefined}
+        onStop={onStop ? () => onStop(entry) : undefined}
       />
     </div>
   );

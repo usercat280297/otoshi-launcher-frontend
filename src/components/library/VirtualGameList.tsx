@@ -10,22 +10,28 @@ type VirtualGameListProps = {
   entries: LibraryEntry[];
   onInstall: (entry: LibraryEntry) => void;
   onPlay?: (entry: LibraryEntry) => void;
+  onStop?: (entry: LibraryEntry) => void;
+  runningIds?: Set<string>;
 };
 
 type ListData = {
   entries: LibraryEntry[];
   onInstall: (entry: LibraryEntry) => void;
   onPlay?: (entry: LibraryEntry) => void;
+  onStop?: (entry: LibraryEntry) => void;
+  runningIds?: Set<string>;
 };
 
 export default function VirtualGameList({
   entries,
   onInstall,
-  onPlay
+  onPlay,
+  onStop,
+  runningIds
 }: VirtualGameListProps) {
   const itemData = useMemo<ListData>(
-    () => ({ entries, onInstall, onPlay }),
-    [entries, onInstall, onPlay]
+    () => ({ entries, onInstall, onPlay, onStop, runningIds }),
+    [entries, onInstall, onPlay, onStop, runningIds]
   );
 
   return (
@@ -54,13 +60,16 @@ function ListRow({ index, style, data }: ListChildComponentProps<ListData>) {
   if (!entry) {
     return null;
   }
+  const running = Boolean(data.runningIds?.has(entry.game.id));
 
   return (
     <div style={{ ...style, paddingBottom: 12 }}>
       <LibraryRow
         game={entry.game}
+        running={running}
         onInstall={() => data.onInstall(entry)}
         onPlay={data.onPlay ? () => data.onPlay?.(entry) : undefined}
+        onStop={data.onStop ? () => data.onStop(entry) : undefined}
       />
     </div>
   );

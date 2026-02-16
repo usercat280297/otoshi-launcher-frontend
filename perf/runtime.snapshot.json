@@ -1,0 +1,30 @@
+{
+  "cold_start_p95_ms": 41,
+  "warm_start_p95_ms": 11,
+  "store_first_interactive_ms": 41,
+  "long_tasks": 0,
+  "fps_avg": 60.03,
+  "idle_cpu_pct": 0,
+  "idle_ram_mb": 88.58,
+  "details": {
+    "cold_start_samples_ms": [
+      41,
+      22
+    ],
+    "warm_start_samples_ms": [
+      10,
+      11
+    ],
+    "cold_interactive_samples_ms": [
+      41,
+      22
+    ],
+    "warm_interactive_samples_ms": [
+      10,
+      11
+    ],
+    "cold_start_median_ms": 31.5,
+    "warm_start_median_ms": 10.5
+  },
+  "generated_at": "2026-02-15T21:20:20.830Z"
+}

@@ -1,15 +1,17 @@
 import { NavLink } from "react-router-dom";
 import { Store, Library, Download, Sparkles, User } from "lucide-react";
+import { useLocale } from "../../context/LocaleContext";
 
 const navItems = [
-  { to: "/store", label: "Game", icon: Store },
-  { to: "/discover", label: "Anime", icon: Sparkles },
-  { to: "/library", label: "Library", icon: Library },
-  { to: "/downloads", label: "Downloads", icon: Download },
-  { to: "/profile", label: "Profile", icon: User }
+  { to: "/store", labelKey: "mobile_nav.game", icon: Store },
+  { to: "/discover", labelKey: "mobile_nav.anime", icon: Sparkles },
+  { to: "/library", labelKey: "mobile_nav.library", icon: Library },
+  { to: "/downloads", labelKey: "mobile_nav.downloads", icon: Download },
+  { to: "/profile", labelKey: "mobile_nav.profile", icon: User }
 ];
 
 export default function MobileNav() {
+  const { t } = useLocale();
   return (
     <nav className="fixed bottom-4 left-1/2 z-30 flex w-[92%] -translate-x-1/2 justify-between rounded-lg border border-background-border bg-background-elevated px-4 py-3 lg:hidden">
       {navItems.map((item) => {
@@ -25,7 +27,7 @@ export default function MobileNav() {
             }
           >
             <Icon size={16} />
-            {item.label}
+            {t(item.labelKey)}
           </NavLink>
         );
       })}

@@ -44,7 +44,9 @@ export default function SteamCatalogPage() {
         const data = await fetchSteamCatalog({
           limit: PAGE_SIZE,
           offset: nextOffset,
-          search: searchValue || undefined
+          search: searchValue || undefined,
+          artMode: "tiered",
+          thumbW: 460
         });
         const totalCount = data.total ?? 0;
         setTotal(totalCount);
@@ -211,11 +213,12 @@ export default function SteamCatalogPage() {
           </div>
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
-            {items.map((item) => (
+            {items.map((item, index) => (
               <SteamCard
                 key={item.appId}
                 item={item}
                 onOpen={() => navigate(`/steam/${item.appId}`)}
+                prefetchItems={items.slice(index + 1, index + 11)}
               />
             ))}
           </div>

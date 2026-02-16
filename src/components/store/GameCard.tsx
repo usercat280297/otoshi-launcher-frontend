@@ -1,60 +1,70 @@
 import { useEffect, useRef, useState } from "react";
+import { artworkGet, artworkPrefetch } from "../../services/api";
 import { Game } from "../../types";
 import { getMediaProtectionProps } from "../../utils/mediaProtection";
 import Badge from "../common/Badge";
 
 export default function GameCard({
   game,
-  onOpen
+  onOpen,
+  prefetchGames = []
 }: {
   game: Game;
   onOpen: (game: Game) => void;
+  prefetchGames?: Game[];
 }) {
   const discounted = game.discountPercent > 0;
   const price = (game.price * (1 - game.discountPercent / 100)).toFixed(2);
   const displayPrice = game.price <= 0 ? "Free" : `$${price}`;
   const [displayImage, setDisplayImage] = useState<string | null>(null);
   const fallbackTimerRef = useRef<number | null>(null);
-  const FALLBACK_DELAY_MS = 2000;
-  const hasSteamGridArt = Boolean(game.logoImage || game.iconImage);
+  const FALLBACK_DELAY_MS = 1500;
+  const fallbackImage = game.capsuleImage || game.headerImage || game.heroImage || null;
+
+  const mapSources = (item: Game) => ({
+    t0: item.capsuleImage || item.iconImage || item.headerImage || item.heroImage || null,
+    t1: item.capsuleImage || item.headerImage || item.heroImage || null,
+    t2: item.headerImage || item.capsuleImage || item.heroImage || null,
+    t3: item.heroImage || item.headerImage || item.capsuleImage || null,
+    t4: item.heroImage || item.headerImage || item.capsuleImage || null,
+  });
+
+  const resolveId = (item: Game) => item.steamAppId || item.id;
 
   useEffect(() => {
     let active = true;
     if (fallbackTimerRef.current) {
       window.clearTimeout(fallbackTimerRef.current);
     }
-    if (!game.headerImage) {
+    if (!fallbackImage) {
       setDisplayImage(null);
       return () => {
         active = false;
       };
     }
-
-    const revealImage = (src: string) => {
-      const img = new Image();
-      img.onload = () => {
-        if (!active) return;
-        setDisplayImage(src);
-      };
-      img.onerror = () => {
-        if (!active) return;
-        setDisplayImage(src);
-      };
-      img.src = src;
-    };
-
-    if (hasSteamGridArt) {
-      revealImage(game.headerImage);
-      return () => {
-        active = false;
-      };
-    }
-
-    setDisplayImage(null);
     fallbackTimerRef.current = window.setTimeout(() => {
       if (!active) return;
-      revealImage(game.headerImage);
+      setDisplayImage((current) => current || fallbackImage);
     }, FALLBACK_DELAY_MS);
+    const dpr = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+
+    const loadProgressive = async () => {
+      const gameId = resolveId(game);
+      const sources = mapSources(game);
+      const lowTier = await artworkGet(gameId, 1, dpr, sources).catch(() => null);
+      if (!active) return;
+      if (lowTier) {
+        setDisplayImage(lowTier);
+      } else {
+        setDisplayImage(fallbackImage);
+      }
+
+      const highTier = await artworkGet(gameId, 3, dpr, sources).catch(() => null);
+      if (!active || !highTier) return;
+      setDisplayImage(highTier);
+    };
+
+    void loadProgressive();
 
     return () => {
       active = false;
@@ -62,7 +72,16 @@ export default function GameCard({
         window.clearTimeout(fallbackTimerRef.current);
       }
     };
-  }, [game.headerImage, hasSteamGridArt]);
+  }, [fallbackImage, game]);
+
+  useEffect(() => {
+    if (!prefetchGames.length) return;
+    const payload = prefetchGames.slice(0, 8).map((item) => ({
+      gameId: resolveId(item),
+      sources: mapSources(item),
+    }));
+    void artworkPrefetch(payload, 2).catch(() => undefined);
+  }, [prefetchGames]);
 
   return (
     <button

@@ -36,9 +36,9 @@ module.exports = {
         }
       },
       fontFamily: {
-        display: ["\"Inter Tight\"", "\"Inter\"", "system-ui", "sans-serif"],
-        body: ["\"Inter\"", "system-ui", "sans-serif"],
-        mono: ["\"Recursive\"", "ui-monospace", "monospace"]
+        display: ["\"CollectEmAlliCiel\"", "system-ui", "sans-serif"],
+        body: ["\"CollectEmAlliCiel\"", "system-ui", "sans-serif"],
+        mono: ["\"CollectEmAlliCiel\"", "ui-monospace", "monospace"]
       },
       boxShadow: {
         panel: "0 18px 40px rgba(0, 0, 0, 0.35)",

@@ -1,15 +1,19 @@
 import { useEffect, useState } from "react";
-import { Play, DownloadCloud, Clock, Star } from "lucide-react";
+import { Play, DownloadCloud, Clock, Star, Square } from "lucide-react";
 import { Game } from "../../types";
+import { useLocale } from "../../context/LocaleContext";
 import Button from "../common/Button";
 
 type LibraryCardProps = {
   game: Game;
+  running?: boolean;
   onPlay?: () => void;
+  onStop?: () => void;
   onInstall?: () => void;
 };
 
-export default function LibraryCard({ game, onPlay, onInstall }: LibraryCardProps) {
+export default function LibraryCard({ game, running, onPlay, onStop, onInstall }: LibraryCardProps) {
+  const { t } = useLocale();
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
 
@@ -52,15 +56,21 @@ export default function LibraryCard({ game, onPlay, onInstall }: LibraryCardProp
         </div>
         <div className="flex items-center gap-2 text-xs text-text-secondary">
           <Clock size={14} />
-          {game.playtimeHours}h played
+          {t("library.playtime_played").replace("{hours}", String(game.playtimeHours))}
         </div>
         {game.installed ? (
-          <Button size="sm" variant="secondary" icon={<Play size={14} />} onClick={onPlay}>
-            Launch
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={running ? <Square size={14} /> : <Play size={14} />}
+            onClick={running ? onStop : onPlay}
+            disabled={running ? !onStop : !onPlay}
+          >
+            {running ? t("action.stop") : t("action.play")}
           </Button>
         ) : (
           <Button size="sm" variant="secondary" icon={<DownloadCloud size={14} />} onClick={onInstall}>
-            Install
+            {t("action.install")}
           </Button>
         )}
       </div>

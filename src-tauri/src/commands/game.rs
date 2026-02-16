@@ -1,19 +1,26 @@
 use std::collections::HashMap;
 use std::fs;
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sysinfo::{Pid, System};
 use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
 
 use crate::commands::overlay::set_overlay_window_visible;
 use crate::db::queries::{GameQueries, LaunchPrefQueries, PlaySessionQueries};
 use crate::models::{Game, GameLaunchPref, LibraryEntry, LocalGame, PlaySessionLocal};
+use crate::services::RunningGame;
 use crate::utils::paths::resolve_data_dir;
 use crate::AppState;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[tauri::command]
 pub async fn get_library(state: State<'_, Arc<AppState>>) -> Result<Vec<LibraryEntry>, String> {
@@ -130,6 +137,11 @@ pub async fn set_game_launch_pref(
     Ok(pref)
 }
 
+#[tauri::command]
+pub async fn get_running_games(state: State<'_, Arc<AppState>>) -> Result<Vec<RunningGame>, String> {
+    Ok(state.game_runtime.list())
+}
+
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct LaunchersConfig {
@@ -186,8 +198,96 @@ pub async fn launch_game(
     state.overlay.set_visible(payload.overlay_enabled);
     let _ = set_overlay_window_visible(&app, payload.overlay_enabled);
 
+    let session_id = Uuid::new_v4().to_string();
+    let session_started_at = Utc::now().timestamp();
+    let _ = state.db.upsert_play_session(&PlaySessionLocal {
+        id: session_id.clone(),
+        game_id: payload.game_id.clone(),
+        started_at: session_started_at,
+        ended_at: None,
+        duration_sec: 0,
+        exit_code: None,
+        synced: false,
+        updated_at: session_started_at,
+    });
+
     if require_admin {
-        launch_with_admin(&exe_path, &working_dir, &args)?;
+        let pid = launch_with_admin(
+            &exe_path,
+            &working_dir,
+            &args,
+            &payload.renderer,
+            payload.overlay_enabled,
+        )?;
+
+        state.game_runtime.register(RunningGame {
+            game_id: payload.game_id.clone(),
+            title: payload.title.clone(),
+            pid,
+            started_at: session_started_at,
+            session_id: session_id.clone(),
+            launched_as_admin: true,
+            overlay_enabled: payload.overlay_enabled,
+        });
+
+        let app_handle = app.clone();
+        let state_for_thread = state.inner().clone();
+        let game_id = payload.game_id.clone();
+        let overlay_enabled = payload.overlay_enabled;
+        let session_for_thread = session_id.clone();
+        std::thread::spawn(move || {
+            let pid_sys = Pid::from_u32(pid);
+            let mut sys = System::new_all();
+            loop {
+                if !state_for_thread.game_runtime.is_pid_registered(&game_id, pid) {
+                    return;
+                }
+                sys.refresh_processes();
+                if sys.process(pid_sys).is_none() {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(750));
+            }
+
+            let ended_at = Utc::now().timestamp();
+            let duration_sec = (ended_at - session_started_at).max(0);
+            if state_for_thread
+                .game_runtime
+                .take_if_pid_matches(&game_id, pid)
+                .is_none()
+            {
+                return;
+            }
+            let _ = state_for_thread.db.update_playtime(&game_id, duration_sec);
+            let _ = state_for_thread.db.upsert_play_session(&PlaySessionLocal {
+                id: session_for_thread.clone(),
+                game_id: game_id.clone(),
+                started_at: session_started_at,
+                ended_at: Some(ended_at),
+                duration_sec,
+                exit_code: None,
+                synced: false,
+                updated_at: ended_at,
+            });
+            if overlay_enabled {
+                let _ = set_overlay_window_visible(&app_handle, false);
+            }
+
+            let state_for_sync = state_for_thread.clone();
+            let game_for_sync = game_id.clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = sync_play_session_to_backend(
+                    state_for_sync,
+                    &session_for_thread,
+                    &game_for_sync,
+                    session_started_at,
+                    ended_at,
+                    duration_sec,
+                    None,
+                )
+                .await;
+            });
+        });
         return Ok(LaunchResult {
             exe_path: exe_path.to_string_lossy().to_string(),
             working_dir: working_dir.to_string_lossy().to_string(),
@@ -207,22 +307,20 @@ pub async fn launch_game(
         )
         .args(&args);
 
-    let session_id = Uuid::new_v4().to_string();
-    let session_started_at = Utc::now().timestamp();
-    let _ = state.db.upsert_play_session(&PlaySessionLocal {
-        id: session_id.clone(),
-        game_id: payload.game_id.clone(),
-        started_at: session_started_at,
-        ended_at: None,
-        duration_sec: 0,
-        exit_code: None,
-        synced: false,
-        updated_at: session_started_at,
-    });
-
     let mut child = cmd
         .spawn()
         .map_err(|err| format!("Failed to launch game: {err}"))?;
+    let pid = child.id();
+
+    state.game_runtime.register(RunningGame {
+        game_id: payload.game_id.clone(),
+        title: payload.title.clone(),
+        pid,
+        started_at: session_started_at,
+        session_id: session_id.clone(),
+        launched_as_admin: false,
+        overlay_enabled: payload.overlay_enabled,
+    });
 
     let app_handle = app.clone();
     let state_for_thread = state.inner().clone();
@@ -233,6 +331,16 @@ pub async fn launch_game(
         let ended_at = Utc::now().timestamp();
         let duration_sec = (ended_at - session_started_at).max(0);
         let exit_code = status.ok().and_then(|s| s.code());
+        if state_for_thread
+            .game_runtime
+            .take_if_pid_matches(&game_id, pid)
+            .is_none()
+        {
+            if overlay_enabled {
+                let _ = set_overlay_window_visible(&app_handle, false);
+            }
+            return;
+        }
         let _ = state_for_thread.db.update_playtime(&game_id, duration_sec);
         let _ = state_for_thread.db.upsert_play_session(&PlaySessionLocal {
             id: session_id.clone(),
@@ -275,7 +383,13 @@ pub async fn launch_game(
 }
 
 #[cfg(target_os = "windows")]
-fn launch_with_admin(exe_path: &Path, working_dir: &Path, args: &[String]) -> Result<(), String> {
+fn launch_with_admin(
+    exe_path: &Path,
+    working_dir: &Path,
+    args: &[String],
+    renderer: &str,
+    overlay_enabled: bool,
+) -> Result<u32, String> {
     let quote = |value: &str| format!("'{}'", value.replace('\'', "''"));
     let args_literal = if args.is_empty() {
         "@()".to_string()
@@ -289,25 +403,145 @@ fn launch_with_admin(exe_path: &Path, working_dir: &Path, args: &[String]) -> Re
     };
 
     let script = format!(
-        "Start-Process -FilePath {} -WorkingDirectory {} -ArgumentList {} -Verb RunAs",
+        "$ErrorActionPreference='Stop'; $env:OTOSHI_RENDERER={}; $env:OTOSHI_OVERLAY={}; (Start-Process -FilePath {} -WorkingDirectory {} -ArgumentList {} -Verb RunAs -PassThru).Id",
+        quote(renderer),
+        quote(if overlay_enabled { "1" } else { "0" }),
         quote(exe_path.to_string_lossy().as_ref()),
         quote(working_dir.to_string_lossy().as_ref()),
         args_literal,
     );
 
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &script])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|err| format!("Failed to request admin launch: {err}"))?;
+    if !output.status.success() {
+        return Err("Admin launch request was rejected.".to_string());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let pid = stdout
+        .split(|c: char| !c.is_ascii_digit())
+        .filter(|token| !token.is_empty())
+        .last()
+        .and_then(|token| token.parse::<u32>().ok())
+        .ok_or_else(|| format!("Admin launch succeeded but PID was not returned: {stdout}"))?;
+    Ok(pid)
+}
+
+#[cfg(target_os = "windows")]
+fn kill_pid(pid: u32) -> Result<(), String> {
+    let pid_arg = pid.to_string();
+    let output = Command::new("taskkill")
+        .args(["/PID", &pid_arg, "/T", "/F"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|err| format!("Failed to run taskkill: {err}"))?;
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}\n{stderr}").to_ascii_lowercase();
+    if combined.contains("not found") || combined.contains("no running instance") {
+        return Ok(());
+    }
+
+    // If taskkill fails due to elevation (or any other reason), try again with elevation.
+    let script = format!(
+        "$ErrorActionPreference='Stop'; $p=Start-Process -FilePath 'taskkill' -ArgumentList @('/PID','{pid}','/T','/F') -Verb RunAs -WindowStyle Hidden -Wait -PassThru; exit $p.ExitCode"
+    );
     let status = Command::new("powershell")
         .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &script])
+        .creation_flags(CREATE_NO_WINDOW)
         .status()
-        .map_err(|err| format!("Failed to request admin launch: {err}"))?;
+        .map_err(|err| format!("Failed to request elevation for stop: {err}"))?;
     if status.success() {
         Ok(())
     } else {
-        Err("Admin launch request was rejected.".to_string())
+        Err(format!(
+            "Failed to stop game (taskkill exit={:?}): {}",
+            output.status.code(),
+            stderr.trim()
+        ))
     }
 }
 
 #[cfg(not(target_os = "windows"))]
-fn launch_with_admin(_exe_path: &Path, _working_dir: &Path, _args: &[String]) -> Result<(), String> {
+fn kill_pid(_pid: u32) -> Result<(), String> {
+    Err("Stop is only supported on Windows.".to_string())
+}
+
+#[tauri::command]
+pub async fn stop_game(
+    game_id: String,
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+) -> Result<(), String> {
+    let running = state
+        .game_runtime
+        .take(&game_id)
+        .ok_or_else(|| "Game is not running.".to_string())?;
+
+    if let Err(err) = kill_pid(running.pid) {
+        // Game is likely still running; re-register so user can retry.
+        state.game_runtime.register(running);
+        return Err(err);
+    }
+
+    if running.overlay_enabled {
+        let _ = set_overlay_window_visible(&app, false);
+    }
+
+    let ended_at = Utc::now().timestamp();
+    let duration_sec = (ended_at - running.started_at).max(0);
+    state
+        .db
+        .update_playtime(&game_id, duration_sec)
+        .map_err(|err| err.to_string())?;
+    state
+        .db
+        .upsert_play_session(&PlaySessionLocal {
+            id: running.session_id.clone(),
+            game_id: game_id.clone(),
+            started_at: running.started_at,
+            ended_at: Some(ended_at),
+            duration_sec,
+            exit_code: None,
+            synced: false,
+            updated_at: ended_at,
+        })
+        .map_err(|err| err.to_string())?;
+
+    let state_for_sync = state.inner().clone();
+    let session_for_sync = running.session_id.clone();
+    let game_for_sync = game_id.clone();
+    tauri::async_runtime::spawn(async move {
+        let _ = sync_play_session_to_backend(
+            state_for_sync,
+            &session_for_sync,
+            &game_for_sync,
+            running.started_at,
+            ended_at,
+            duration_sec,
+            None,
+        )
+        .await;
+    });
+
+    Ok(())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn launch_with_admin(
+    _exe_path: &Path,
+    _working_dir: &Path,
+    _args: &[String],
+    _renderer: &str,
+    _overlay_enabled: bool,
+) -> Result<u32, String> {
     Err("Admin launch is only supported on Windows.".to_string())
 }
 

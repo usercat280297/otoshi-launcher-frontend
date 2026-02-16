@@ -55,7 +55,7 @@ export function UpdateBanner({
           <Download className="w-5 h-5" />
           <div>
             <span className="font-medium">
-              Phiên bản mới {updateInfo.version} đã sẵn sàng!
+              {`${t("update_banner.new_version_prefix")} ${updateInfo.version} ${t("update_banner.new_version_suffix")}`}
             </span>
             {updateInfo.notes && (
               <p className="text-sm text-white/80 mt-0.5 line-clamp-1">
@@ -86,6 +86,7 @@ export function UpdateBanner({
 }
 
 export function MaintenanceBanner() {
+  const { t } = useLocale();
   const { maintenanceMode, maintenanceMessage } = useRemoteConfig();
   
   if (!maintenanceMode) {
@@ -97,7 +98,7 @@ export function MaintenanceBanner() {
       <div className="container mx-auto flex items-center gap-3">
         <AlertTriangle className="w-5 h-5 flex-shrink-0" />
         <p className="font-medium">
-          {maintenanceMessage || 'Hệ thống đang bảo trì. Một số tính năng có thể không hoạt động.'}
+          {maintenanceMessage || t("update_banner.maintenance_default")}
         </p>
       </div>
     </div>
@@ -105,6 +106,7 @@ export function MaintenanceBanner() {
 }
 
 export function UpdateCheckButton({ currentVersion = '0.1.0' }: { currentVersion?: string }) {
+  const { t } = useLocale();
   const { isChecking, checkForUpdates, updateAvailable, lastChecked } = useAutoUpdate();
   
   return (
@@ -115,7 +117,7 @@ export function UpdateCheckButton({ currentVersion = '0.1.0' }: { currentVersion
     >
       <RefreshCw className={`w-4 h-4 ${isChecking ? 'animate-spin' : ''}`} />
       <span className="text-sm">
-        {isChecking ? 'Đang kiểm tra...' : 'Kiểm tra cập nhật'}
+        {isChecking ? t("update_banner.checking") : t("update_banner.check_updates")}
       </span>
       {updateAvailable && (
         <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />

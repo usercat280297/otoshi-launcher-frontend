@@ -82,15 +82,26 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
 
   const current = media[activeIndex];
   const currentVideo = current?.type === "video" ? current : null;
-  const currentVideoKey =
-    currentVideo ? `${currentVideo.hls ?? ""}::${currentVideo.url}` : null;
+  const currentVideoHls =
+    currentVideo?.hls ||
+    (currentVideo?.url && currentVideo.url.includes(".m3u8") ? currentVideo.url : null);
+  const currentVideoDash =
+    currentVideo?.dash ||
+    (currentVideo?.url && currentVideo.url.includes(".mpd") ? currentVideo.url : null);
+  const currentVideoDirectUrl =
+    currentVideo?.url &&
+    !currentVideo.url.includes(".m3u8") &&
+    !currentVideo.url.includes(".mpd")
+      ? currentVideo.url
+      : null;
+  const currentVideoKey = currentVideo
+    ? `${currentVideoHls ?? ""}::${currentVideoDirectUrl ?? currentVideo.url}`
+    : null;
   const currentVideoAlreadyLoaded = Boolean(
     currentVideoKey && loadedVideoKeysRef.current.has(currentVideoKey)
   );
   const shouldLoadVideo = isInView && Boolean(currentVideo);
-  const canUseHls = Boolean(
-    shouldLoadVideo && currentVideo?.hls && !currentVideo?.url && Hls.isSupported()
-  );
+  const canUseHls = Boolean(shouldLoadVideo && currentVideoHls && Hls.isSupported());
 
   useEffect(() => {
     if (!current) return;
@@ -127,13 +138,15 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
       return;
     }
     video.dataset.mediaKey = currentVideoKey;
-    if (canUseHls && currentVideo.hls) {
+    if (canUseHls && currentVideoHls) {
       if (hlsRef.current) {
         hlsRef.current.destroy();
       }
       const hls = new Hls({ enableWorker: true });
       hlsRef.current = hls;
-      hls.loadSource(currentVideo.hls);
+      // Steam store API increasingly returns trailers as HLS-only (no mp4/webm).
+      // Always prefer the explicit HLS field, but accept url-as-hls too.
+      hls.loadSource(currentVideoHls);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         if (hls.levels.length > 0) {
@@ -149,8 +162,9 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
         }
         hls.destroy();
         hlsRef.current = null;
-        if (currentVideo.url) {
-          video.src = currentVideo.url;
+        // Fall back to direct media URL if we have one (mp4/webm).
+        if (currentVideoDirectUrl) {
+          video.src = currentVideoDirectUrl;
           video.load();
         }
       });
@@ -164,19 +178,26 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
-    if (currentVideo.hls && !currentVideo.url && video.canPlayType("application/vnd.apple.mpegurl")) {
-      video.src = currentVideo.hls;
+    if (currentVideoHls && video.canPlayType("application/vnd.apple.mpegurl")) {
+      video.src = currentVideoHls;
       video.load();
       return;
     }
-    if (currentVideo.url) {
-      video.src = currentVideo.url;
+    // We don't currently ship a DASH player; keep the poster and avoid looping errors.
+    if (currentVideoDash && !currentVideoDirectUrl) {
+      clearWaitingTimer();
+      setVideoLoading(false);
+      return;
+    }
+    if (currentVideoDirectUrl) {
+      video.src = currentVideoDirectUrl;
       video.load();
     }
   }, [
     canUseHls,
-    currentVideo?.hls,
-    currentVideo?.url,
+    currentVideoHls,
+    currentVideoDash,
+    currentVideoDirectUrl,
     currentVideoKey,
     shouldLoadVideo
   ]);

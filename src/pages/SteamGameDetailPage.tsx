@@ -9,6 +9,7 @@ import { openExternal } from "../utils/openExternal";
 import {
   fetchSteamDownloadOptions,
   prepareSteamDownload,
+  resolveDownloadErrorI18nKey,
   startSteamDownloadWithOptions,
   verifyAgeGate,
   fetchSteamExtended,
@@ -287,16 +288,17 @@ export default function SteamGameDetailPage() {
 
   const handleDownloadSubmit = async (payload: DownloadPreparePayload) => {
     if (!appId) {
-      setDownloadSubmitError("Missing app id.");
+      setDownloadSubmitError(t("download.error.start_failed"));
       return;
     }
     if (!token) {
-      const message = "Authentication required. Please login to download games.";
+      const messageKey = "download.error.auth_required";
+      const message = t(messageKey);
       const iconUrl = game?.iconImage || game?.logoImage || game?.headerImage || undefined;
       setDownloadSubmitError(message);
       window.dispatchEvent(
         new CustomEvent("otoshi:download-error", {
-          detail: { message, iconUrl },
+          detail: { message, messageKey, iconUrl },
         })
       );
       return;
@@ -319,7 +321,7 @@ export default function SteamGameDetailPage() {
       );
       const requiredBytes = selectedVersion?.sizeBytes ?? prepared.sizeBytes ?? null;
       if (requiredBytes && prepared.freeBytes != null && prepared.freeBytes < requiredBytes) {
-        setDownloadSubmitError("Not enough free space for this download.");
+        setDownloadSubmitError(t("download_options.storage_not_enough"));
         return;
       }
       const preparedInstallPath = (prepared.installPath || "").trim();
@@ -341,12 +343,13 @@ export default function SteamGameDetailPage() {
       );
       navigate("/downloads");
     } catch (err: any) {
-      const message = err.message || "Failed to start download";
+      const messageKey = resolveDownloadErrorI18nKey(err);
+      const message = t(messageKey);
       const iconUrl = game?.iconImage || game?.logoImage || game?.headerImage || undefined;
       setDownloadSubmitError(message);
       window.dispatchEvent(
         new CustomEvent("otoshi:download-error", {
-          detail: { message, iconUrl },
+          detail: { message, messageKey, iconUrl },
         })
       );
     } finally {
@@ -460,7 +463,7 @@ export default function SteamGameDetailPage() {
                 navigate("/download-launcher");
               }}
             >
-              Open launcher download
+              {t("steam_detail.open_launcher_download")}
             </Button>
           </div>
         </div>
@@ -505,7 +508,7 @@ export default function SteamGameDetailPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.2 }}
-            className="fixed left-0 right-0 top-16 z-20 hidden md:block"
+            className="fixed left-0 right-0 top-16 z-20 hidden md:block lg:left-64"
           >
             <div className="mx-auto w-full max-w-[1400px] px-6 md:px-10">
               <div className="flex items-center justify-between gap-4 rounded-xl border border-background-border bg-background/90 px-4 py-3 shadow-soft backdrop-blur">

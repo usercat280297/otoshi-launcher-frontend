@@ -60,11 +60,11 @@ export default function DiscoverPage() {
         setSelectedAnime((prev) => prev ?? first);
       }
     } catch (err: any) {
-      setHomeError(err?.message || "Failed to load anime catalog.");
+      setHomeError(err?.message || t("discover.error_home"));
     } finally {
       setHomeLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const loadAnimeDetail = useCallback(
     async (item: AnimeItem, syncSelection = true) => {
@@ -85,12 +85,12 @@ export default function DiscoverPage() {
           setSelectedEpisodeUrl(firstEpisode.url);
         }
       } catch (err: any) {
-        setDetailError(err?.message || "Failed to load anime detail.");
+        setDetailError(err?.message || t("discover.error_detail"));
       } finally {
         setDetailLoading(false);
       }
     },
-    []
+    [t]
   );
 
   useEffect(() => {
@@ -234,16 +234,16 @@ export default function DiscoverPage() {
         }}
       />
 
-      <section className="glass-panel space-y-4 p-4 md:p-5">
+      <section className="glass-panel space-y-3 p-3 md:p-4">
         <div className="flex items-center gap-2 text-xs uppercase tracking-[0.28em] text-text-muted">
-          <Tags size={13} />
-          Anime Tags
+          <Tags size={12} />
+          {t("discover.tags_title")}
         </div>
         <div className="flex flex-wrap gap-2">
           {menuGroups.map((group) => (
             <button
               key={group.id}
-              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition md:text-xs ${
                 selectedMenuGroup?.id === group.id
                   ? "border-primary bg-primary/15 text-primary"
                   : "border-background-border text-text-secondary hover:border-primary"
@@ -259,7 +259,7 @@ export default function DiscoverPage() {
             {selectedMenuGroup.items.map((tag) => (
               <button
                 key={`${selectedMenuGroup.id}-${tag.id}`}
-                className="rounded-lg border border-background-border bg-background-surface px-3 py-1.5 text-xs text-text-secondary transition hover:border-primary hover:text-text-primary"
+                className="rounded-lg border border-background-border bg-background-surface px-2.5 py-1 text-[11px] text-text-secondary transition hover:border-primary hover:text-text-primary md:text-xs"
                 onClick={() => void openExternal(tag.href)}
               >
                 {tag.label}
@@ -279,37 +279,37 @@ export default function DiscoverPage() {
         )}
         <div className="absolute inset-0 bg-gradient-to-r from-background via-background/85 to-background/65" />
 
-        <div className="relative z-10 grid gap-5 p-5 md:grid-cols-[1.4fr_1fr] md:p-7">
+        <div className="relative z-10 grid gap-4 p-4 md:grid-cols-[1.35fr_0.95fr] md:p-5">
           <div className="space-y-4">
-            <p className="epic-pill w-fit">Anime Carousel</p>
-            <h2 className="text-3xl font-semibold leading-tight">
-              {heroItem?.title || "Anime Library"}
+            <p className="epic-pill w-fit">{t("discover.carousel_label")}</p>
+            <h2 className="text-2xl font-semibold leading-tight md:text-3xl">
+              {heroItem?.title || t("discover.hero_fallback_title")}
             </h2>
-            <p className="max-w-2xl text-sm text-text-secondary">
+            <p className="max-w-2xl text-[13px] text-text-secondary md:text-sm">
               {animeDetail?.description ||
-                "Anime feed with categories, detail metadata, episodes, and server groups. This launcher shows source metadata only."}
+                t("discover.hero_fallback_desc")}
             </p>
-            <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-text-muted">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-text-muted md:text-xs">
               {heroItem?.episodeLabel && (
-                <span className="rounded-full border border-background-border px-3 py-1">
+                <span className="rounded-full border border-background-border px-2.5 py-0.5">
                   {heroItem.episodeLabel}
                 </span>
               )}
               {heroItem?.ratingLabel && (
-                <span className="rounded-full border border-background-border px-3 py-1">
-                  Score {heroItem.ratingLabel}
+                <span className="rounded-full border border-background-border px-2.5 py-0.5">
+                  {t("discover.score_prefix")} {heroItem.ratingLabel}
                 </span>
               )}
               {animeDetail?.qualityLabel && (
-                <span className="rounded-full border border-background-border px-3 py-1">
+                <span className="rounded-full border border-background-border px-2.5 py-0.5">
                   {animeDetail.qualityLabel}
                 </span>
               )}
-              {searchLoading && <span>Searching...</span>}
+              {searchLoading && <span>{t("discover.searching")}</span>}
             </div>
             <div className="flex flex-wrap gap-3">
               <button
-                className="epic-button px-4 py-2 text-sm font-semibold"
+                className="epic-button px-3 py-1.5 text-xs font-semibold"
                 onClick={() => {
                   if (heroItem) {
                     setSelectedAnime(heroItem);
@@ -317,10 +317,10 @@ export default function DiscoverPage() {
                 }}
               >
                 <Clapperboard size={16} />
-                Open detail
+                {t("discover.open_detail")}
               </button>
               <button
-                className="epic-button-secondary px-4 py-2 text-sm font-semibold"
+                className="epic-button-secondary px-3 py-1.5 text-xs font-semibold"
                 onClick={() => {
                   if (heroItem?.detailUrl) {
                     void openExternal(heroItem.detailUrl);
@@ -328,23 +328,23 @@ export default function DiscoverPage() {
                 }}
               >
                 <ExternalLink size={16} />
-                Open source page
+                {t("discover.open_source_page")}
               </button>
               <button
-                className="epic-button-secondary px-4 py-2 text-sm font-semibold"
+                className="epic-button-secondary px-3 py-1.5 text-xs font-semibold"
                 onClick={() => void loadAnimeHome(true)}
               >
                 <RefreshCcw size={16} />
-                Refresh feed
+                {t("discover.refresh_feed")}
               </button>
             </div>
           </div>
 
           <div className="space-y-3">
-            <p className="text-xs uppercase tracking-[0.28em] text-text-muted">
-              Trending now
+            <p className="text-[10px] uppercase tracking-[0.28em] text-text-muted md:text-xs">
+              {t("discover.trending_now")}
             </p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2 md:gap-3">
               {carouselItems.slice(0, 6).map((item, index) => (
                 <button
                   key={`carousel-${item.id}-${index}`}
@@ -362,10 +362,10 @@ export default function DiscoverPage() {
                     <img
                       src={item.posterImage}
                       alt={item.title}
-                      className="h-24 w-full object-cover"
+                      className="h-20 w-full object-cover md:h-24"
                     />
                   ) : (
-                    <div className="flex h-24 items-center justify-center bg-background-muted">
+                    <div className="flex h-20 items-center justify-center bg-background-muted md:h-24">
                       <Tv size={20} className="text-text-muted" />
                     </div>
                   )}
@@ -383,8 +383,8 @@ export default function DiscoverPage() {
       )}
 
       {homeLoading && !animeHome ? (
-        <div className="glass-panel p-6 text-sm text-text-secondary">
-          Loading anime catalog...
+        <div className="glass-panel p-4 text-sm text-text-secondary">
+          {t("discover.loading_catalog")}
         </div>
       ) : (
         <div className="grid gap-6 xl:grid-cols-[1.65fr_1fr]">
@@ -392,16 +392,16 @@ export default function DiscoverPage() {
             {(animeHome?.sections || []).map((section) => (
               <section key={section.id} className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">{section.title}</h3>
+                  <h3 className="text-base font-semibold md:text-lg">{section.title}</h3>
                   <p className="text-xs uppercase tracking-[0.28em] text-text-muted">
-                    {section.items.length} items
+                    {section.items.length} {t("discover.items")}
                   </p>
                 </div>
-                <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-elegant">
+                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-elegant">
                   {section.items.map((item) => (
                     <button
                       key={`${section.id}-${item.id}`}
-                      className={`glass-card min-w-[180px] max-w-[180px] overflow-hidden text-left transition ${
+                      className={`glass-card min-w-[150px] max-w-[150px] overflow-hidden text-left transition md:min-w-[170px] md:max-w-[170px] ${
                         selectedAnime?.detailUrl === item.detailUrl
                           ? "border-primary"
                           : "hover:border-primary"
@@ -412,17 +412,19 @@ export default function DiscoverPage() {
                         <img
                           src={item.posterImage}
                           alt={item.title}
-                          className="h-[250px] w-full object-cover"
+                          className="h-[210px] w-full object-cover md:h-[240px]"
                         />
                       ) : (
-                        <div className="flex h-[250px] w-full items-center justify-center bg-background-muted text-text-muted">
+                        <div className="flex h-[210px] w-full items-center justify-center bg-background-muted text-text-muted md:h-[240px]">
                           <Tv size={24} />
                         </div>
                       )}
-                      <div className="space-y-1 p-3">
-                        <p className="line-clamp-2 text-sm font-semibold">{item.title}</p>
-                        <p className="text-xs text-text-muted">
-                          {item.episodeLabel || item.ratingLabel || "Anime"}
+                      <div className="space-y-1 p-2.5">
+                        <p className="line-clamp-2 text-[13px] font-semibold md:text-sm">
+                          {item.title}
+                        </p>
+                        <p className="text-[11px] text-text-muted md:text-xs">
+                          {item.episodeLabel || item.ratingLabel || t("discover.anime")}
                         </p>
                       </div>
                     </button>
@@ -432,13 +434,13 @@ export default function DiscoverPage() {
             ))}
           </div>
 
-          <aside className="glass-panel h-fit space-y-4 p-4 xl:sticky xl:top-6">
+          <aside className="glass-panel h-fit space-y-3 p-3 md:p-4 xl:sticky xl:top-6">
             <div className="flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-text-muted">
               <Play size={12} />
-              Anime Detail
+              {t("discover.detail_title")}
             </div>
             {detailLoading ? (
-              <p className="text-sm text-text-secondary">Loading detail...</p>
+              <p className="text-sm text-text-secondary">{t("discover.loading_detail")}</p>
             ) : detailError ? (
               <p className="text-sm text-accent-red">{detailError}</p>
             ) : animeDetail ? (
@@ -447,7 +449,7 @@ export default function DiscoverPage() {
                   <img
                     src={animeDetail.bannerImage}
                     alt={animeDetail.title}
-                    className="h-36 w-full rounded-xl border border-background-border object-cover"
+                    className="h-32 w-full rounded-xl border border-background-border object-cover md:h-36"
                   />
                 )}
 
@@ -476,7 +478,7 @@ export default function DiscoverPage() {
                 {animeDetail.metadata.length > 0 && (
                   <div className="space-y-2">
                     <p className="text-xs uppercase tracking-[0.28em] text-text-muted">
-                      Metadata
+                      {t("discover.metadata")}
                     </p>
                     <div className="grid gap-2">
                       {animeDetail.metadata.slice(0, 10).map((entry, index) => (
@@ -494,7 +496,7 @@ export default function DiscoverPage() {
 
                 <div className="space-y-2">
                   <p className="text-xs uppercase tracking-[0.28em] text-text-muted">
-                    Episodes
+                    {t("discover.episodes")}
                   </p>
                   <div className="max-h-48 space-y-2 overflow-y-auto pr-1 scrollbar-elegant">
                     {detailEpisodes.map((episode) => (
@@ -515,10 +517,12 @@ export default function DiscoverPage() {
 
                 <div className="space-y-3 border-t border-background-border pt-3">
                   <p className="text-xs uppercase tracking-[0.28em] text-text-muted">
-                    Server Groups
+                    {t("discover.server_groups")}
                   </p>
                   {episodeLoading ? (
-                    <p className="text-sm text-text-secondary">Loading server data...</p>
+                    <p className="text-sm text-text-secondary">
+                      {t("discover.loading_server_data")}
+                    </p>
                   ) : episodeSource ? (
                     <div className="space-y-3">
                       {serverGroups.length > 0 && (
@@ -550,7 +554,9 @@ export default function DiscoverPage() {
                               onClick={() => setSelectedEpisodeUrl(episode.url)}
                             >
                               <div className="flex items-center justify-between gap-2">
-                                <span>Episode {episode.label}</span>
+                                <span>
+                                  {t("discover.episode_prefix")} {episode.label}
+                                </span>
                                 <span className="text-text-muted">
                                   {episode.sourceKey?.toUpperCase() || "API"}
                                 </span>
@@ -565,12 +571,12 @@ export default function DiscoverPage() {
                         onClick={() => void openExternal(episodeSource.url)}
                       >
                         <ExternalLink size={14} />
-                        Open watch page
+                        {t("discover.open_watch_page")}
                       </button>
 
                       {episodeSource.qualityLabel && (
                         <p className="text-xs text-text-secondary">
-                          Reported quality:{" "}
+                          {t("discover.reported_quality")}:{" "}
                           <span className="font-semibold text-text-primary">
                             {episodeSource.qualityLabel}
                           </span>
@@ -578,20 +584,19 @@ export default function DiscoverPage() {
                       )}
 
                       <p className="text-xs text-text-muted">
-                        Direct stream links may be hidden by source protection. This launcher keeps
-                        server metadata and episode routing stable.
+                        {t("discover.direct_links_note")}
                       </p>
                     </div>
                   ) : (
                     <p className="text-sm text-text-secondary">
-                      Select an episode to load server groups.
+                      {t("discover.select_episode_prompt")}
                     </p>
                   )}
                 </div>
               </div>
             ) : (
               <p className="text-sm text-text-secondary">
-                Select an anime card to see details.
+                {t("discover.select_anime_prompt")}
               </p>
             )}
           </aside>

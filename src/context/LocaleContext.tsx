@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { fetchLocaleSettings, updateLocaleSettings } from "../services/api";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { fetchLocaleBundle, fetchLocaleSettings, updateLocaleSettings } from "../services/api";
 
 type Locale = "en" | "vi";
 
@@ -11,6 +11,7 @@ type LocaleContextValue = {
 };
 
 const LOCALE_STORAGE_KEY = "otoshi_locale";
+const LOCALE_BUNDLE_CACHE_PREFIX = "otoshi_locale_bundle_";
 
 const messages: Record<string, Record<Locale, string>> = {
   // Navigation - Top bar
@@ -30,6 +31,7 @@ const messages: Record<string, Record<Locale, string>> = {
   "action.edit": { en: "Edit", vi: "Chỉnh sửa" },
   "action.search": { en: "Search", vi: "Tìm kiếm" },
   "action.play": { en: "Play", vi: "Chơi" },
+  "action.stop": { en: "Stop", vi: "Dừng" },
   "action.install": { en: "Install", vi: "Cài đặt" },
   "action.uninstall": { en: "Uninstall", vi: "Gỡ cài đặt" },
   "action.pause": { en: "Pause", vi: "Tạm dừng" },
@@ -48,6 +50,7 @@ const messages: Record<string, Record<Locale, string>> = {
   "sidebar.fixes": { en: "Fixes", vi: "Sửa lỗi" },
   "sidebar.create": { en: "Create", vi: "Tạo" },
   "sidebar.active_download": { en: "Active download", vi: "Đang tải xuống" },
+  "sidebar.active_game": { en: "Active game", vi: "Game đang chạy" },
   "sidebar.no_downloads": { en: "No active downloads.", vi: "Không có tải xuống nào." },
   "sidebar.paused": { en: "Paused", vi: "Tam dung" },
   "sidebar.bandwidth": { en: "Bandwidth", vi: "Bang thong" },
@@ -85,6 +88,11 @@ const messages: Record<string, Record<Locale, string>> = {
   "nav.developer": { en: "Developer", vi: "Nhà phát triển" },
   "nav.inventory": { en: "Inventory", vi: "Kho đồ" },
   "nav.settings": { en: "Settings", vi: "Cài đặt" },
+
+  // Library
+  "library.playtime_played": { en: "{hours}h played", vi: "{hours}h đã chơi" },
+  "library.status.installed": { en: "Installed", vi: "Đã cài đặt" },
+  "library.status.not_installed": { en: "Not installed", vi: "Chưa cài đặt" },
 
   // Store page
   "store.featured": { en: "Featured Spotlight", vi: "Tựa game nổi bật" },
@@ -125,6 +133,7 @@ const messages: Record<string, Record<Locale, string>> = {
 
   // Common
   "common.loading": { en: "Loading...", vi: "Đang tải..." },
+  "common.game": { en: "Game", vi: "Game" },
   "common.error": { en: "Error", vi: "Lỗi" },
   "common.success": { en: "Success", vi: "Thành công" },
   "common.warning": { en: "Warning", vi: "Cảnh báo" },
@@ -280,8 +289,53 @@ const messages: Record<string, Record<Locale, string>> = {
   "library.filters": { en: "Filters", vi: "Bo loc" },
   "intro.skip": { en: "Skip intro", vi: "Bo qua intro" },
   "intro.launcher": { en: "Launcher", vi: "Launcher" },
-  "discover.search_placeholder": { en: "Search anime title", vi: "Tim ten anime" },
+  "discover.search_placeholder": { en: "Search anime title", vi: "Tìm tên anime" },
   "discover.anime": { en: "Anime", vi: "Anime" },
+  "discover.tags_title": { en: "Anime Tags", vi: "Thẻ Anime" },
+  "discover.carousel_label": { en: "Anime Carousel", vi: "Anime Carousel" },
+  "discover.hero_fallback_title": { en: "Anime Library", vi: "Thư viện Anime" },
+  "discover.hero_fallback_desc": {
+    en: "Anime feed with categories, detail metadata, episodes, and server groups. This launcher shows source metadata only.",
+    vi: "Nguồn anime với thể loại, metadata, tập và nhóm server. Launcher chỉ hiển thị metadata của nguồn.",
+  },
+  "discover.score_prefix": { en: "Score", vi: "Điểm" },
+  "discover.searching": { en: "Searching...", vi: "Đang tìm..." },
+  "discover.open_detail": { en: "Open detail", vi: "Mở chi tiết" },
+  "discover.open_source_page": { en: "Open source page", vi: "Mở trang nguồn" },
+  "discover.refresh_feed": { en: "Refresh feed", vi: "Làm mới" },
+  "discover.trending_now": { en: "Trending now", vi: "Đang thịnh hành" },
+  "discover.loading_catalog": { en: "Loading anime catalog...", vi: "Đang tải danh mục anime..." },
+  "discover.items": { en: "items", vi: "mục" },
+  "discover.detail_title": { en: "Anime Detail", vi: "Chi tiết Anime" },
+  "discover.loading_detail": { en: "Loading detail...", vi: "Đang tải chi tiết..." },
+  "discover.metadata": { en: "Metadata", vi: "Metadata" },
+  "discover.episodes": { en: "Episodes", vi: "Tập" },
+  "discover.server_groups": { en: "Server Groups", vi: "Nhóm server" },
+  "discover.loading_server_data": { en: "Loading server data...", vi: "Đang tải dữ liệu server..." },
+  "discover.episode_prefix": { en: "Episode", vi: "Tập" },
+  "discover.open_watch_page": { en: "Open watch page", vi: "Mở trang xem" },
+  "discover.reported_quality": { en: "Reported quality", vi: "Chất lượng báo cáo" },
+  "discover.direct_links_note": {
+    en: "Direct stream links may be hidden by source protection. This launcher keeps server metadata and episode routing stable.",
+    vi: "Link phát trực tiếp có thể bị ẩn bởi cơ chế bảo vệ nguồn. Launcher cố gắng giữ metadata và định tuyến tập ổn định.",
+  },
+  "discover.select_episode_prompt": {
+    en: "Select an episode to load server groups.",
+    vi: "Chọn một tập để tải nhóm server.",
+  },
+  "discover.select_anime_prompt": {
+    en: "Select an anime card to see details.",
+    vi: "Chọn một anime để xem chi tiết.",
+  },
+  "discover.error_home": { en: "Failed to load anime catalog.", vi: "Không thể tải danh mục anime." },
+  "discover.error_detail": { en: "Failed to load anime detail.", vi: "Không thể tải chi tiết anime." },
+
+  // Mobile nav
+  "mobile_nav.game": { en: "Game", vi: "Game" },
+  "mobile_nav.anime": { en: "Anime", vi: "Anime" },
+  "mobile_nav.library": { en: "Library", vi: "Thư viện" },
+  "mobile_nav.downloads": { en: "Downloads", vi: "Tải xuống" },
+  "mobile_nav.profile": { en: "Profile", vi: "Hồ sơ" },
 
   // Crack Download System
   "crack.download_title": { en: "Download Fix", vi: "Tải Bản Sửa Lỗi" },
@@ -490,6 +544,69 @@ const messages: Record<string, Record<Locale, string>> = {
   // Download options / Reviews / Play
   "download_options.title": { en: "Download options", vi: "Tuy chon tai xuong" },
   "download_options.version": { en: "Version", vi: "Phien ban" },
+  "download_options.loading": { en: "Loading options...", vi: "Đang tải tùy chọn..." },
+  "download_options.badge_steam": { en: "Steam download", vi: "Tải từ Steam" },
+  "download_options.section.method": { en: "Download method", vi: "Phương thức tải" },
+  "download_options.section.version": { en: "Version", vi: "Phiên bản" },
+  "download_options.section.install_location": { en: "Install location", vi: "Vị trí cài đặt" },
+  "download_options.section.storage": { en: "Storage", vi: "Dung lượng" },
+  "download_options.section.fixes": { en: "Fixes", vi: "Fix" },
+  "download_options.section.current_task": { en: "Current task", vi: "Tác vụ hiện tại" },
+  "download_options.section.preparing": { en: "Preparing install", vi: "Chuẩn bị cài đặt" },
+  "download_options.method_recommended": { en: "Recommended", vi: "Đề xuất" },
+  "download_options.browse": { en: "Browse", vi: "Duyệt" },
+  "download_options.browse_unavailable": {
+    en: "Folder picker is available in the desktop app.",
+    vi: "Chức năng chọn thư mục chỉ có trên bản desktop."
+  },
+  "download_options.create_subfolder": {
+    en: "Create a game subfolder automatically",
+    vi: "Tự động tạo thư mục con cho game"
+  },
+  "download_options.install_path_final": { en: "Final path", vi: "Đường dẫn cuối cùng" },
+  "download_options.storage_required": { en: "Required", vi: "Cần" },
+  "download_options.storage_free": { en: "Free space", vi: "Còn trống" },
+  "download_options.storage_total": { en: "Total", vi: "Tổng" },
+  "download_options.storage_not_enough": {
+    en: "Not enough free space for this download.",
+    vi: "Không đủ dung lượng trống để tải."
+  },
+  "download_options.fix_online": { en: "Online Fix", vi: "Online Fix" },
+  "download_options.fix_bypass": { en: "Bypass", vi: "Bypass" },
+  "download_options.available": { en: "Available", vi: "Có sẵn" },
+  "download_options.not_available": { en: "Not available", vi: "Không có" },
+  "download_options.open_online_fix": { en: "Open Online Fix", vi: "Mở Online Fix" },
+  "download_options.open_bypass": { en: "Open Bypass", vi: "Mở Bypass" },
+  "download_options.summary_manifest": {
+    en: "Download size uses manifests when available, otherwise Steam requirements.",
+    vi: "Dung lượng tải sẽ dùng manifest nếu có, nếu không sẽ dùng yêu cầu từ Steam."
+  },
+  "download_options.cancel": { en: "Cancel", vi: "Hủy" },
+  "download_options.download": { en: "Download", vi: "Tải xuống" },
+  "download_options.preparing_button": { en: "Preparing...", vi: "Đang chuẩn bị..." },
+  "download_options.pause": { en: "Pause", vi: "Tạm dừng" },
+  "download_options.resume": { en: "Resume", vi: "Tiếp tục" },
+  "download_options.stop": { en: "Stop", vi: "Dừng" },
+  "download_options.hf_unavailable_banner": {
+    en: "This game is not updated yet. We'll update soon.",
+    vi: "Game chưa được cập nhật. Chúng tôi sẽ cập nhật sớm."
+  },
+  "download_options.note.hf_repo_not_configured": {
+    en: "This game is not updated yet. We'll update soon.",
+    vi: "Game chưa được cập nhật. Chúng tôi sẽ cập nhật sớm."
+  },
+  "download_options.note.hf_manifest_missing": {
+    en: "This game is not updated yet. We'll update soon.",
+    vi: "Game chưa được cập nhật. Chúng tôi sẽ cập nhật sớm."
+  },
+  "download_options.note.aria2_missing": {
+    en: "aria2c is not available on this device.",
+    vi: "aria2c chưa có trên thiết bị này."
+  },
+  "download_options.note.auto_fallback_notice": {
+    en: "Automatic mode will fallback to available methods.",
+    vi: "Chế độ tự động sẽ chuyển sang phương thức còn khả dụng."
+  },
   "reviews.headline_placeholder": { en: "Headline", vi: "Tieu de" },
   "reviews.body_placeholder": { en: "Share what stood out.", vi: "Chia se diem noi bat." },
   "reviews.publish": { en: "Publish review", vi: "Dang danh gia" },
@@ -503,6 +620,7 @@ const messages: Record<string, Record<Locale, string>> = {
     vi: "Tai game chi ho tro tren launcher desktop. Vui long cai dat va mo launcher de tiep tuc."
   },
   "steam_detail.later": { en: "Later", vi: "De sau" },
+  "steam_detail.open_launcher_download": { en: "Open launcher download", vi: "Mở trang tải launcher" },
   "steam_detail.show_price_details": { en: "Show price details", vi: "Xem chi tiet gia" },
   "steam_detail.refresh_dlc_title": { en: "Refresh DLC data", vi: "Lam moi du lieu DLC" },
   "steam_detail.refresh": { en: "Refresh", vi: "Lam moi" },
@@ -514,12 +632,227 @@ const messages: Record<string, Record<Locale, string>> = {
   // Download statuses
   "download.status.queued": { en: "Queued", vi: "Dang xep hang" },
   "download.status.cancelled": { en: "Cancelled", vi: "Da huy" },
+  "download.toast.started_title": { en: "Download started", vi: "Bắt đầu tải" },
+  "download.toast.failed_title": { en: "Download failed", vi: "Tải xuống thất bại" },
+  "download.toast.failed_default": { en: "Download failed to start.", vi: "Không thể bắt đầu tải xuống." },
+  "download.error.start_failed": { en: "Download failed to start.", vi: "Không thể bắt đầu tải xuống." },
+  "download.error.auth_required": { en: "Authentication required. Please login to download games.", vi: "Cần đăng nhập để tải game." },
+  "download.error.security_blocked": {
+    en: "Security policy blocked this download action.",
+    vi: "Chính sách bảo mật đã chặn thao tác tải xuống này."
+  },
+  "download.error.method_unavailable": { en: "Selected download method is unavailable.", vi: "Phương thức tải xuống đã chọn hiện không khả dụng." },
+  "download.error.game_not_updated": {
+    en: "This game is not updated yet. We'll update soon.",
+    vi: "Game chưa được cập nhật. Chúng tôi sẽ cập nhật sớm."
+  },
+  "app.about.title": { en: "About Otoshi Launcher", vi: "Về Otoshi Launcher" },
+  "app.about.description": {
+    en: "Otoshi Launcher desktop client with high-performance downloads, patching, and workshop integration.",
+    vi: "Ứng dụng desktop Otoshi Launcher với tải tốc độ cao, vá dữ liệu và tích hợp workshop."
+  },
+  "app.about.version_label": { en: "Version", vi: "Phiên bản" },
+  "app.about.desktop_build": { en: "desktop build", vi: "bản desktop" },
+  "app.about.close": { en: "Close", vi: "Đóng" },
+  "app.about.open_website": { en: "Open Official Website", vi: "Mở trang chính thức" },
+  "discover.paused.title": { en: "Anime updates are paused", vi: "Mục Anime đang tạm dừng" },
+  "discover.paused.message": { en: "We'll update soon.", vi: "Chúng tôi sẽ cập nhật sớm." },
+  "discover.paused.context": {
+    en: "This section is temporarily paused while we prepare new content.",
+    vi: "Mục này đang tạm dừng để chuẩn bị nội dung mới."
+  },
+  "discover.paused.action_store": { en: "Back to Store", vi: "Quay về Cửa hàng" },
+  "update_banner.new_version_prefix": { en: "New version", vi: "Phiên bản mới" },
+  "update_banner.new_version_suffix": { en: "is ready!", vi: "đã sẵn sàng!" },
+  "update_banner.maintenance_default": {
+    en: "System is under maintenance. Some features may be unavailable.",
+    vi: "Hệ thống đang bảo trì. Một số tính năng có thể không hoạt động."
+  },
+  "update_banner.checking": { en: "Checking...", vi: "Đang kiểm tra..." },
+  "update_banner.check_updates": { en: "Check updates", vi: "Kiểm tra cập nhật" },
+
+  // Hypervisor Beta Crack Warning
+  "crack.hypervisor_beta_warning": { en: "Hypervisor Beta Crack - Not recommended for inexperienced users", vi: "Hypervisor Beta Crack - Không khuyến khích cho người dùng không có kinh nghiệm" },
+  
+  // Hypervisor Setup Instructions
+  "hypervisor.notes_title": { en: "Hypervisor Notes", vi: "Ghi chú Hypervisor" },
+  "hypervisor.enable_virtualization": { en: "Enable virtualization in bios settings (VT-x)", vi: "Bật virtualization trong BIOS (VT-x)" },
+  "hypervisor.meltdown_mitigation": { en: "For users who have Intel 8th gen and below processors; it is needed to disable the OS Meltdown mitigations to be able to load the hypervisor.", vi: "Đối với người dùng có bộ xử lý Intel thế hệ 8 trở xuống; cần phải tắt Meltdown mitigations của OS để có thể tải hypervisor." },
+  "hypervisor.inspect_tool": { en: "Some new generations may also have this enabled, it can be checked via the included InSpectre tool in the Hypervisor folder.", vi: "Một số thế hệ mới cũng có thể được bật, có thể kiểm tra thông qua công cụ InSpectre đi kèm trong thư mục Hypervisor." },
+  "hypervisor.disable_meltdown_button": { en: "If the \"Disable Meltdown Protection\" button is grayed out, it is patched on hardware level for your CPU and no action is needed, proceed with the next steps.", vi: "Nếu nút \"Disable Meltdown Protection\" bị tắt, điều đó có nghĩa là bộ xử lý của bạn đã được vá ở cấp độ phần cứng và không cần thao tác nào, hãy tiếp tục các bước tiếp theo." },
+  "hypervisor.kernel_anticheats": { en: "Kernel anticheats will be problematic, make sure they are off before performing the rest of the steps.", vi: "Kernel anticheats sẽ gây vấn đề, hãy chắc chắn rằng chúng bị tắt trước khi thực hiện các bước còn lại." },
+  "hypervisor.enable_test_signing": { en: "Enable test signing mode via bcdedit (bcdedit /set testsigning on)", vi: "Bật chế độ test signing qua bcdedit (bcdedit /set testsigning on)" },
+  "hypervisor.hyperv_disabled": { en: "For users with Hyper-V windows feature enabled, it's required to keep its hypervisor off with the following command:", vi: "Đối với người dùng có tính năng Hyper-V Windows được bật, cần phải tắt hypervisor của nó bằng lệnh sau:" },
+  "hypervisor.hyperv_command": { en: "bcdedit /set hypervisorlaunchtype off", vi: "bcdedit /set hypervisorlaunchtype off" },
+  "hypervisor.secure_boot": { en: "Keep Secure Boot disabled", vi: "Giữ Secure Boot bị tắt" },
+  "hypervisor.windows_defender": { en: "Keep Windows Defender memory integrity and credential guard off (VBS and HVCI)", vi: "Giữ Windows Defender memory integrity và credential guard bị tắt (VBS và HVCI)" },
+  "hypervisor.usage_title": { en: "Usage", vi: "Cách sử dụng" },
+  "hypervisor.usage_intro": { en: "In a cmd or powershell with admin rights, after meeting the requirements:", vi: "Trong cmd hoặc powershell có quyền admin, sau khi đáp ứng các yêu cầu:" },
+  "hypervisor.create_service": { en: "sc create denuvo type=kernel start=demand binPath=C:\\Drivers\\Hypervisor\\hyperkd.sys (your full path for hyperkd.sys)", vi: "sc create denuvo type=kernel start=demand binPath=C:\\Drivers\\Hypervisor\\hyperkd.sys (đường dẫn đầy đủ của bạn cho hyperkd.sys)" },
+  "hypervisor.start_service": { en: "sc start denuvo", vi: "sc start denuvo" },
+  "hypervisor.stop_note": { en: "After you close the game, you can stop the hypervisor service with", vi: "Sau khi đóng trò chơi, bạn có thể dừng dịch vụ hypervisor bằng" },
+  "hypervisor.stop_service": { en: "sc stop denuvo", vi: "sc stop denuvo" },
+  "hypervisor.installation_title": { en: "Installation Steps", vi: "Các bước cài đặt" },
+  "hypervisor.step1": { en: "Load the hyperkd.sys file in the \"Hypervisor\" folder. The .dll files must remain next to it.", vi: "Tải tệp hyperkd.sys trong thư mục \"Hypervisor\". Các tệp .dll phải vẫn ở bên cạnh nó." },
+  "hypervisor.step2": { en: "Copy and paste everything else apart from the hypervisor folders to the main game directory", vi: "Sao chép và dán mọi thứ khác ngoài các thư mục hypervisor vào thư mục trò chơi chính" },
+  "hypervisor.step3": { en: "Launch b1-Win64-Shipping.exe", vi: "Khởi chạy b1-Win64-Shipping.exe" },
+
+  // Fix Detail Page
+  "fix_detail.back_to": { en: "Back to", vi: "Quay lại" },
+  "fix_detail.online_fix_label": { en: "Online Fix", vi: "Sửa Lỗi Online" },
+  "fix_detail.bypass_label": { en: "Bypass", vi: "Bỏ Qua Bảo Vệ" },
+  "fix_detail.download_source": { en: "Download source", vi: "Nguồn tải xuống" },
+  "fix_detail.download_link": { en: "Download link", vi: "Liên kết tải xuống" },
+  "fix_detail.link_number": { en: "Link {index}", vi: "Liên kết {index}" },
+  "fix_detail.version_label": { en: "Version", vi: "Phiên bản" },
+  "fix_detail.open_download_popup": { en: "Open download popup", vi: "Mở cửa sổ tải xuống" },
+  "fix_detail.warnings": { en: "Warnings", vi: "Cảnh báo" },
+  "fix_detail.notes": { en: "Notes", vi: "Ghi chú" },
+
+  // Guide titles and summaries
+  "guide.bypass.default.title": { en: "Bypass Setup Guide", vi: "Hướng Dẫn Cấu Hình Bypass" },
+  "guide.bypass.default.summary": { en: "Instructions for installing and configuring bypasses. Review the notes carefully before proceeding.", vi: "Hướng dẫn cài đặt và cấu hình bypass. Hãy xem kỹ các ghi chú trước khi tiếp tục." },
+  "guide.bypass.2358720.title": { en: "Black Myth: Wukong - Hypervisor Setup", vi: "Black Myth: Wukong - Cấu Hình Hypervisor" },
+  "guide.bypass.2358720.summary": { en: "Simplified setup guide for Black Myth: Wukong. Follow 4 simple steps to install and run.", vi: "Hướng dẫn cấu hình đơn giản cho Black Myth: Wukong. Thực hiện 4 bước đơn giản để cài đặt và chạy." },
+  "guide.bypass.1777620.title": { en: "Soul Hackers 2 - Hypervisor Setup", vi: "Soul Hackers 2 - Cấu Hình Hypervisor" },
+  "guide.bypass.1777620.summary": { en: "This is a Hypervisor Beta crack. Advanced setup required. Not recommended for inexperienced users.", vi: "Đây là Hypervisor Beta crack. Cần cấu hình nâng cao. Không khuyên dùng cho người dùng không có kinh nghiệm." },
+  "guide.bypass.2513280.title": { en: "Sonic X Shadow Generations - Hypervisor Setup", vi: "Sonic X Shadow Generations - Cấu Hình Hypervisor" },
+  "guide.bypass.2513280.summary": { en: "This is a Hypervisor Beta crack. Advanced setup required. Not recommended for inexperienced users.", vi: "Đây là Hypervisor Beta crack. Cần cấu hình nâng cao. Không khuyên dùng cho người dùng không có kinh nghiệm." },
+  "guide.bypass.1794960.title": { en: "Sonic Origins - Hypervisor Setup", vi: "Sonic Origins - Cấu Hình Hypervisor" },
+  "guide.bypass.1794960.summary": { en: "This is a Hypervisor Beta crack. Advanced setup required. Not recommended for inexperienced users.", vi: "Đây là Hypervisor Beta crack. Cần cấu hình nâng cao. Không khuyên dùng cho người dùng không có kinh nghiệm." },
+  "guide.bypass.2486820.title": { en: "Sonic Racing: CrossWorlds - Hypervisor Setup", vi: "Sonic Racing: CrossWorlds - Cấu Hình Hypervisor" },
+  "guide.bypass.2486820.summary": { en: "This is a Hypervisor Beta crack. Advanced setup required. Not recommended for inexperienced users.", vi: "Đây là Hypervisor Beta crack. Cần cấu hình nâng cao. Không khuyên dùng cho người dùng không có kinh nghiệm." },
+  "guide.bypass.1285190.title": { en: "Borderlands 4 - Hypervisor Setup", vi: "Borderlands 4 - Cấu Hình Hypervisor" },
+  "guide.bypass.1285190.summary": { en: "This is a Hypervisor Beta crack. Advanced setup required. Not recommended for inexperienced users.", vi: "Đây là Hypervisor Beta crack. Cần cấu hình nâng cao. Không khuyên dùng cho người dùng không có kinh nghiệm." },
+  "guide.bypass.1235140.title": { en: "Final Fantasy VII Rebirth - Hypervisor Setup", vi: "Final Fantasy VII Rebirth - Cấu Hình Hypervisor" },
+  "guide.bypass.1235140.summary": { en: "This is a Hypervisor Beta crack. Advanced setup required. Not recommended for inexperienced users.", vi: "Đây là Hypervisor Beta crack. Cần cấu hình nâng cao. Không khuyên dùng cho người dùng không có kinh nghiệm." },
+  "guide.bypass.2072450.title": { en: "Like a Dragon: Infinite Wealth - Hypervisor Setup", vi: "Like a Dragon: Infinite Wealth - Cấu Hình Hypervisor" },
+  "guide.bypass.2072450.summary": { en: "This is a Hypervisor Beta crack. Advanced setup required. Not recommended for inexperienced users.", vi: "Đây là Hypervisor Beta crack. Cần cấu hình nâng cao. Không khuyên dùng cho người dùng không có kinh nghiệm." },
+  "guide.bypass.2161700.title": { en: "Persona 3 Reload - Hypervisor Setup", vi: "Persona 3 Reload - Cấu Hình Hypervisor" },
+  "guide.bypass.2161700.summary": { en: "This is a Hypervisor Beta crack. Advanced setup required. Not recommended for inexperienced users.", vi: "Đây là Hypervisor Beta crack. Cần cấu hình nâng cao. Không khuyên dùng cho người dùng không có kinh nghiệm." },
+  "guide.bypass.809890.title": { en: "Shining Resonance Refrain - Bypass Setup", vi: "Shining Resonance Refrain - Cấu Hình Bypass" },
+  "guide.bypass.809890.summary": { en: "Standard bypass installation guide. Follow these 4 steps to install and run.", vi: "Hướng dẫn cài đặt bypass tiêu chuẩn. Thực hiện 4 bước sau để cài đặt và chạy." },
+
+  // Guide steps - Standard 4-step bypass
+  "guide.step.download_bypass_extract": { en: "Download and extract bypass files", vi: "Tải xuống và giải nén các tệp bypass" },
+  "guide.step.download_bypass_extract_desc": { en: "Download the bypass files from the provided link. Extract them to a temporary location.", vi: "Tải xuống các tệp bypass từ liên kết được cung cấp. Giải nén chúng vào một vị trí tạm thời." },
+  "guide.step.copy_to_game_folder": { en: "Copy files to game folder", vi: "Sao chép tệp vào thư mục trò chơi" },
+  "guide.step.copy_to_game_folder_desc": { en: "Copy all bypass files from the extracted folder into your game installation directory. Replace files when prompted.", vi: "Sao chép tất cả các tệp bypass từ thư mục được giải nén vào thư mục cài đặt trò chơi của bạn. Thay thế tệp khi được nhắc." },
+  "guide.step.launch_game_standard": { en: "Launch the game", vi: "Khởi chạy trò chơi" },
+  "guide.step.launch_game_standard_desc": { en: "Run the game executable from the game installation directory. The bypass should now be active.", vi: "Chạy tệp thực thi trò chơi từ thư mục cài đặt trò chơi. Bypass bây giờ sẽ hoạt động." },
+
+  // Guide steps - Default bypass setup
+  "guide.step.download_bypass_files": { en: "Download the bypass files", vi: "Tải xuống các tệp bypass" },
+  "guide.step.download_bypass_files_desc": { en: "Download the crack files from the provided link. Make sure to extract them to a secure location.", vi: "Tải xuống các tệp crack từ liên kết được cung cấp. Hãy chắc chắn trích xuất chúng vào một vị trí an toàn." },
+  "guide.step.locate_game_directory": { en: "Locate game directory", vi: "Định vị thư mục trò chơi" },
+  "guide.step.locate_game_directory_desc": { en: "Find your game installation directory. This is typically in your Steam library folder.", vi: "Tìm thư mục cài đặt trò chơi của bạn. Điều này thường nằm trong thư mục thư viện Steam của bạn." },
+  "guide.step.apply_crack": { en: "Apply the crack", vi: "Áp dụng crack" },
+  "guide.step.apply_crack_desc": { en: "Follow the crack's instructions carefully. Different cracks may have different installation procedures.", vi: "Tuân theo hướng dẫn của crack một cách cẩn thận. Các crack khác nhau có thể có quy trình cài đặt khác nhau." },
+
+  // Guide steps - Hypervisor setup
+  "guide.step.prerequisites_check": { en: "Prerequisites Check", vi: "Kiểm Tra Điều Kiện Tiên Quyết" },
+  "guide.step.prerequisites_check_desc": { en: "Enable virtualization in BIOS (VT-x). Disable kernel anticheats. Check Intel generations for Meltdown mitigation requirements using InSpectre tool.", vi: "Bật virtualization trong BIOS (VT-x). Tắt kernel anticheats. Kiểm tra thế hệ Intel để yêu cầu giảm thiểu Meltdown bằng công cụ InSpectre." },
+  "guide.step.system_configuration": { en: "System Configuration", vi: "Cấu Hình Hệ Thống" },
+  "guide.step.system_configuration_desc": { en: "Enable test signing mode: bcdedit /set testsigning on. If Hyper-V is enabled: bcdedit /set hypervisorlaunchtype off. Disable Secure Boot. Disable Windows Defender memory integrity and credential guard (VBS and HVCI).", vi: "Bật chế độ ký thử nghiệm: bcdedit /set testsigning on. Nếu Hyper-V được bật: bcdedit /set hypervisorlaunchtype off. Tắt Secure Boot. Tắt Windows Defender memory integrity và credential guard (VBS và HVCI)." },
+  "guide.step.load_hypervisor_service": { en: "Load Hypervisor Service", vi: "Tải Dịch Vụ Hypervisor" },
+  "guide.step.load_hypervisor_service_desc": { en: "Run in admin CMD/PowerShell: sc create denuvo type=kernel start=demand binPath=C:\\Drivers\\Hypervisor\\hyperkd.sys", vi: "Chạy trong admin CMD/PowerShell: sc create denuvo type=kernel start=demand binPath=C:\\Drivers\\Hypervisor\\hyperkd.sys" },
+  "guide.step.start_service": { en: "Start Service", vi: "Bắt Đầu Dịch Vụ" },
+  "guide.step.start_service_desc": { en: "Run: sc start denuvo", vi: "Chạy: sc start denuvo" },
+  "guide.step.install_game_files": { en: "Install Game Files", vi: "Cài Đặt Các Tệp Trò Chơi" },
+  "guide.step.install_game_files_desc": { en: "1 - Load the hyperkd.sys file in the Hypervisor folder. The .dll files must remain next to it. 2 - Copy and paste everything else from crack to the main game directory. 3 - Launch the game executable", vi: "1 - Tải tệp hyperkd.sys trong thư mục Hypervisor. Các tệp .dll phải ở bên cạnh nó. 2 - Sao chép và dán mọi thứ khác từ crack vào thư mục trò chơi chính. 3 - Khởi chạy tệp thực thi trò chơi" },
+  "guide.step.stop_service": { en: "Stop Service", vi: "Dừng Dịch Vụ" },
+  "guide.step.stop_service_desc": { en: "After playing, run: sc stop denuvo", vi: "Sau khi chơi, chạy: sc stop denuvo" },
+
+  // Guide steps - Black Myth Wukong (simplified)
+  "guide.step.copy_crack_folder": { en: "Copy Crack Folder", vi: "Sao Chép Thư Mục Crack" },
+  "guide.step.copy_crack_folder_desc": { en: "Copy the crack folder to the game installation directory.", vi: "Sao chép thư mục crack vào thư mục cài đặt trò chơi." },
+  "guide.step.enable_vtx_svm": { en: "Enable VT-x / SVM", vi: "Bật VT-x / SVM" },
+  "guide.step.enable_vtx_svm_desc": { en: "Enable VT-x (Intel) or SVM (AMD) virtualization in BIOS. You can verify these features are enabled by opening b1 Launcher.exe - if they're disabled, you can click the 'Open BIOS' button to configure them.", vi: "Bật VT-x (Intel) hoặc SVM (AMD) virtualization trong BIOS. Bạn có thể xác minh những tính năng này được bật bằng cách mở b1 Launcher.exe - nếu chúng bị tắt, bạn có thể nhấp nút 'Open BIOS' để cấu hình chúng." },
+  "guide.step.disable_secure_boot": { en: "Disable Secure Boot", vi: "Tắt Secure Boot" },
+  "guide.step.disable_secure_boot_desc": { en: "Disable Secure Boot in BIOS settings.", vi: "Tắt Secure Boot trong cài đặt BIOS." },
+  "guide.step.launch_game": { en: "Launch Game", vi: "Khởi Chạy Trò Chơi" },
+  "guide.step.launch_game_desc": { en: "Open b1 Launcher.exe and run the game. If your system requires a restart, please follow the instructions provided.", vi: "Mở b1 Launcher.exe và chạy trò chơi. Nếu hệ thống của bạn yêu cầu khởi động lại, vui lòng tuân theo hướng dẫn được cung cấp." },
+
+  // Warnings and notes
+  "guide.warning.scan_antivirus": { en: "Always scan downloaded files with antivirus software before extracting", vi: "Luôn quét các tệp đã tải xuống bằng phần mềm chống virus trước khi trích xuất" },
+  "guide.warning.backup": { en: "Create a backup of your game before applying any crack", vi: "Tạo bản sao lưu trò chơi của bạn trước khi áp dụng bất kỳ crack" },
+  "guide.warning.antivirus_flags": { en: "Some antivirus software may flag crack files as threats - this is normal", vi: "Một số phần mềm chống virus có thể gắn cờ các tệp crack như mối đe dọa - điều này bình thường" },
+  "guide.warning.beta_software": { en: "This is experimental beta software", vi: "Đây là phần mềm beta thử nghiệm" },
+  "guide.warning.advanced_users": { en: "Only for advanced users with virtualization experience", vi: "Chỉ dành cho người dùng nâng cao có kinh nghiệm ảo hóa" },
+  "guide.warning.conflict_security": { en: "May conflict with security tools", vi: "Có thể xung đột với các công cụ bảo mật" },
+  "guide.warning.config_prevent": { en: "Improper configuration may prevent game launch", vi: "Cấu hình không phù hợp có thể ngăn khởi chạy trò chơi" },
+  "guide.warning.bios_changes": { en: "Requires BIOS configuration changes", vi: "Yêu cầu thay đổi cấu hình BIOS" },
+  "guide.warning.restart": { en: "System restart may be necessary", vi: "Có thể cần khởi động lại hệ thống" },
+  "guide.warning.b1launcher_only": { en: "Only run b1 Launcher.exe from the game directory", vi: "Chỉ chạy b1 Launcher.exe từ thư mục trò chơi" },
+
+  "guide.note.supports_amd_intel": { en: "Supports both AMD and Intel processors", vi: "Hỗ trợ cả bộ xử lý AMD và Intel" },
+  "guide.note.meltdown_mitigation": { en: "Meltdown mitigation may need to be disabled for older CPUs", vi: "Giảm thiểu Meltdown có thể cần được tắt cho các CPU cũ" },
+  "guide.note.dll_files": { en: "Keep all .dll files next to hyperkd.sys", vi: "Giữ tất cả các tệp .dll bên cạnh hyperkd.sys" },
+  "guide.note.check_readme": { en: "Check crack README for the specific game executable name (varies per game)", vi: "Kiểm tra crack README để biết tên tệp thực thi trò chơi cụ thể (khác nhau tùy theo trò chơi)" },
+  "guide.note.requires_intel_8gen": { en: "Requires Intel 8th gen or newer (or AMD equivalent)", vi: "Yêu cầu Intel thế hệ 8 trở lên (hoặc tương đương AMD)" },
+  "guide.note.optimized_intel_8gen": { en: "Optimized for Intel 8th gen or newer processors", vi: "Được tối ưu hóa cho bộ xử lý Intel thế hệ 8 trở lên" },
+  "guide.note.b1launcher_check": { en: "The b1 Launcher.exe will check if VT-x/SVM are properly enabled", vi: "b1 Launcher.exe sẽ kiểm tra xem VT-x/SVM có được bật đúng cách hay không" },
+  "guide.note.restart_requirement": { en: "Some systems may require a restart after enabling virtualization", vi: "Một số hệ thống có thể cần khởi động lại sau khi bật ảo hóa" },
+  "guide.note.crack_folder_copy": { en: "Ensure the entire crack folder is properly copied to the game directory", vi: "Đảm bảo toàn bộ thư mục crack được sao chép đúng cách vào thư mục trò chơi" },
 };
 
 const normalizeLocale = (value: string | null | undefined): Locale => {
   if (!value) return "en";
   const cleaned = value.replace("_", "-").toLowerCase();
   return cleaned.startsWith("vi") ? "vi" : "en";
+};
+
+const readCachedBundle = (locale: Locale): Record<string, string> => {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(`${LOCALE_BUNDLE_CACHE_PREFIX}${locale}`);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+    return Object.entries(parsed as Record<string, unknown>).reduce<Record<string, string>>(
+      (acc, [key, value]) => {
+        if (typeof value === "string") {
+          acc[key] = value;
+        }
+        return acc;
+      },
+      {}
+    );
+  } catch {
+    return {};
+  }
+};
+
+const writeCachedBundle = (locale: Locale, bundle: Record<string, string>) => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      `${LOCALE_BUNDLE_CACHE_PREFIX}${locale}`,
+      JSON.stringify(bundle)
+    );
+  } catch {
+    // Ignore storage write failures.
+  }
+};
+
+const loadStaticBundle = async (locale: Locale): Promise<Record<string, string>> => {
+  try {
+    const response = await fetch(`/locales/${locale}.json`, { cache: "no-store" });
+    if (!response.ok) return {};
+    const payload = await response.json();
+    if (!payload || typeof payload !== "object") return {};
+    return Object.entries(payload as Record<string, unknown>).reduce<Record<string, string>>(
+      (acc, [key, value]) => {
+        if (typeof value === "string") {
+          acc[key] = value;
+        }
+        return acc;
+      },
+      {}
+    );
+  } catch {
+    return {};
+  }
 };
 
 const LocaleContext = createContext<LocaleContextValue | null>(null);
@@ -530,11 +863,36 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
     const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY);
     return normalizeLocale(stored);
   });
+  const [bundleMessages, setBundleMessages] = useState<Record<string, string>>(() =>
+    readCachedBundle(
+      typeof window === "undefined"
+        ? "en"
+        : normalizeLocale(window.localStorage.getItem(LOCALE_STORAGE_KEY))
+    )
+  );
+  const missingKeysRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     document.documentElement.lang = locale;
     window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
   }, [locale]);
+
+  useEffect(() => {
+    setBundleMessages(readCachedBundle(locale));
+  }, [locale]);
+
+  const refreshLocaleBundle = useCallback(async (targetLocale: Locale) => {
+    const [staticBundle, remoteBundle] = await Promise.all([
+      loadStaticBundle(targetLocale),
+      fetchLocaleBundle(targetLocale).catch(() => ({})),
+    ]);
+    const merged = {
+      ...staticBundle,
+      ...remoteBundle,
+    };
+    setBundleMessages(merged);
+    writeCachedBundle(targetLocale, merged);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -543,26 +901,48 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
         if (!active) return;
         const resolved = normalizeLocale(data.locale || data.systemLocale);
         setLocaleState(resolved);
+        void refreshLocaleBundle(resolved);
       })
       .catch(() => undefined);
     return () => {
       active = false;
     };
-  }, []);
+  }, [refreshLocaleBundle]);
+
+  useEffect(() => {
+    void refreshLocaleBundle(locale);
+  }, [locale, refreshLocaleBundle]);
 
   const setLocale = (value: Locale) => {
     setLocaleState(value);
     updateLocaleSettings(value).catch(() => undefined);
   };
 
-  const t = (key: string) => messages[key]?.[locale] || messages[key]?.en || key;
+  const t = useCallback(
+    (key: string) => {
+      const value =
+        bundleMessages[key] ||
+        messages[key]?.[locale] ||
+        messages[key]?.en;
+      if (value) {
+        return value;
+      }
+
+      if (!missingKeysRef.current.has(key)) {
+        missingKeysRef.current.add(key);
+        console.warn(`[i18n] Missing locale key: ${key}`);
+      }
+      return key;
+    },
+    [bundleMessages, locale]
+  );
 
   const options = useMemo(
     () => [
       { value: "en" as const, label: t("locale.english"), shortLabel: "EN" },
       { value: "vi" as const, label: t("locale.vietnamese"), shortLabel: "VI" }
     ],
-    [locale]
+    [t]
   );
 
   return (
@@ -579,4 +959,3 @@ export function useLocale() {
   }
   return context;
 }
-

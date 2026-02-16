@@ -2,21 +2,19 @@
 <html lang="en" class="bg-[#0d0d0f]">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Force a desktop-style layout even on mobile browsers.
+      This keeps the full launcher UI visible (sidebar, full tabs) instead of collapsing to a reduced mobile layout.
+      Mobile browsers will auto-scale to fit this virtual viewport width.
+    -->
+    <meta name="viewport" content="width=1280, viewport-fit=cover" />
     <title>Otoshi Launcher</title>
     <link rel="icon" type="image/png" href="/OTOSHI_icon.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Inter+Tight:wght@700;800;900&family=Recursive:wght@400;600&display=swap"
-      rel="stylesheet"
-    />
     <style>
       html, body, #root {
         margin: 0;
         padding: 0;
         background-color: #0d0d0f;
-        overflow: hidden;
       }
     </style>
   </head>

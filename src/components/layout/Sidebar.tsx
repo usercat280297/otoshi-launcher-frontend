@@ -17,14 +17,18 @@ import {
 } from "lucide-react";
 import { useMemo } from "react";
 import { useDownloads } from "../../hooks/useDownloads";
+import { useRunningGames } from "../../hooks/useRunningGames";
 import { useLocale } from "../../context/LocaleContext";
 import { useAuth } from "../../context/AuthContext";
+import { stopGame } from "../../services/launcher";
 
 export default function Sidebar() {
   const { activeTask, activeCount, pause, resume, cancel } = useDownloads();
+  const { runningList } = useRunningGames();
   const { t } = useLocale();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const activeGame = runningList[0];
 
   const playNav = useMemo(
     () => [
@@ -73,7 +77,7 @@ export default function Sidebar() {
   return (
     <aside
       data-tour="sidebar"
-      className="hidden w-64 border-r border-background-border bg-background px-5 py-6 lg:relative lg:sticky lg:top-0 lg:z-[60] lg:flex lg:h-screen lg:self-start lg:overflow-x-visible lg:overflow-y-visible"
+      className="hidden w-64 border-r border-background-border bg-background px-5 py-6 lg:fixed lg:inset-y-0 lg:left-0 lg:z-[60] lg:flex lg:h-screen lg:overflow-x-visible lg:overflow-y-visible"
     >
       <div className="flex h-full min-h-0 flex-col gap-6">
         <div className="flex items-center gap-3">
@@ -253,7 +257,7 @@ export default function Sidebar() {
                   <ArrowUpRight size={12} />
                 </div>
                 <p className="mt-1 truncate text-sm font-semibold text-text-primary">
-                  {activeTask?.title || "Download Manager"}
+                  {activeTask?.title || t("sidebar.download_manager")}
                 </p>
                 <div className="mt-2 h-1.5 rounded-full bg-background-muted">
                   <div className="h-1.5 rounded-full bg-primary transition-all" style={{ width: `${progress}%` }} />
@@ -275,7 +279,7 @@ export default function Sidebar() {
                         }
                       }}
                     >
-                      {activeTask.status === "paused" ? "Resume" : "Pause"}
+                      {activeTask.status === "paused" ? t("action.resume") : t("action.pause")}
                     </button>
                     <button
                       type="button"
@@ -285,8 +289,32 @@ export default function Sidebar() {
                         void cancel(activeTask.id);
                       }}
                     >
-                      Stop
+                      {t("action.stop")}
                     </button>
+                  </div>
+                ) : null}
+
+                {activeGame ? (
+                  <div className="mt-3 border-t border-background-border pt-3">
+                    <div className="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-text-muted">
+                      <span>{t("sidebar.active_game")}</span>
+                      <ArrowUpRight size={12} />
+                    </div>
+                    <p className="mt-1 truncate text-sm font-semibold text-text-primary">
+                      {activeGame.title}
+                    </p>
+                    <div className="mt-2 flex items-center gap-1">
+                      <button
+                        type="button"
+                        className="rounded-md border border-background-border bg-background-muted px-2 py-1 text-[10px] text-text-secondary transition hover:border-accent-red hover:text-accent-red"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          void stopGame(activeGame.gameId);
+                        }}
+                      >
+                        {t("action.stop")}
+                      </button>
+                    </div>
                   </div>
                 ) : null}
               </div>
