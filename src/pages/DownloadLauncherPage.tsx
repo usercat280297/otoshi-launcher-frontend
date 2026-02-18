@@ -584,6 +584,13 @@ export default function DownloadLauncherPage() {
 
       if (infoResponse.ok) {
         const info = await infoResponse.json();
+        const rawDownloadUrl = String(info?.download_url ?? "").trim();
+        if (!rawDownloadUrl) {
+          throw new Error("Missing download URL");
+        }
+        const resolvedDownloadUrl = /^https?:\/\//i.test(rawDownloadUrl)
+          ? rawDownloadUrl
+          : `${API_URL}${rawDownloadUrl.startsWith("/") ? "" : "/"}${rawDownloadUrl}`;
 
         // Simulate progress while downloading
         const progressInterval = setInterval(() => {
@@ -596,7 +603,7 @@ export default function DownloadLauncherPage() {
         }, 200);
 
         // Download the file
-        const downloadResponse = await fetch(`${API_URL}${info.download_url}`);
+        const downloadResponse = await fetch(resolvedDownloadUrl);
 
         if (downloadResponse.ok) {
           const blob = await downloadResponse.blob();
