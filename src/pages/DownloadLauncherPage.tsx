@@ -588,7 +588,8 @@ export default function DownloadLauncherPage() {
         if (!rawDownloadUrl) {
           throw new Error("Missing download URL");
         }
-        const resolvedDownloadUrl = /^https?:\/\//i.test(rawDownloadUrl)
+        const isExternalUrl = /^https?:\/\//i.test(rawDownloadUrl);
+        const resolvedDownloadUrl = isExternalUrl
           ? rawDownloadUrl
           : `${API_URL}${rawDownloadUrl.startsWith("/") ? "" : "/"}${rawDownloadUrl}`;
 
@@ -601,6 +602,22 @@ export default function DownloadLauncherPage() {
             return prev + Math.random() * 8;
           });
         }, 200);
+
+        if (isExternalUrl) {
+          // Avoid CORS issues: do not fetch() cross-origin binaries, let the browser handle the download.
+          clearInterval(progressInterval);
+          setDownloadProgress(100);
+          setDownloadComplete(true);
+          setIsDownloading(false);
+          const link = document.createElement("a");
+          link.href = resolvedDownloadUrl;
+          link.rel = "noopener noreferrer";
+          link.target = "_blank";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          return;
+        }
 
         // Download the file
         const downloadResponse = await fetch(resolvedDownloadUrl);
