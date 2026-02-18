@@ -28,6 +28,7 @@ const railItem = {
   hidden: { opacity: 0, x: 8 },
   show: { opacity: 1, x: 0, transition: { duration: 0.2 } }
 };
+const RAIL_ICON_PLACEHOLDER = "/icons/game-placeholder.svg";
 
 export default function Hero({
   game,
@@ -233,6 +234,19 @@ export default function Hero({
         <div className="space-y-3">
           {slidesForRail.map((item, index) => {
             const isActive = item.id === activeGame.id;
+            const steamStaticBase =
+              item.steamAppId && /^\d+$/.test(String(item.steamAppId))
+                ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${item.steamAppId}`
+                : null;
+            const railImage =
+              railImages[item.id] ||
+              item.iconImage ||
+              item.capsuleImage ||
+              item.headerImage ||
+              (steamStaticBase ? `${steamStaticBase}/icon.jpg` : null) ||
+              (steamStaticBase ? `${steamStaticBase}/capsule_sm_120.jpg` : null) ||
+              (steamStaticBase ? `${steamStaticBase}/header.jpg` : null) ||
+              RAIL_ICON_PLACEHOLDER;
             return (
               <motion.button
                 variants={railItem}
@@ -263,12 +277,7 @@ export default function Hero({
                 )}
                 <div className="relative z-10 flex w-full items-center gap-3">
                   <img
-                    src={
-                      railImages[item.id] ||
-                      item.iconImage ||
-                      item.capsuleImage ||
-                      item.headerImage
-                    }
+                    src={railImage}
                     alt={item.title}
                     className="h-14 w-14 rounded-lg object-cover"
                     loading="eager"

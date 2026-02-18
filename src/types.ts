@@ -102,6 +102,11 @@ export type SteamCatalogItem = {
   genres?: string[];
   releaseDate?: string | null;
   platforms?: string[];
+  itemType?: string | null;
+  isDlc?: boolean;
+  isBaseGame?: boolean;
+  classificationConfidence?: number;
+  artworkCoverage?: "sgdb" | "epic" | "steam" | "mixed";
   dlcCount?: number;
 };
 
@@ -133,6 +138,11 @@ export type SteamIndexIngestStatus = {
       steamdbFailed: number;
       crossStoreSuccess: number;
       crossStoreFailed: number;
+      completionProcessed?: number;
+      completionFailed?: number;
+      completionMetadataCreated?: number;
+      completionAssetsCreated?: number;
+      completionCrossStoreCreated?: number;
     };
   };
   totals: {
@@ -141,6 +151,71 @@ export type SteamIndexIngestStatus = {
     steamdbEnrichment: number;
     crossStoreMappings: number;
   };
+};
+
+export type SteamIndexCoverage = {
+  titlesTotal: number;
+  metadataComplete: number;
+  assetsComplete: number;
+  crossStoreComplete: number;
+  absoluteComplete: number;
+};
+
+export type RuntimeHealth = {
+  status: string;
+  sidecarReady: boolean;
+  runtimeMode?: string;
+  indexMode?: string;
+  globalIndexV1?: boolean;
+  dbPath?: string | null;
+  dbExists?: boolean;
+  ingestState?: string;
+  lastError?: string | null;
+};
+
+export type RuntimeTuningProfile = "performance" | "balanced" | "power_save";
+
+export type AsmCpuCapabilities = {
+  arch: string;
+  vendor: string;
+  logicalCores: number;
+  physicalCores: number;
+  totalMemoryMb: number;
+  availableMemoryMb: number;
+  hasSse42: boolean;
+  hasAvx2: boolean;
+  hasAvx512: boolean;
+  hasAesNi: boolean;
+  hasBmi2: boolean;
+  hasFma: boolean;
+  featureScore: number;
+  asmProbeTicks?: number | null;
+  fallbackUsed: boolean;
+};
+
+export type RuntimeTuningRecommendation = {
+  profile: RuntimeTuningProfile;
+  decodeConcurrency: number;
+  prefetchWindow: number;
+  pollingFastMs: number;
+  pollingIdleMs: number;
+  animationLevel: string;
+  reason: string;
+  autoApplyAllowed: boolean;
+  fallbackUsed: boolean;
+};
+
+export type RuntimeTuningApplyResult = {
+  applied: boolean;
+  profile: RuntimeTuningProfile;
+  decodeConcurrency: number;
+  prefetchWindow: number;
+  pollingFastMs: number;
+  pollingIdleMs: number;
+  animationLevel: string;
+  fallbackUsed: boolean;
+  settingsPath: string;
+  appliedAt: string;
 };
 
 export type SteamIndexAssetPrefetchResult = {
@@ -159,8 +234,21 @@ export type SteamIndexIngestRebuildResult = {
   steamdbFailed?: number;
   crossStoreSuccess?: number;
   crossStoreFailed?: number;
+  completionProcessed?: number;
+  completionFailed?: number;
   startedAt: string;
   completedAt: string;
+};
+
+export type SteamIndexCompletionResult = {
+  processed: number;
+  failed: number;
+  metadataCreated: number;
+  metadataUpdated: number;
+  assetsCreated: number;
+  assetsUpdated: number;
+  crossStoreCreated: number;
+  crossStoreUpdated: number;
 };
 
 export type PropertiesInstallInfo = {
@@ -241,6 +329,10 @@ export type SearchSuggestion = {
   value: string;
   kind: "history" | "popular" | "result";
   image?: string | null;
+  imageCandidates?: string[] | null;
+  isDlc?: boolean;
+  kindTag?: "DLC" | "BASE";
+  artSource?: "sgdb" | "epic" | "steam" | "mixed";
   meta?: string | null;
   appId?: string | null;
 };
@@ -489,6 +581,7 @@ export type SteamGameDetail = SteamCatalogItem & {
     url?: string | null;
     email?: string | null;
   } | null;
+  contentLocale?: string | null;
   gridImage?: string | null;
   heroImage?: string | null;
   logoImage?: string | null;

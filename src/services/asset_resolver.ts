@@ -15,7 +15,7 @@ export type ResolvedDownloadAsset = {
 };
 
 const CACHE_KEY = "otoshi.asset.download.v2";
-const PLACEHOLDER_IMAGE = "/icons/epic-games-shield.svg";
+const PLACEHOLDER_IMAGE = "/icons/game-placeholder.svg";
 
 const inMemoryCache = new Map<string, { imageUrl?: string; iconUrl?: string; title?: string }>();
 
@@ -123,4 +123,3 @@ export function resolveDownloadAsset(input: DownloadAssetInput): ResolvedDownloa
     source: "placeholder",
   };
 }
-

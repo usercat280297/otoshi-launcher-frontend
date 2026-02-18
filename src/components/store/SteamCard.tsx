@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { artworkGet, artworkPrefetch } from "../../services/api";
 import { SteamCatalogItem, SteamPrice } from "../../types";
 import { getMediaProtectionProps } from "../../utils/mediaProtection";
+import { useLocale } from "../../context/LocaleContext";
 import Badge from "../common/Badge";
 
 type SteamCardProps = {
@@ -24,6 +25,7 @@ function formatPrice(price?: SteamPrice | null) {
 const prefetchedAhead = new Set<string>();
 const PREFETCH_AHEAD_LIMIT = 10;
 const FALLBACK_DELAY_MS = 1800;
+const POSTER_PLACEHOLDER = "/icons/game-placeholder.svg";
 
 function decodeThumbnailSource(value: string): string {
   try {
@@ -88,20 +90,118 @@ function mapArtworkSources(item: SteamCatalogItem, fallback: string) {
 }
 
 export default function SteamCard({ item, onOpen, prefetchItems = [] }: SteamCardProps) {
+  const { t } = useLocale();
   const discounted = (item.price?.discountPercent ?? 0) > 0;
   const displayPrice = formatPrice(item.price);
-  const [displayImage, setDisplayImage] = useState<string | null>(null);
+  const [activeImage, setActiveImage] = useState<string | null>(null);
+  const [incomingImage, setIncomingImage] = useState<string | null>(null);
+  const [incomingReady, setIncomingReady] = useState(false);
   const fallbackTimerRef = useRef<number | null>(null);
-  const fallbackGrid = `https://cdn.cloudflare.steamstatic.com/steam/apps/${item.appId}/library_600x900.jpg`;
+  const commitTimerRef = useRef<number | null>(null);
+  const activeImageRef = useRef<string | null>(null);
+  const incomingImageRef = useRef<string | null>(null);
+  const steamStaticBase = `https://cdn.cloudflare.steamstatic.com/steam/apps/${item.appId}`;
+  const fallbackGrid = `${steamStaticBase}/library_600x900.jpg`;
+  const fallbackHeader = `${steamStaticBase}/header.jpg`;
+  const fallbackCapsule = `${steamStaticBase}/capsule_616x353.jpg`;
   const steamFallback =
-    pickBestPoster([fallbackGrid, item.capsuleImage, item.headerImage]) || fallbackGrid;
+    pickBestPoster([fallbackGrid, fallbackHeader, fallbackCapsule, item.capsuleImage, item.headerImage]) ||
+    fallbackHeader;
   const artworkSources = useMemo(
     () => mapArtworkSources(item, steamFallback),
     [item, steamFallback]
   );
+
+  const posterCandidates = useMemo(() => {
+    const candidates = [
+      artworkSources.t3,
+      artworkSources.t2,
+      artworkSources.t1,
+      artworkSources.t0,
+      item.capsuleImage,
+      item.headerImage,
+      fallbackGrid,
+      fallbackHeader,
+      fallbackCapsule,
+      `${steamStaticBase}/capsule_231x87.jpg`,
+      `${steamStaticBase}/capsule_sm_120.jpg`,
+      `${steamStaticBase}/capsule_184x69.jpg`,
+      `${steamStaticBase}/icon.jpg`,
+      `${steamStaticBase}/logo.png`,
+      POSTER_PLACEHOLDER,
+    ];
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const value of candidates) {
+      if (typeof value !== "string") continue;
+      const trimmed = value.trim();
+      if (!trimmed) continue;
+      if (seen.has(trimmed)) continue;
+      seen.add(trimmed);
+      out.push(trimmed);
+    }
+    return out;
+  }, [
+    artworkSources.t0,
+    artworkSources.t1,
+    artworkSources.t2,
+    artworkSources.t3,
+    fallbackCapsule,
+    fallbackGrid,
+    fallbackHeader,
+    item.capsuleImage,
+    item.headerImage,
+    steamStaticBase,
+  ]);
+
+  const getNextPosterCandidate = (current: string | null): string | null => {
+    if (!posterCandidates.length) return null;
+    const idx = current ? posterCandidates.indexOf(current) : -1;
+    for (let next = idx + 1; next < posterCandidates.length; next += 1) {
+      const candidate = posterCandidates[next];
+      if (candidate && candidate !== current) return candidate;
+    }
+    return null;
+  };
+
+  useEffect(() => {
+    activeImageRef.current = activeImage;
+  }, [activeImage]);
+
+  useEffect(() => {
+    incomingImageRef.current = incomingImage;
+  }, [incomingImage]);
+
+  const requestImage = (value: string | null) => {
+    const src = typeof value === "string" ? value.trim() : "";
+    if (!src) return;
+    const current = activeImageRef.current;
+    const incoming = incomingImageRef.current;
+    if (src === current || src === incoming) return;
+    setIncomingReady(false);
+    setIncomingImage(src);
+  };
+
+  useEffect(() => {
+    if (!incomingImage || !incomingReady) return;
+    if (commitTimerRef.current) {
+      window.clearTimeout(commitTimerRef.current);
+    }
+    commitTimerRef.current = window.setTimeout(() => {
+      setActiveImage(incomingImage);
+      setIncomingImage(null);
+      setIncomingReady(false);
+    }, 220);
+    return () => {
+      if (commitTimerRef.current) {
+        window.clearTimeout(commitTimerRef.current);
+      }
+    };
+  }, [incomingImage, incomingReady]);
   const cardRef = useRef<HTMLButtonElement | null>(null);
   const [artReady, setArtReady] = useState(false);
   const hasDenuvo = Boolean(item.denuvo);
+  const hasDlc = Boolean(item.isDlc || item.itemType === "dlc");
 
   useEffect(() => {
     const node = cardRef.current;
@@ -131,7 +231,9 @@ export default function SteamCard({ item, onOpen, prefetchItems = [] }: SteamCar
 
     fallbackTimerRef.current = window.setTimeout(() => {
       if (!active) return;
-      setDisplayImage((current) => current || steamFallback);
+      if (!activeImageRef.current && !incomingImageRef.current) {
+        requestImage(posterCandidates[0] || steamFallback);
+      }
     }, FALLBACK_DELAY_MS);
 
     const dpr = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
@@ -139,16 +241,14 @@ export default function SteamCard({ item, onOpen, prefetchItems = [] }: SteamCar
       const lowTier = await artworkGet(item.appId, 1, dpr, artworkSources).catch(() => null);
       if (!active) return;
       if (lowTier) {
-        setDisplayImage(lowTier);
+        requestImage(lowTier);
       } else {
-        setDisplayImage(
-          artworkSources.t2 ?? artworkSources.t1 ?? artworkSources.t0 ?? steamFallback
-        );
+        requestImage(posterCandidates[0] || steamFallback);
       }
 
       const highTier = await artworkGet(item.appId, 3, dpr, artworkSources).catch(() => null);
       if (!active || !highTier) return;
-      setDisplayImage(highTier);
+      requestImage(highTier);
     };
 
     void run();
@@ -157,6 +257,9 @@ export default function SteamCard({ item, onOpen, prefetchItems = [] }: SteamCar
       active = false;
       if (fallbackTimerRef.current) {
         window.clearTimeout(fallbackTimerRef.current);
+      }
+      if (commitTimerRef.current) {
+        window.clearTimeout(commitTimerRef.current);
       }
     };
   }, [artReady, artworkSources, item.appId, steamFallback]);
@@ -194,19 +297,47 @@ export default function SteamCard({ item, onOpen, prefetchItems = [] }: SteamCar
       <div className="relative aspect-[3/4] overflow-hidden rounded-xl border border-background-border bg-background-surface shadow-soft">
         <div
           className={`absolute inset-0 ghost-placeholder transition-opacity duration-500 ${
-            displayImage ? "opacity-0" : "opacity-100"
+            activeImage || (incomingImage && incomingReady) ? "opacity-0" : "opacity-100"
           }`}
           aria-hidden
         />
-        {displayImage && (
+        {activeImage && (
           <img
-            src={displayImage}
+            src={activeImage}
             alt={item.name}
-            className={`h-full w-full object-cover transition duration-300 group-hover:scale-[1.04] ${
-              displayImage ? "opacity-100" : "opacity-0"
+            className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]"
+            loading="lazy"
+            decoding="async"
+            onError={() => {
+              const next = getNextPosterCandidate(activeImageRef.current);
+              if (next && next !== activeImageRef.current) {
+                requestImage(next);
+              }
+            }}
+            {...getMediaProtectionProps()}
+          />
+        )}
+        {incomingImage && (
+          <img
+            src={incomingImage}
+            alt={item.name}
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${
+              incomingReady ? "opacity-100" : "opacity-0"
             }`}
             loading="lazy"
             decoding="async"
+            onLoad={() => setIncomingReady(true)}
+            onError={() => {
+              const current = incomingImageRef.current || incomingImage;
+              const next = getNextPosterCandidate(current);
+              if (next && next !== current) {
+                setIncomingReady(false);
+                setIncomingImage(next);
+              } else {
+                setIncomingReady(false);
+                setIncomingImage(null);
+              }
+            }}
             {...getMediaProtectionProps()}
           />
         )}
@@ -218,6 +349,11 @@ export default function SteamCard({ item, onOpen, prefetchItems = [] }: SteamCar
         {hasDenuvo && (
           <div className="absolute right-3 top-3">
             <Badge label="Denuvo" tone="danger" />
+          </div>
+        )}
+        {hasDlc && (
+          <div className="absolute left-3 bottom-3">
+            <Badge label={t("game.dlc")} tone="secondary" />
           </div>
         )}
       </div>

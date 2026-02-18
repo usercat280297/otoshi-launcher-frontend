@@ -6,8 +6,15 @@ import { useLocale } from "../context/LocaleContext";
 import Input from "../components/common/Input";
 import Button from "../components/common/Button";
 import { openExternal } from "../utils/openExternal";
+import {
+  applyRuntimeTuning,
+  probeAsmCpuCapabilities,
+  recommendRuntimeTuning,
+  rollbackRuntimeTuning,
+} from "../services/api";
+import type { AsmCpuCapabilities, RuntimeTuningProfile } from "../types";
 
-type SettingsSection = "account" | "downloads" | "notifications" | "privacy" | "about";
+type SettingsSection = "account" | "downloads" | "notifications" | "privacy" | "performance" | "about";
 
 type SettingsState = {
   displayName: string;
@@ -23,6 +30,12 @@ type SettingsState = {
     shareActivity: boolean;
     telemetry: boolean;
     cloudSync: boolean;
+  };
+  performance: {
+    autoTuningEnabled: boolean;
+    autoTuningProfile: RuntimeTuningProfile;
+    autoTuningLastAppliedAt: string | null;
+    autoTuningFallbackUsed: boolean;
   };
 };
 
@@ -42,8 +55,31 @@ const defaultSettings: SettingsState = {
     shareActivity: true,
     telemetry: false,
     cloudSync: true
+  },
+  performance: {
+    autoTuningEnabled: false,
+    autoTuningProfile: "balanced",
+    autoTuningLastAppliedAt: null,
+    autoTuningFallbackUsed: false
   }
 };
+
+const mergeSettings = (raw: Partial<SettingsState> | null | undefined): SettingsState => ({
+  ...defaultSettings,
+  ...(raw || {}),
+  notifications: {
+    ...defaultSettings.notifications,
+    ...((raw as any)?.notifications || {}),
+  },
+  privacy: {
+    ...defaultSettings.privacy,
+    ...((raw as any)?.privacy || {}),
+  },
+  performance: {
+    ...defaultSettings.performance,
+    ...((raw as any)?.performance || {}),
+  },
+});
 
 const isTauriRuntime = () =>
   typeof window !== "undefined" && "__TAURI__" in window;
@@ -53,11 +89,13 @@ export default function SettingsPage() {
   const { t } = useLocale();
   const [activeSection, setActiveSection] = useState<SettingsSection>("account");
   const [status, setStatus] = useState<string | null>(null);
+  const [tuningBusy, setTuningBusy] = useState(false);
+  const [capabilities, setCapabilities] = useState<AsmCpuCapabilities | null>(null);
   const [settings, setSettings] = useState<SettingsState>(() => {
     const stored = localStorage.getItem(SETTINGS_KEY);
     if (stored) {
       try {
-        return JSON.parse(stored) as SettingsState;
+        return mergeSettings(JSON.parse(stored) as SettingsState);
       } catch {
         return defaultSettings;
       }
@@ -118,6 +156,7 @@ export default function SettingsPage() {
       { id: "downloads" as const, label: t("settings.downloads"), icon: Download },
       { id: "notifications" as const, label: t("settings.notifications"), icon: Bell },
       { id: "privacy" as const, label: t("settings.privacy"), icon: Shield },
+      { id: "performance" as const, label: "Performance", icon: Shield },
       { id: "about" as const, label: t("settings.about"), icon: Info }
     ],
     [t]
@@ -140,6 +179,105 @@ export default function SettingsPage() {
 
   const selectInstallDirectory = async () => {
     setStatus("Directory picker is not configured. Enter a path manually.");
+  };
+
+  const analyzeRuntimeTuning = async () => {
+    if (!isTauriRuntime()) {
+      setStatus("Runtime tuning analysis is available in desktop app only.");
+      return;
+    }
+    setTuningBusy(true);
+    setStatus(null);
+    try {
+      const [probe, recommendation] = await Promise.all([
+        probeAsmCpuCapabilities(),
+        recommendRuntimeTuning({
+          consent: settings.performance.autoTuningEnabled,
+          profile: settings.performance.autoTuningProfile,
+        }),
+      ]);
+      if (probe) {
+        setCapabilities(probe);
+      }
+      if (recommendation) {
+        setSettings((prev) => ({
+          ...prev,
+          performance: {
+            ...prev.performance,
+            autoTuningProfile: recommendation.profile,
+            autoTuningFallbackUsed: recommendation.fallbackUsed,
+          },
+        }));
+        setStatus(
+          recommendation.autoApplyAllowed
+            ? `Recommended profile: ${recommendation.profile}`
+            : "Auto tuning requires opt-in."
+        );
+      }
+    } catch {
+      setStatus("Unable to analyze runtime tuning.");
+    } finally {
+      setTuningBusy(false);
+    }
+  };
+
+  const applyRuntimeTuningNow = async () => {
+    if (!isTauriRuntime()) {
+      setStatus("Runtime tuning apply is available in desktop app only.");
+      return;
+    }
+    setTuningBusy(true);
+    setStatus(null);
+    try {
+      const result = await applyRuntimeTuning({
+        consent: settings.performance.autoTuningEnabled,
+        profile: settings.performance.autoTuningProfile,
+      });
+      if (!result?.applied) {
+        setStatus("Runtime tuning did not apply.");
+        return;
+      }
+      setSettings((prev) => ({
+        ...prev,
+        performance: {
+          ...prev.performance,
+          autoTuningProfile: result.profile,
+          autoTuningLastAppliedAt: result.appliedAt,
+          autoTuningFallbackUsed: result.fallbackUsed,
+        },
+      }));
+      setStatus(`Runtime tuning applied: ${result.profile}`);
+    } catch {
+      setStatus("Unable to apply runtime tuning.");
+    } finally {
+      setTuningBusy(false);
+    }
+  };
+
+  const rollbackRuntimeTuningNow = async () => {
+    if (!isTauriRuntime()) {
+      setStatus("Runtime tuning rollback is available in desktop app only.");
+      return;
+    }
+    setTuningBusy(true);
+    setStatus(null);
+    try {
+      await rollbackRuntimeTuning();
+      setSettings((prev) => ({
+        ...prev,
+        performance: {
+          ...prev.performance,
+          autoTuningLastAppliedAt: null,
+          autoTuningFallbackUsed: false,
+          autoTuningProfile: "balanced",
+        },
+      }));
+      setStatus("Runtime tuning rolled back to defaults.");
+    } catch {
+      setStatus("Unable to rollback runtime tuning.");
+    } finally {
+      setTuningBusy(false);
+    }
   };
 
   return (
@@ -321,6 +459,69 @@ export default function SettingsPage() {
                   />
                 </label>
               ))}
+            </div>
+          )}
+
+          {activeSection === "performance" && (
+            <div className="glass-panel space-y-4 p-6">
+              <div>
+                <h3 className="section-title">Performance</h3>
+                <p className="text-sm text-text-secondary">
+                  Optional auto-tuning for launcher runtime. Opt-in is required before apply.
+                </p>
+              </div>
+              <label className="glass-card flex items-center justify-between p-4 text-sm text-text-secondary">
+                Enable automatic runtime tuning
+                <input
+                  type="checkbox"
+                  checked={settings.performance.autoTuningEnabled}
+                  onChange={(event) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      performance: {
+                        ...prev.performance,
+                        autoTuningEnabled: event.target.checked,
+                      },
+                    }))
+                  }
+                  className="h-5 w-5 accent-primary"
+                />
+              </label>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Button variant="secondary" onClick={analyzeRuntimeTuning} disabled={tuningBusy}>
+                  Analyze
+                </Button>
+                <Button onClick={applyRuntimeTuningNow} disabled={tuningBusy}>
+                  Apply
+                </Button>
+                <Button variant="secondary" onClick={rollbackRuntimeTuningNow} disabled={tuningBusy}>
+                  Rollback
+                </Button>
+              </div>
+              <div className="glass-card p-4 text-sm text-text-secondary">
+                <p className="font-semibold text-text-primary">
+                  Profile: {settings.performance.autoTuningProfile}
+                </p>
+                <p>
+                  Last applied: {settings.performance.autoTuningLastAppliedAt || "not applied"}
+                </p>
+                <p>
+                  Fallback mode: {settings.performance.autoTuningFallbackUsed ? "yes" : "no"}
+                </p>
+              </div>
+              {capabilities && (
+                <div className="glass-card p-4 text-sm text-text-secondary">
+                  <p>CPU: {capabilities.vendor} ({capabilities.arch})</p>
+                  <p>
+                    Cores: {capabilities.physicalCores} physical / {capabilities.logicalCores} logical
+                  </p>
+                  <p>
+                    Memory: {capabilities.availableMemoryMb} MB free / {capabilities.totalMemoryMb} MB total
+                  </p>
+                  <p>Feature score: {capabilities.featureScore}</p>
+                </div>
+              )}
+              {status && <p className="text-xs text-text-secondary">{status}</p>}
             </div>
           )}
 

@@ -60,6 +60,18 @@ export function useSteamSearchMemory() {
         value: item.name,
         kind: "popular",
         image: item.headerImage ?? item.capsuleImage ?? null,
+        imageCandidates: [
+          item.artwork?.t3 ?? null,
+          item.artwork?.t2 ?? null,
+          item.artwork?.t1 ?? null,
+          item.headerImage ?? null,
+          item.capsuleImage ?? null,
+          item.background ?? null,
+          item.artwork?.t0 ?? null,
+        ].filter((value): value is string => typeof value === "string" && value.trim().length > 0),
+        isDlc: Boolean(item.isDlc),
+        kindTag: item.isDlc ? "DLC" : "BASE",
+        artSource: item.artworkCoverage ?? undefined,
         meta: `#${item.appId}`,
         appId: item.appId
       });

@@ -45,8 +45,15 @@ import {
   PropertiesVerifyResult,
   SteamIndexAssetInfo,
   SteamIndexAssetPrefetchResult,
+  SteamIndexCoverage,
+  SteamIndexCompletionResult,
   SteamIndexIngestRebuildResult,
   SteamIndexIngestStatus,
+  RuntimeHealth,
+  AsmCpuCapabilities,
+  RuntimeTuningApplyResult,
+  RuntimeTuningProfile,
+  RuntimeTuningRecommendation,
   TradeOffer,
   UserProfile,
   WishlistEntry,
@@ -140,6 +147,13 @@ let resolvedApiBase: string | null = null;
 let runtimeBaseResolved = false;
 const MIN_COMPATIBLE_CDN_CHUNK_LIMIT_BYTES = 100 * 1024 * 1024;
 const API_HEALTH_TIMEOUT_MS = 1500;
+const API_RUNTIME_READY_CACHE_MS = 15_000;
+const API_RUNTIME_READY_ATTEMPTS = 18;
+const API_RUNTIME_READY_DELAY_MS = 250;
+let runtimeReadyCheckedAt = 0;
+let runtimeReadyPromise: Promise<void> | null = null;
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
 function parseNumericLike(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -290,6 +304,76 @@ async function ensureDesktopRuntimeApiBase() {
   }
 }
 
+async function probeRuntimeHealth(base: string): Promise<RuntimeHealth | null> {
+  const normalized = base.replace(/\/+$/, "");
+  try {
+    const response = await fetchWithTimeout(`${normalized}/health/runtime`);
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (!data || typeof data !== "object") return null;
+    return {
+      status: String((data as any).status ?? "unknown"),
+      sidecarReady: Boolean((data as any).sidecar_ready ?? false),
+      runtimeMode: (data as any).runtime_mode ?? null,
+      indexMode: (data as any).index_mode ?? null,
+      globalIndexV1: Boolean((data as any).global_index_v1 ?? false),
+      dbPath: (data as any).db_path ?? null,
+      dbExists: Boolean((data as any).db_exists ?? false),
+      ingestState: (data as any).ingest_state ?? null,
+      lastError: (data as any).last_error ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function ensureDesktopRuntimeReady() {
+  if (!isDesktop) return;
+  const now = Date.now();
+  if (now - runtimeReadyCheckedAt < API_RUNTIME_READY_CACHE_MS) {
+    return;
+  }
+  if (runtimeReadyPromise) {
+    return runtimeReadyPromise;
+  }
+
+  runtimeReadyPromise = (async () => {
+    await ensureDesktopRuntimeApiBase();
+
+    const candidates = Array.from(
+      new Set(
+        (resolvedApiBase
+          ? [resolvedApiBase, ...API_BASES.filter((base) => base !== resolvedApiBase)]
+          : API_BASES
+        ).filter(Boolean)
+      )
+    );
+    if (!candidates.length) {
+      runtimeReadyCheckedAt = Date.now();
+      return;
+    }
+
+    for (let attempt = 0; attempt < API_RUNTIME_READY_ATTEMPTS; attempt += 1) {
+      for (const base of candidates) {
+        const health = await probeRuntimeHealth(base);
+        if (health?.sidecarReady) {
+          resolvedApiBase = base.replace(/\/+$/, "");
+          runtimeReadyCheckedAt = Date.now();
+          return;
+        }
+      }
+      await sleep(API_RUNTIME_READY_DELAY_MS);
+    }
+
+    // keep requests moving even if runtime health endpoint is unavailable
+    runtimeReadyCheckedAt = Date.now();
+  })().finally(() => {
+    runtimeReadyPromise = null;
+  });
+
+  return runtimeReadyPromise;
+}
+
 export const getPreferredApiBase = () =>
   resolvedApiBase || API_BASES[0] || (isDev ? "http://127.0.0.1:8000" : "");
 
@@ -297,6 +381,7 @@ export function getApiDebugInfo() {
   return {
     preferredBase: getPreferredApiBase(),
     resolvedBase: resolvedApiBase,
+    runtimeReadyCheckedAt,
     bases: API_BASES,
     isDev
   };
@@ -555,6 +640,9 @@ async function requestJson<T>(
   token?: string
 ): Promise<T> {
   await ensureDesktopRuntimeApiBase();
+  if (isDesktop && !path.startsWith("/health")) {
+    await ensureDesktopRuntimeReady();
+  }
   const method = (options.method || "GET").toUpperCase();
   const canFallback = method === "GET" || method === "HEAD";
   const headers = new Headers(options.headers || {});
@@ -640,7 +728,11 @@ async function requestJson<T>(
     }
   }
 
-  console.error(`[API] All bases failed for ${path}`, lastError);
+  if (path.startsWith("/settings/locale") || path.startsWith("/settings/locales/")) {
+    console.warn(`[API] All bases failed for ${path}`, lastError);
+  } else {
+    console.error(`[API] All bases failed for ${path}`, lastError);
+  }
 
   throw lastError || new Error("Request failed");
 }
@@ -651,6 +743,9 @@ async function requestForm<T>(
   token?: string
 ): Promise<T> {
   await ensureDesktopRuntimeApiBase();
+  if (isDesktop && !path.startsWith("/health")) {
+    await ensureDesktopRuntimeReady();
+  }
   const headers = new Headers();
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
@@ -853,12 +948,18 @@ export async function searchSteamIndexCatalog(params: {
   limit?: number;
   offset?: number;
   source?: "global";
+  includeDlc?: boolean;
+  rankingMode?: "relevance" | "recent" | "updated" | "priority" | "hot" | "top";
+  mustHaveArtwork?: boolean;
 }): Promise<{ total: number; offset: number; limit: number; items: SteamCatalogItem[] }> {
   const query = new URLSearchParams();
   query.set("q", params.q);
   if (params.limit) query.set("limit", String(params.limit));
   if (params.offset) query.set("offset", String(params.offset));
   if (params.source) query.set("source", params.source);
+  if (typeof params.includeDlc === "boolean") query.set("include_dlc", params.includeDlc ? "1" : "0");
+  if (params.rankingMode) query.set("ranking_mode", params.rankingMode);
+  if (params.mustHaveArtwork) query.set("must_have_artwork", "1");
   const data = await requestJson<any>(`/steam/index/search?${query.toString()}`);
   return {
     total: data.total ?? 0,
@@ -897,7 +998,10 @@ export async function prefetchSteamIndexAssets(payload: {
   appIds: string[];
   forceRefresh?: boolean;
 }): Promise<SteamIndexAssetPrefetchResult> {
-  const data = await requestJson<any>("/steam/index/assets/prefetch", {
+  const endpoint = payload.forceRefresh
+    ? "/steam/index/assets/prefetch-force-visible"
+    : "/steam/index/assets/prefetch";
+  const data = await requestJson<any>(endpoint, {
     method: "POST",
     body: JSON.stringify({
       app_ids: payload.appIds,
@@ -910,6 +1014,38 @@ export async function prefetchSteamIndexAssets(payload: {
     success: Number(data.success ?? 0),
     failed: Number(data.failed ?? 0),
   };
+}
+
+export async function fetchSteamIndexAssetsBatch(payload: {
+  appIds: string[];
+  forceRefresh?: boolean;
+}): Promise<Record<string, SteamIndexAssetInfo>> {
+  const data = await requestJson<any>("/steam/index/assets/batch", {
+    method: "POST",
+    body: JSON.stringify({
+      app_ids: payload.appIds,
+      force_refresh: Boolean(payload.forceRefresh),
+    }),
+  });
+
+  const rawItems = data?.items && typeof data.items === "object" ? data.items : {};
+  const result: Record<string, SteamIndexAssetInfo> = {};
+  for (const [appId, raw] of Object.entries(rawItems)) {
+    const assets = (raw as any)?.assets && typeof (raw as any).assets === "object" ? (raw as any).assets : {};
+    result[String(appId)] = {
+      appId: String((raw as any)?.app_id ?? (raw as any)?.appId ?? appId),
+      selectedSource: String((raw as any)?.selected_source ?? (raw as any)?.selectedSource ?? "steam"),
+      assets: {
+        grid: assets.grid ?? null,
+        hero: assets.hero ?? null,
+        logo: assets.logo ?? null,
+        icon: assets.icon ?? null,
+      },
+      qualityScore: (raw as any)?.quality_score ?? (raw as any)?.qualityScore ?? null,
+      version: (raw as any)?.version ?? null,
+    };
+  }
+  return result;
 }
 
 export async function fetchSteamIndexIngestStatus(): Promise<SteamIndexIngestStatus> {
@@ -929,6 +1065,17 @@ export async function fetchSteamIndexIngestStatus(): Promise<SteamIndexIngestSta
         steamdbFailed: Number(data.latest_job?.external_enrichment?.steamdb_failed ?? 0),
         crossStoreSuccess: Number(data.latest_job?.external_enrichment?.cross_store_success ?? 0),
         crossStoreFailed: Number(data.latest_job?.external_enrichment?.cross_store_failed ?? 0),
+        completionProcessed: Number(data.latest_job?.external_enrichment?.completion_processed ?? 0),
+        completionFailed: Number(data.latest_job?.external_enrichment?.completion_failed ?? 0),
+        completionMetadataCreated: Number(
+          data.latest_job?.external_enrichment?.completion_metadata_created ?? 0
+        ),
+        completionAssetsCreated: Number(
+          data.latest_job?.external_enrichment?.completion_assets_created ?? 0
+        ),
+        completionCrossStoreCreated: Number(
+          data.latest_job?.external_enrichment?.completion_cross_store_created ?? 0
+        ),
       },
     },
     totals: {
@@ -937,6 +1084,53 @@ export async function fetchSteamIndexIngestStatus(): Promise<SteamIndexIngestSta
       steamdbEnrichment: Number(data.totals?.steamdb_enrichment ?? 0),
       crossStoreMappings: Number(data.totals?.cross_store_mappings ?? 0),
     },
+  };
+}
+
+export async function fetchSteamIndexCoverage(): Promise<SteamIndexCoverage> {
+  const data = await requestJson<any>("/steam/index/coverage");
+  return {
+    titlesTotal: Number(data.titles_total ?? 0),
+    metadataComplete: Number(data.metadata_complete ?? 0),
+    assetsComplete: Number(data.assets_complete ?? 0),
+    crossStoreComplete: Number(data.cross_store_complete ?? 0),
+    absoluteComplete: Number(data.absolute_complete ?? 0),
+  };
+}
+
+export async function fetchRuntimeHealth(): Promise<RuntimeHealth> {
+  const data = await requestJson<any>("/health/runtime");
+  return {
+    status: String(data.status ?? "unknown"),
+    sidecarReady: Boolean(data.sidecar_ready ?? false),
+    runtimeMode: data.runtime_mode ?? undefined,
+    indexMode: data.index_mode ?? undefined,
+    globalIndexV1: Boolean(data.global_index_v1 ?? false),
+    dbPath: data.db_path ?? null,
+    dbExists: Boolean(data.db_exists ?? false),
+    ingestState: data.ingest_state ?? undefined,
+    lastError: data.last_error ?? null,
+  };
+}
+
+export async function fetchSteamIndexTopRanking(params?: {
+  limit?: number;
+  offset?: number;
+  includeDlc?: boolean;
+}): Promise<{ total: number; offset: number; limit: number; items: SteamCatalogItem[] }> {
+  const query = new URLSearchParams();
+  if (params?.limit) query.set("limit", String(params.limit));
+  if (params?.offset) query.set("offset", String(params.offset));
+  if (typeof params?.includeDlc === "boolean") {
+    query.set("include_dlc", params.includeDlc ? "1" : "0");
+  }
+  const suffix = query.toString();
+  const data = await requestJson<any>(`/steam/index/ranking/top${suffix ? `?${suffix}` : ""}`);
+  return {
+    total: Number(data.total ?? 0),
+    offset: Number(data.offset ?? 0),
+    limit: Number(data.limit ?? params?.limit ?? 0),
+    items: Array.isArray(data.items) ? data.items.map(mapSteamCatalogItem) : [],
   };
 }
 
@@ -960,8 +1154,33 @@ export async function rebuildSteamIndex(params?: {
     steamdbFailed: Number(data.steamdb_failed ?? 0),
     crossStoreSuccess: Number(data.cross_store_success ?? 0),
     crossStoreFailed: Number(data.cross_store_failed ?? 0),
+    completionProcessed: Number(data.completion_processed ?? 0),
+    completionFailed: Number(data.completion_failed ?? 0),
     startedAt: String(data.started_at ?? ""),
     completedAt: String(data.completed_at ?? ""),
+  };
+}
+
+export async function completeSteamIndexCoverage(payload?: {
+  appIds?: string[];
+  maxItems?: number | null;
+}): Promise<SteamIndexCompletionResult> {
+  const data = await requestJson<any>("/steam/index/ingest/complete", {
+    method: "POST",
+    body: JSON.stringify({
+      app_ids: payload?.appIds ?? [],
+      max_items: payload?.maxItems ?? null,
+    }),
+  });
+  return {
+    processed: Number(data.processed ?? 0),
+    failed: Number(data.failed ?? 0),
+    metadataCreated: Number(data.metadata_created ?? 0),
+    metadataUpdated: Number(data.metadata_updated ?? 0),
+    assetsCreated: Number(data.assets_created ?? 0),
+    assetsUpdated: Number(data.assets_updated ?? 0),
+    crossStoreCreated: Number(data.cross_store_created ?? 0),
+    crossStoreUpdated: Number(data.cross_store_updated ?? 0),
   };
 }
 
@@ -1014,6 +1233,91 @@ export async function fetchPerformanceSnapshot(): Promise<PerformanceSnapshot> {
     decodeMs: 0,
     uploadMs: 0,
   };
+}
+
+export async function probeAsmCpuCapabilities(): Promise<AsmCpuCapabilities | null> {
+  if (!isTauri()) {
+    return null;
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  const data = await invoke<any>("asm_probe_cpu_capabilities");
+  return {
+    arch: String(data?.arch ?? "unknown"),
+    vendor: String(data?.vendor ?? "unknown"),
+    logicalCores: Number(data?.logical_cores ?? data?.logicalCores ?? 1),
+    physicalCores: Number(data?.physical_cores ?? data?.physicalCores ?? 1),
+    totalMemoryMb: Number(data?.total_memory_mb ?? data?.totalMemoryMb ?? 0),
+    availableMemoryMb: Number(data?.available_memory_mb ?? data?.availableMemoryMb ?? 0),
+    hasSse42: Boolean(data?.has_sse42 ?? data?.hasSse42 ?? false),
+    hasAvx2: Boolean(data?.has_avx2 ?? data?.hasAvx2 ?? false),
+    hasAvx512: Boolean(data?.has_avx512 ?? data?.hasAvx512 ?? false),
+    hasAesNi: Boolean(data?.has_aes_ni ?? data?.hasAesNi ?? false),
+    hasBmi2: Boolean(data?.has_bmi2 ?? data?.hasBmi2 ?? false),
+    hasFma: Boolean(data?.has_fma ?? data?.hasFma ?? false),
+    featureScore: Number(data?.feature_score ?? data?.featureScore ?? 0),
+    asmProbeTicks: Number(data?.asm_probe_ticks ?? data?.asmProbeTicks ?? 0),
+    fallbackUsed: Boolean(data?.fallback_used ?? data?.fallbackUsed ?? false),
+  };
+}
+
+export async function recommendRuntimeTuning(payload: {
+  consent: boolean;
+  profile?: RuntimeTuningProfile | null;
+}): Promise<RuntimeTuningRecommendation | null> {
+  if (!isTauri()) {
+    return null;
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  const data = await invoke<any>("runtime_tuning_recommend", {
+    consent: payload.consent,
+    profile: payload.profile ?? null,
+  });
+  return {
+    profile: (String(data?.profile ?? "balanced").toLowerCase() as RuntimeTuningProfile),
+    decodeConcurrency: Number(data?.decode_concurrency ?? data?.decodeConcurrency ?? 4),
+    prefetchWindow: Number(data?.prefetch_window ?? data?.prefetchWindow ?? 24),
+    pollingFastMs: Number(data?.polling_fast_ms ?? data?.pollingFastMs ?? 1000),
+    pollingIdleMs: Number(data?.polling_idle_ms ?? data?.pollingIdleMs ?? 8000),
+    animationLevel: String(data?.animation_level ?? data?.animationLevel ?? "normal"),
+    reason: String(data?.reason ?? "balanced_default"),
+    autoApplyAllowed: Boolean(data?.auto_apply_allowed ?? data?.autoApplyAllowed ?? false),
+    fallbackUsed: Boolean(data?.fallback_used ?? data?.fallbackUsed ?? false),
+  };
+}
+
+export async function applyRuntimeTuning(payload: {
+  consent: boolean;
+  profile?: RuntimeTuningProfile | null;
+}): Promise<RuntimeTuningApplyResult | null> {
+  if (!isTauri()) {
+    return null;
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  const data = await invoke<any>("runtime_tuning_apply", {
+    consent: payload.consent,
+    profile: payload.profile ?? null,
+  });
+  return {
+    applied: Boolean(data?.applied ?? false),
+    profile: (String(data?.profile ?? "balanced").toLowerCase() as RuntimeTuningProfile),
+    decodeConcurrency: Number(data?.decode_concurrency ?? data?.decodeConcurrency ?? 4),
+    prefetchWindow: Number(data?.prefetch_window ?? data?.prefetchWindow ?? 24),
+    pollingFastMs: Number(data?.polling_fast_ms ?? data?.pollingFastMs ?? 1000),
+    pollingIdleMs: Number(data?.polling_idle_ms ?? data?.pollingIdleMs ?? 8000),
+    animationLevel: String(data?.animation_level ?? data?.animationLevel ?? "normal"),
+    fallbackUsed: Boolean(data?.fallback_used ?? data?.fallbackUsed ?? false),
+    settingsPath: String(data?.settings_path ?? data?.settingsPath ?? ""),
+    appliedAt: String(data?.applied_at ?? data?.appliedAt ?? ""),
+  };
+}
+
+export async function rollbackRuntimeTuning(): Promise<boolean> {
+  if (!isTauri()) {
+    return true;
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  const result = await invoke<boolean>("runtime_tuning_rollback");
+  return Boolean(result);
 }
 
 export async function artworkGet(
@@ -1141,8 +1445,12 @@ export async function fetchSteamPopular(
   };
 }
 
-export async function fetchSteamGameDetail(appId: string): Promise<SteamGameDetail> {
-  const data = await requestJson<any>(`/steam/games/${appId}`);
+export async function fetchSteamGameDetail(
+  appId: string,
+  locale?: string | null
+): Promise<SteamGameDetail> {
+  const query = locale ? `?locale=${encodeURIComponent(locale)}` : "";
+  const data = await requestJson<any>(`/steam/games/${appId}${query}`);
   return mapSteamGameDetail(data);
 }
 
@@ -1517,29 +1825,58 @@ export async function fetchLocaleSettings(): Promise<{
   systemLocale: string;
   supported: string[];
 }> {
-  const data = await requestJson<any>("/settings/locale");
-  return {
-    locale: data.locale ?? "en",
-    source: data.source ?? "default",
-    systemLocale: data.system_locale ?? data.systemLocale ?? "en",
-    supported: Array.isArray(data.supported) ? data.supported : ["en", "vi"]
-  };
+  try {
+    const data = await requestJson<any>("/settings/locale");
+    return {
+      locale: data.locale ?? "en",
+      source: data.source ?? "default",
+      systemLocale: data.system_locale ?? data.systemLocale ?? "en",
+      supported: Array.isArray(data.supported) ? data.supported : ["en", "vi"]
+    };
+  } catch {
+    const browserLocale =
+      typeof navigator !== "undefined" && typeof navigator.language === "string"
+        ? navigator.language.toLowerCase()
+        : "en";
+    const resolved = browserLocale.startsWith("vi") ? "vi" : "en";
+    return {
+      locale: resolved,
+      source: "runtime_fallback",
+      systemLocale: resolved,
+      supported: ["en", "vi"]
+    };
+  }
 }
 
 export async function fetchLocaleBundle(locale: string): Promise<Record<string, string>> {
-  const data = await requestJson<any>(`/settings/locales/${encodeURIComponent(locale)}`);
-  const messages = data?.messages;
-  if (!messages || typeof messages !== "object") {
-    return {};
-  }
-
-  const normalized: Record<string, string> = {};
-  Object.entries(messages).forEach(([key, value]) => {
-    if (typeof value === "string") {
-      normalized[key] = value;
+  const normalizeMessages = (messages: unknown): Record<string, string> => {
+    if (!messages || typeof messages !== "object") {
+      return {};
     }
-  });
-  return normalized;
+    const normalized: Record<string, string> = {};
+    Object.entries(messages as Record<string, unknown>).forEach(([key, value]) => {
+      if (typeof value === "string") {
+        normalized[key] = value;
+      }
+    });
+    return normalized;
+  };
+
+  try {
+    const data = await requestJson<any>(`/settings/locales/${encodeURIComponent(locale)}`);
+    return normalizeMessages(data?.messages);
+  } catch {
+    try {
+      const response = await fetch(`/locales/${encodeURIComponent(locale)}.json`);
+      if (!response.ok) {
+        return {};
+      }
+      const payload = await response.json();
+      return normalizeMessages(payload);
+    } catch {
+      return {};
+    }
+  }
 }
 
 export async function updateLocaleSettings(locale: string): Promise<{
@@ -1789,8 +2126,30 @@ function mapSteamCatalogItem(raw: any): SteamCatalogItem {
     t4: toThumb(heroImageSource, 1600, "high"),
     version: Number.isFinite(Number(rawArtwork.version)) ? Number(rawArtwork.version) : 1,
   };
-  const dlcCountRaw = raw.dlc_count ?? raw.dlcCount;
+  const dlcCountRaw =
+    raw.dlc_count ??
+    raw.dlcCount ??
+    (Array.isArray(raw.dlc) ? raw.dlc.length : null);
   const dlcCount = Number.isFinite(Number(dlcCountRaw)) ? Number(dlcCountRaw) : 0;
+  const itemTypeRaw = raw.item_type ?? raw.itemType ?? raw.type;
+  const itemType =
+    typeof itemTypeRaw === "string" && itemTypeRaw.trim()
+      ? itemTypeRaw.trim().toLowerCase()
+      : null;
+  const isDlc = Boolean(raw.is_dlc ?? raw.isDlc ?? itemType === "dlc");
+  const isBaseGame = Boolean(raw.is_base_game ?? raw.isBaseGame ?? !isDlc);
+  const classificationRaw = Number(raw.classification_confidence ?? raw.classificationConfidence);
+  const classificationConfidence = Number.isFinite(classificationRaw)
+    ? classificationRaw
+    : undefined;
+  const artworkCoverageRaw = raw.artwork_coverage ?? raw.artworkCoverage ?? null;
+  const artworkCoverage =
+    artworkCoverageRaw === "sgdb" ||
+    artworkCoverageRaw === "epic" ||
+    artworkCoverageRaw === "steam" ||
+    artworkCoverageRaw === "mixed"
+      ? artworkCoverageRaw
+      : undefined;
   return {
     appId,
     name: raw.name ?? (appId ? `Steam App ${appId}` : ""),
@@ -1811,6 +2170,11 @@ function mapSteamCatalogItem(raw: any): SteamCatalogItem {
     genres: raw.genres ?? [],
     releaseDate: raw.release_date ?? raw.releaseDate ?? null,
     platforms: raw.platforms ?? [],
+    itemType,
+    isDlc,
+    isBaseGame,
+    classificationConfidence,
+    artworkCoverage,
     dlcCount
   };
 }
@@ -1843,7 +2207,8 @@ function mapSteamGameDetail(raw: any): SteamGameDetail {
     metacritic: raw.metacritic ?? null,
     recommendations: raw.recommendations ?? null,
     website: raw.website ?? null,
-    supportInfo: raw.support_info ?? raw.supportInfo ?? null
+    supportInfo: raw.support_info ?? raw.supportInfo ?? null,
+    contentLocale: raw.content_locale ?? raw.contentLocale ?? null
   };
 }
 

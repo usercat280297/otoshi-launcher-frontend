@@ -18,6 +18,7 @@ pub mod remote_download_service;
 pub mod security_guard;
 pub mod self_heal;
 pub mod streaming_service;
+pub mod steam_prefetch_worker;
 pub mod telemetry_service;
 pub mod workshop_service;
 

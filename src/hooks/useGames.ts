@@ -4,7 +4,8 @@ import {
   fetchSteamCatalog,
   fetchSteamIndexCatalog,
   fetchSteamGridAssets,
-  fetchSteamGridAssetsBatch,
+  fetchSteamIndexAssetsBatch,
+  prefetchSteamIndexAssets,
 } from "../services/api";
 import { Game, SteamCatalogItem, SystemRequirements } from "../types";
 
@@ -72,6 +73,7 @@ const ART_BATCH_FLUSH_MS = 120;
 const STARTUP_MAX_ATTEMPTS = 8;
 const STARTUP_RETRY_BASE_MS = 700;
 const STARTUP_RETRY_MAX_MS = 4000;
+const FORCE_REFRESH_VISIBLE_LIMIT = 120;
 const isDev = Boolean(import.meta.env.DEV);
 
 const debugLog = (...args: unknown[]) => {
@@ -92,7 +94,14 @@ const mapSteamItemToGame = (item: SteamCatalogItem, index: number): Game => {
   const discountPercent = item.price?.discountPercent ?? 0;
   const headerImage = item.artwork?.t3 || item.headerImage || item.capsuleImage || "";
   const heroImage = item.artwork?.t4 || item.background || headerImage;
-  const iconImage = item.artwork?.t0 || null;
+  const iconImage =
+    item.artwork?.t3 ||
+    item.artwork?.t2 ||
+    item.artwork?.t1 ||
+    item.artwork?.t0 ||
+    item.capsuleImage ||
+    item.headerImage ||
+    null;
   return {
     id: `steam-${item.appId}`,
     slug: `steam-${item.appId}`,
@@ -121,6 +130,42 @@ const mapSteamItemToGame = (item: SteamCatalogItem, index: number): Game => {
     playtimeHours: 0
   };
 };
+
+function mergeIndexAssets(
+  items: SteamCatalogItem[],
+  assetsByAppId: Record<
+    string,
+    { grid?: string | null; hero?: string | null; logo?: string | null; icon?: string | null } | null
+  >
+): SteamCatalogItem[] {
+  return items.map((item) => {
+    const key = String(item.appId || "").trim();
+    const assets = key ? assetsByAppId[key] : null;
+    if (!assets) {
+      return item;
+    }
+
+    const grid = assets.grid || item.artwork?.t3 || item.headerImage || item.capsuleImage || null;
+    const hero = assets.hero || item.background || item.artwork?.t4 || grid;
+    const icon = assets.icon || item.artwork?.t0 || item.capsuleImage || item.headerImage || null;
+
+    return {
+      ...item,
+      headerImage: grid || item.headerImage,
+      capsuleImage: grid || item.capsuleImage,
+      background: hero || item.background,
+      artwork: {
+        ...(item.artwork || {}),
+        t0: icon,
+        t1: grid || item.artwork?.t1 || item.capsuleImage || null,
+        t2: grid || item.artwork?.t2 || item.headerImage || null,
+        t3: grid || item.artwork?.t3 || item.capsuleImage || item.headerImage || null,
+        t4: hero || item.artwork?.t4 || item.background || item.headerImage || null,
+        version: Number(item.artwork?.version || 1) + 1,
+      },
+    };
+  });
+}
 
 export function useGames() {
   const [games, setGames] = useState<Game[]>([]);
@@ -233,7 +278,7 @@ export function useGames() {
         const steamCatalog = await fetchSteamIndexCatalog({
           limit: 80,
           offset: 0,
-          sort: "recent",
+          sort: "priority",
           scope: "all"
         });
         const withAppId = steamCatalog.items.filter(
@@ -242,10 +287,28 @@ export function useGames() {
         const preferred = withAppId.filter(
           (item) => !isPlaceholderSteamTitle(item.name)
         );
-        const sourceItems = preferred.length ? preferred : withAppId;
+        let sourceItems = preferred.length ? preferred : withAppId;
         if (!sourceItems.length) {
           return [];
         }
+
+        // Try to enrich the most visible items first (hero/featured rails) so the UI
+        // can render SGDB/Epic-quality posters without showing Steam fallback swaps.
+        try {
+          const visibleIds = sourceItems.slice(0, 24).map((item) => item.appId);
+          const batchResult = await fetchSteamIndexAssetsBatch({ appIds: visibleIds });
+          const assetsMap: Record<
+            string,
+            { grid?: string | null; hero?: string | null; logo?: string | null; icon?: string | null } | null
+          > = {};
+          for (const [appId, info] of Object.entries(batchResult)) {
+            assetsMap[String(appId)] = info?.assets ?? null;
+          }
+          sourceItems = mergeIndexAssets(sourceItems, assetsMap);
+        } catch {
+          // keep base catalog assets on enrichment failure
+        }
+
         const mapped = sourceItems.map((item, index) => {
           const game = mapSteamItemToGame(item, index);
           return { ...game, studio: "Steam" };
@@ -283,35 +346,60 @@ export function useGames() {
             void (async () => {
               const batchPayload = data
                 .filter((game) => Boolean(game.steamAppId))
-                .map((game) => ({
-                  appId: game.steamAppId || null,
-                  title: game.title,
-                }));
-              const batchResult = await fetchSteamGridAssetsBatch(batchPayload).catch(() => ({}));
+                .map((game) => String(game.steamAppId || "").trim())
+                .filter((value, index, self) => Boolean(value) && self.indexOf(value) === index);
+              const batchResult = await fetchSteamIndexAssetsBatch({
+                appIds: batchPayload,
+              }).catch(() => ({} as Record<string, any>));
               const missingBatch: Game[] = [];
 
               for (const game of data) {
                 const appId = game.steamAppId ? String(game.steamAppId) : "";
-                const artFromBatch = appId ? batchResult[appId] : null;
-                if (artFromBatch) {
-                  queueArtPatch(game.id, artFromBatch);
+                const resolved = appId ? (batchResult as any)[appId] : null;
+                const assets = resolved?.assets ?? null;
+                if (assets) {
+                  queueArtPatch(game.id, assets);
                 } else {
                   missingBatch.push(game);
                 }
               }
 
               if (!missingBatch.length) {
-                return;
+                // Continue with force-refresh path to sanitize stale cached assets.
+              } else {
+                await mapWithLimit(missingBatch, ART_CONCURRENCY, async (game) => {
+                  const art = await fetchSteamGridAssets(game.title, game.steamAppId);
+                  if (!mounted || !art) {
+                    return game;
+                  }
+                  queueArtPatch(game.id, art);
+                  return game;
+                });
               }
 
-              await mapWithLimit(missingBatch, ART_CONCURRENCY, async (game) => {
-                const art = await fetchSteamGridAssets(game.title, game.steamAppId);
-                if (!mounted || !art) {
-                  return game;
+              const refreshIds = batchPayload.slice(0, FORCE_REFRESH_VISIBLE_LIMIT);
+              if (!refreshIds.length) {
+                return;
+              }
+              await prefetchSteamIndexAssets({
+                appIds: refreshIds,
+                forceRefresh: true,
+              }).catch(() => undefined);
+
+              const refreshedBatch = await fetchSteamIndexAssetsBatch({
+                appIds: refreshIds,
+                forceRefresh: true,
+              }).catch(() => ({} as Record<string, any>));
+
+              for (const game of data) {
+                const appId = game.steamAppId ? String(game.steamAppId) : "";
+                if (!appId) continue;
+                const refreshed = (refreshedBatch as any)[appId];
+                const refreshedAssets = refreshed?.assets ?? null;
+                if (refreshedAssets) {
+                  queueArtPatch(game.id, refreshedAssets);
                 }
-                queueArtPatch(game.id, art);
-                return game;
-              });
+              }
             })();
             return;
           }

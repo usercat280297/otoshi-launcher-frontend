@@ -62,8 +62,8 @@ export default function SteamGameDetailPage() {
   const { appId } = useParams();
   const navigate = useNavigate();
   const { token } = useAuth();
-  const { t } = useLocale();
-  const { game, loading, error } = useSteamGame(appId);
+  const { t, locale } = useLocale();
+  const { game, loading, error } = useSteamGame(appId, locale);
   const { tasks, pause, resume, cancel } = useDownloads();
   const [actionError, setActionError] = useState<string | null>(null);
   const [startingDownload, setStartingDownload] = useState(false);
@@ -419,6 +419,7 @@ export default function SteamGameDetailPage() {
   const heroImage = game.heroImage || game.background || game.headerImage || "";
   const platformLabel = (game.platforms || []).join(", ") || "Unknown";
   const iconImage = game.iconImage || game.logoImage || game.headerImage || "";
+  const isCurrentTitleDlc = Boolean(game.isDlc || game.itemType === "dlc");
   const resolvedDlcCount = Math.max(
     Number(game.dlcCount || 0),
     Number(extendedData?.dlc?.total || 0),
@@ -599,7 +600,11 @@ export default function SteamGameDetailPage() {
             )}
             <div className="flex flex-wrap gap-2">
               {game.denuvo && <Badge label="Denuvo" tone="danger" />}
-              {resolvedDlcCount > 0 ? <Badge label={`DLC ${resolvedDlcCount}`} tone="primary" /> : null}
+              {isCurrentTitleDlc ? <Badge label={t("game.dlc")} tone="secondary" /> : null}
+              {!isCurrentTitleDlc ? <Badge label={t("store.base_game")} tone="secondary" /> : null}
+              {!isCurrentTitleDlc && resolvedDlcCount > 0 ? (
+                <Badge label={`DLC ${resolvedDlcCount}`} tone="primary" />
+              ) : null}
               {tags.map((tag) => (
                 <Badge key={tag} label={tag} tone="primary" />
               ))}

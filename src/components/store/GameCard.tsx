@@ -4,6 +4,8 @@ import { Game } from "../../types";
 import { getMediaProtectionProps } from "../../utils/mediaProtection";
 import Badge from "../common/Badge";
 
+const POSTER_PLACEHOLDER = "/icons/game-placeholder.svg";
+
 export default function GameCard({
   game,
   onOpen,
@@ -16,10 +18,82 @@ export default function GameCard({
   const discounted = game.discountPercent > 0;
   const price = (game.price * (1 - game.discountPercent / 100)).toFixed(2);
   const displayPrice = game.price <= 0 ? "Free" : `$${price}`;
-  const [displayImage, setDisplayImage] = useState<string | null>(null);
+  const [activeImage, setActiveImage] = useState<string | null>(null);
+  const [incomingImage, setIncomingImage] = useState<string | null>(null);
+  const [incomingReady, setIncomingReady] = useState(false);
   const fallbackTimerRef = useRef<number | null>(null);
+  const commitTimerRef = useRef<number | null>(null);
+  const activeImageRef = useRef<string | null>(null);
+  const incomingImageRef = useRef<string | null>(null);
   const FALLBACK_DELAY_MS = 1500;
   const fallbackImage = game.capsuleImage || game.headerImage || game.heroImage || null;
+  const steamStaticBase =
+    game.steamAppId && /^\d+$/.test(String(game.steamAppId))
+      ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.steamAppId}`
+      : null;
+
+  const posterCandidates = [
+    game.capsuleImage,
+    game.headerImage,
+    game.heroImage,
+    game.iconImage,
+    steamStaticBase ? `${steamStaticBase}/library_600x900.jpg` : null,
+    steamStaticBase ? `${steamStaticBase}/header.jpg` : null,
+    steamStaticBase ? `${steamStaticBase}/capsule_616x353.jpg` : null,
+    steamStaticBase ? `${steamStaticBase}/capsule_231x87.jpg` : null,
+    steamStaticBase ? `${steamStaticBase}/capsule_sm_120.jpg` : null,
+    steamStaticBase ? `${steamStaticBase}/capsule_184x69.jpg` : null,
+    steamStaticBase ? `${steamStaticBase}/icon.jpg` : null,
+    steamStaticBase ? `${steamStaticBase}/logo.png` : null,
+    POSTER_PLACEHOLDER,
+  ]
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter((value, index, self) => Boolean(value) && self.indexOf(value) === index);
+
+  const getNextPosterCandidate = (current: string | null): string | null => {
+    if (!posterCandidates.length) return null;
+    const idx = current ? posterCandidates.indexOf(current) : -1;
+    for (let next = idx + 1; next < posterCandidates.length; next += 1) {
+      const candidate = posterCandidates[next];
+      if (candidate && candidate !== current) return candidate;
+    }
+    return null;
+  };
+
+  useEffect(() => {
+    activeImageRef.current = activeImage;
+  }, [activeImage]);
+
+  useEffect(() => {
+    incomingImageRef.current = incomingImage;
+  }, [incomingImage]);
+
+  const requestImage = (value: string | null) => {
+    const src = typeof value === "string" ? value.trim() : "";
+    if (!src) return;
+    const current = activeImageRef.current;
+    const incoming = incomingImageRef.current;
+    if (src === current || src === incoming) return;
+    setIncomingReady(false);
+    setIncomingImage(src);
+  };
+
+  useEffect(() => {
+    if (!incomingImage || !incomingReady) return;
+    if (commitTimerRef.current) {
+      window.clearTimeout(commitTimerRef.current);
+    }
+    commitTimerRef.current = window.setTimeout(() => {
+      setActiveImage(incomingImage);
+      setIncomingImage(null);
+      setIncomingReady(false);
+    }, 220);
+    return () => {
+      if (commitTimerRef.current) {
+        window.clearTimeout(commitTimerRef.current);
+      }
+    };
+  }, [incomingImage, incomingReady]);
 
   const mapSources = (item: Game) => ({
     t0: item.capsuleImage || item.iconImage || item.headerImage || item.heroImage || null,
@@ -37,14 +111,18 @@ export default function GameCard({
       window.clearTimeout(fallbackTimerRef.current);
     }
     if (!fallbackImage) {
-      setDisplayImage(null);
+      setActiveImage(null);
+      setIncomingImage(null);
+      setIncomingReady(false);
       return () => {
         active = false;
       };
     }
     fallbackTimerRef.current = window.setTimeout(() => {
       if (!active) return;
-      setDisplayImage((current) => current || fallbackImage);
+      if (!activeImageRef.current && !incomingImageRef.current) {
+        requestImage(posterCandidates[0] || fallbackImage);
+      }
     }, FALLBACK_DELAY_MS);
     const dpr = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
 
@@ -54,14 +132,14 @@ export default function GameCard({
       const lowTier = await artworkGet(gameId, 1, dpr, sources).catch(() => null);
       if (!active) return;
       if (lowTier) {
-        setDisplayImage(lowTier);
+        requestImage(lowTier);
       } else {
-        setDisplayImage(fallbackImage);
+        requestImage(posterCandidates[0] || fallbackImage);
       }
 
       const highTier = await artworkGet(gameId, 3, dpr, sources).catch(() => null);
       if (!active || !highTier) return;
-      setDisplayImage(highTier);
+      requestImage(highTier);
     };
 
     void loadProgressive();
@@ -70,6 +148,9 @@ export default function GameCard({
       active = false;
       if (fallbackTimerRef.current) {
         window.clearTimeout(fallbackTimerRef.current);
+      }
+      if (commitTimerRef.current) {
+        window.clearTimeout(commitTimerRef.current);
       }
     };
   }, [fallbackImage, game]);
@@ -91,15 +172,43 @@ export default function GameCard({
       <div className="relative aspect-[3/4] overflow-hidden rounded-xl border border-background-border bg-background-surface shadow-soft">
         <div
           className={`absolute inset-0 ghost-placeholder transition-opacity duration-500 ${
-            displayImage ? "opacity-0" : "opacity-100"
+            activeImage || (incomingImage && incomingReady) ? "opacity-0" : "opacity-100"
           }`}
           aria-hidden
         />
-        {displayImage && (
+        {activeImage && (
           <img
-            src={displayImage}
+            src={activeImage}
             alt={game.title}
-            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]"
+            className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]"
+            onError={() => {
+              const next = getNextPosterCandidate(activeImageRef.current);
+              if (next && next !== activeImageRef.current) {
+                requestImage(next);
+              }
+            }}
+            {...getMediaProtectionProps()}
+          />
+        )}
+        {incomingImage && (
+          <img
+            src={incomingImage}
+            alt={game.title}
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${
+              incomingReady ? "opacity-100" : "opacity-0"
+            }`}
+            onLoad={() => setIncomingReady(true)}
+            onError={() => {
+              const current = incomingImageRef.current || incomingImage;
+              const next = getNextPosterCandidate(current);
+              if (next && next !== current) {
+                setIncomingReady(false);
+                setIncomingImage(next);
+              } else {
+                setIncomingReady(false);
+                setIncomingImage(null);
+              }
+            }}
             {...getMediaProtectionProps()}
           />
         )}

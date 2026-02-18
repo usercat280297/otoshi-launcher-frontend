@@ -178,7 +178,7 @@ export default function DownloadCard({ task, onPause, onResume, onCancel }: Down
                 return;
               }
               target.dataset.fallbackApplied = "1";
-              target.src = "/icons/epic-games-shield.svg";
+              target.src = "/icons/game-placeholder.svg";
             }}
           />
           <div className="absolute inset-0 bg-gradient-to-br from-background/75 via-background/88 to-background/94" />
@@ -200,7 +200,7 @@ export default function DownloadCard({ task, onPause, onResume, onCancel }: Down
                   return;
                 }
                 target.dataset.fallbackApplied = "1";
-                target.src = "/icons/epic-games-shield.svg";
+                target.src = "/icons/game-placeholder.svg";
               }}
             />
           ) : (

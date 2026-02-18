@@ -13,7 +13,8 @@ import { useSteamSearchMemory } from "../hooks/useSteamSearchMemory";
 import {
   fetchSteamCatalog,
   fetchSteamIndexCatalog,
-  fetchSteamGridAssetsBatch,
+  fetchSteamIndexAssetsBatch,
+  prefetchSteamIndexAssets,
   searchSteamIndexCatalog,
   getApiDebugInfo,
   runLauncherFirstRunDiagnostics,
@@ -30,7 +31,12 @@ const CATALOG_FETCH_MAX_ATTEMPTS = 5;
 const CATALOG_FETCH_RETRY_BASE_MS = 500;
 const CATALOG_FETCH_RETRY_MAX_MS = 2500;
 const FIRST_RUN_DIAGNOSTIC_KEY = "otoshi.first_run.diagnostics.v1";
+const IMAGE_PLACEHOLDER = "/icons/game-placeholder.svg";
+const VISIBLE_FORCE_REFRESH_DEBOUNCE_MS = 450;
+const VISIBLE_FORCE_REFRESH_MAX_IDS = 160;
 const normalizeSearch = (value: string) => value.trim().toLowerCase();
+const DLC_QUERY_HINT = /\b(dlc|season pass|expansion|soundtrack|costume|pack|set|bonus|mission|pachislot)\b/i;
+const isDlcSearchQuery = (value: string) => DLC_QUERY_HINT.test(value.trim());
 const wait = (ms: number) =>
   new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 const getCatalogRetryDelayMs = (attempt: number) =>
@@ -72,6 +78,24 @@ function mergeSteamGridAssets(
   });
 }
 
+function pickSuggestionImage(item: SteamCatalogItem): string | null {
+  const candidates = [
+    item.artwork?.t3,
+    item.artwork?.t2,
+    item.artwork?.t1,
+    item.capsuleImage,
+    item.headerImage,
+    item.background,
+    item.artwork?.t0,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate;
+    }
+  }
+  return IMAGE_PLACEHOLDER;
+}
+
 export default function StorePage() {
   const navigate = useNavigate();
   const { games, loading, error, errorCode } = useGames();
@@ -100,6 +124,9 @@ export default function StorePage() {
   const searchPreviewRequestRef = useRef(0);
   const allPageCacheRef = useRef(new Map<number, { items: SteamCatalogItem[]; total: number }>());
   const allPageRequestSeqRef = useRef(0);
+  const forceRefreshSeenRef = useRef(new Set<string>());
+  const forceRefreshInflightRef = useRef(new Set<string>());
+  const forceRefreshTimerRef = useRef<number | null>(null);
   const { suggestions, recordSearch } = useSteamSearchMemory();
 
   const rotateDenuvoRail = useCallback(() => {
@@ -161,7 +188,7 @@ export default function StorePage() {
             data = await fetchSteamIndexCatalog({
               limit: ALL_GAMES_PAGE_SIZE,
               offset,
-              sort: "recent",
+              sort: "priority",
               scope: "all",
             });
           } catch {
@@ -175,13 +202,17 @@ export default function StorePage() {
           let enrichedItems = data.items;
           if (enrichedItems.length) {
             try {
-              const batchAssets = await fetchSteamGridAssetsBatch(
-                enrichedItems.map((item) => ({
-                  appId: item.appId,
-                  title: item.name,
-                }))
-              );
-              enrichedItems = mergeSteamGridAssets(enrichedItems, batchAssets);
+              const batchResult = await fetchSteamIndexAssetsBatch({
+                appIds: enrichedItems.map((item) => item.appId),
+              });
+              const assetsMap: Record<
+                string,
+                { grid?: string | null; hero?: string | null; logo?: string | null; icon?: string | null } | null
+              > = {};
+              for (const [appId, info] of Object.entries(batchResult)) {
+                assetsMap[String(appId)] = info?.assets ?? null;
+              }
+              enrichedItems = mergeSteamGridAssets(enrichedItems, assetsMap);
             } catch {
               // keep base Steam catalog assets on batch failure
             }
@@ -392,6 +423,9 @@ export default function StorePage() {
             limit: SEARCH_PREVIEW_LIMIT,
             offset: 0,
             source: "global",
+            includeDlc: isDlcSearchQuery(trimmed),
+            rankingMode: "priority",
+            mustHaveArtwork: false,
           });
           return indexData;
         } catch {
@@ -428,8 +462,20 @@ export default function StorePage() {
       label: item.name,
       value: item.name,
       kind: "result" as const,
-      image: item.headerImage ?? item.capsuleImage ?? null,
+      image: pickSuggestionImage(item),
+      imageCandidates: [
+        item.artwork?.t3 ?? null,
+        item.artwork?.t2 ?? null,
+        item.artwork?.t1 ?? null,
+        item.headerImage ?? null,
+        item.capsuleImage ?? null,
+        item.background ?? null,
+        item.artwork?.t0 ?? null,
+      ].filter((value): value is string => typeof value === "string" && value.trim().length > 0),
       meta: `#${item.appId}`,
+      isDlc: Boolean(item.isDlc),
+      kindTag: (item.isDlc ? "DLC" : "BASE") as "DLC" | "BASE",
+      artSource: item.artworkCoverage ?? undefined,
       appId: item.appId
     }));
   }, [searchPreviewItems, searchQuery]);
@@ -462,6 +508,97 @@ export default function StorePage() {
   const topSellers = games.slice(0, 5);
   const mostPlayed = games.slice(2, 7);
   const wishlisted = games.slice(4, 9);
+  const visibleForceRefreshIds = useMemo(() => {
+    const ordered: string[] = [];
+    const add = (value?: string | null) => {
+      const normalized = String(value || "").trim();
+      if (!/^\d+$/.test(normalized)) return;
+      if (ordered.includes(normalized)) return;
+      ordered.push(normalized);
+    };
+
+    games.forEach((game) => add(game.steamAppId));
+    allGames.forEach((item) => add(item.appId));
+    searchPreviewItems.forEach((item) => add(item.appId));
+    suggestions.forEach((item) => add(item.appId || null));
+
+    return ordered.slice(0, VISIBLE_FORCE_REFRESH_MAX_IDS);
+  }, [allGames, games, searchPreviewItems, suggestions]);
+
+  useEffect(() => {
+    if (!visibleForceRefreshIds.length) {
+      return;
+    }
+    if (forceRefreshTimerRef.current != null) {
+      window.clearTimeout(forceRefreshTimerRef.current);
+    }
+
+    forceRefreshTimerRef.current = window.setTimeout(() => {
+      const pending = visibleForceRefreshIds.filter(
+        (appId) =>
+          !forceRefreshSeenRef.current.has(appId) &&
+          !forceRefreshInflightRef.current.has(appId)
+      );
+      if (!pending.length) {
+        return;
+      }
+      pending.forEach((appId) => forceRefreshInflightRef.current.add(appId));
+
+      void (async () => {
+        try {
+          await prefetchSteamIndexAssets({
+            appIds: pending,
+            forceRefresh: true,
+          }).catch(() => undefined);
+
+          const refreshed = await fetchSteamIndexAssetsBatch({
+            appIds: pending,
+            forceRefresh: true,
+          }).catch(() => ({} as Record<string, any>));
+
+          const assetsMap: Record<
+            string,
+            { grid?: string | null; hero?: string | null; logo?: string | null; icon?: string | null } | null
+          > = {};
+          const refreshedIds = new Set<string>();
+          for (const [appId, info] of Object.entries(refreshed || {})) {
+            assetsMap[String(appId)] = (info as any)?.assets ?? null;
+            refreshedIds.add(String(appId));
+          }
+
+          if (Object.keys(assetsMap).length) {
+            setAllGames((prev) => mergeSteamGridAssets(prev, assetsMap));
+            setSearchPreviewItems((prev) => mergeSteamGridAssets(prev, assetsMap));
+
+            allPageCacheRef.current.forEach((payload, pageIndex) => {
+              allPageCacheRef.current.set(pageIndex, {
+                ...payload,
+                items: mergeSteamGridAssets(payload.items, assetsMap),
+              });
+            });
+
+            searchPreviewCacheRef.current.forEach((items, cacheKey) => {
+              searchPreviewCacheRef.current.set(cacheKey, mergeSteamGridAssets(items, assetsMap));
+            });
+          }
+
+          pending.forEach((appId) => {
+            if (refreshedIds.has(appId)) {
+              forceRefreshSeenRef.current.add(appId);
+            }
+          });
+        } finally {
+          pending.forEach((appId) => forceRefreshInflightRef.current.delete(appId));
+        }
+      })();
+    }, VISIBLE_FORCE_REFRESH_DEBOUNCE_MS);
+
+    return () => {
+      if (forceRefreshTimerRef.current != null) {
+        window.clearTimeout(forceRefreshTimerRef.current);
+      }
+    };
+  }, [visibleForceRefreshIds]);
 
   const promoTiles = useMemo(() => [
     {
@@ -538,9 +675,14 @@ export default function StorePage() {
             className="flex w-full items-center gap-3 text-left"
           >
             <img
-              src={game.iconImage || game.headerImage}
+              src={game.iconImage || game.headerImage || IMAGE_PLACEHOLDER}
               alt={game.title}
               className="h-12 w-12 rounded-lg object-cover"
+              onError={(event) => {
+                const img = event.currentTarget;
+                if (img.src.endsWith(IMAGE_PLACEHOLDER)) return;
+                img.src = IMAGE_PLACEHOLDER;
+              }}
             />
             <div className="flex-1 space-y-1">
               <p className="text-sm font-semibold">{game.title}</p>

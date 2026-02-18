@@ -35,6 +35,7 @@ use crate::services::{
     RemoteDownloadService, SecurityGuardService, SelfHealService, StreamingService, TelemetryService,
     WorkshopService,
 };
+use crate::services::steam_prefetch_worker::spawn_locale_prefetch_worker;
 use crate::utils::file::FileManager;
 use crate::utils::paths::{resolve_cache_dir, resolve_data_dir, resolve_games_dir};
 
@@ -693,8 +694,9 @@ fn main() {
             // If LAUNCHER_API_URL is set, we assume user manages backend themselves.
             let backend_child = backend_sidecar::spawn_backend(&handle)?;
 
-            let state = build_state(&handle)?;
-            app.manage(Arc::new(state));
+            let state = Arc::new(build_state(&handle)?);
+            spawn_locale_prefetch_worker(state.clone());
+            app.manage(state);
 
             // Keep the backend process alive for the lifetime of the app.
             // The BackendProcess guard will kill it when the app exits (Drop).
@@ -743,6 +745,10 @@ fn main() {
             commands::system::artwork_prefetch,
             commands::system::artwork_release,
             commands::system::perf_snapshot,
+            commands::system::asm_probe_cpu_capabilities,
+            commands::system::runtime_tuning_recommend,
+            commands::system::runtime_tuning_apply,
+            commands::system::runtime_tuning_rollback,
             commands::security::get_hardware_id,
             commands::security::validate_license,
             commands::security_v2::inspect_security_v2,

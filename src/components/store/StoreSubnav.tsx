@@ -15,6 +15,57 @@ type StoreSubnavProps = {
   hideSearch?: boolean;
 };
 
+const SEARCH_IMAGE_PLACEHOLDER = "/icons/game-placeholder.svg";
+
+function decodeEmbeddedThumbnail(url: string): string | null {
+  try {
+    const parsed = new URL(url, window.location.origin);
+    const original = parsed.searchParams.get("url");
+    if (!original) return null;
+    const decoded = decodeURIComponent(original);
+    return decoded && decoded !== url ? decoded : null;
+  } catch {
+    return null;
+  }
+}
+
+function pushCandidate(target: string[], value?: string | null) {
+  if (typeof value !== "string") return;
+  const trimmed = value.trim();
+  if (!trimmed) return;
+  if (target.includes(trimmed)) return;
+  target.push(trimmed);
+}
+
+function buildImageCandidates(item: SearchSuggestion): string[] {
+  const candidates: string[] = [];
+  const values = [
+    ...(Array.isArray(item.imageCandidates) ? item.imageCandidates : []),
+    item.image,
+  ];
+  for (const value of values) {
+    pushCandidate(candidates, value);
+    if (typeof value === "string") {
+      pushCandidate(candidates, decodeEmbeddedThumbnail(value));
+    }
+  }
+
+  const appId = String(item.appId || "").trim();
+  if (/^\d+$/.test(appId)) {
+    const base = `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}`;
+    pushCandidate(candidates, `${base}/capsule_sm_120.jpg`);
+    pushCandidate(candidates, `${base}/capsule_184x69.jpg`);
+    pushCandidate(candidates, `${base}/capsule_231x87.jpg`);
+    pushCandidate(candidates, `${base}/capsule_616x353.jpg`);
+    pushCandidate(candidates, `${base}/header.jpg`);
+    pushCandidate(candidates, `${base}/library_600x900.jpg`);
+    pushCandidate(candidates, `${base}/icon.jpg`);
+  }
+
+  pushCandidate(candidates, SEARCH_IMAGE_PLACEHOLDER);
+  return candidates;
+}
+
 export default function StoreSubnav({
   placeholder,
   activeTab,
@@ -29,19 +80,26 @@ export default function StoreSubnav({
 
   const handlePreviewImageError = (event: SyntheticEvent<HTMLImageElement>) => {
     const img = event.currentTarget;
-    if (img.dataset.fallbackTried === "1") return;
-    img.dataset.fallbackTried = "1";
-
-    try {
-      const rawSrc = img.getAttribute("src") || "";
-      const parsed = new URL(rawSrc, window.location.origin);
-      const original = parsed.searchParams.get("url");
-      if (original) {
-        img.src = decodeURIComponent(original);
-      }
-    } catch {
-      // No fallback available: keep current broken state.
+    const encoded = img.dataset.candidates || "";
+    if (!encoded) {
+      img.src = SEARCH_IMAGE_PLACEHOLDER;
+      return;
     }
+    const candidates = encoded.split("||").map((value) => value.trim()).filter(Boolean);
+    if (!candidates.length) {
+      img.src = SEARCH_IMAGE_PLACEHOLDER;
+      return;
+    }
+    const currentIndex = Number(img.dataset.candidateIndex || "0");
+    const nextIndex = Number.isFinite(currentIndex) ? currentIndex + 1 : 1;
+    const next = candidates[nextIndex];
+    if (next) {
+      img.dataset.candidateIndex = String(nextIndex);
+      img.src = next;
+      return;
+    }
+    img.dataset.candidateIndex = String(candidates.length);
+    img.src = SEARCH_IMAGE_PLACEHOLDER;
   };
 
   const tabs = useMemo(() => [
@@ -109,16 +167,29 @@ export default function StoreSubnav({
                           handleSelect(item);
                         }}
                       >
-                        {item.image && (
-                          <img
-                            src={item.image}
-                            alt={item.label}
-                            className="h-9 w-9 rounded-lg object-cover"
-                            onError={handlePreviewImageError}
-                          />
-                        )}
+                        {(() => {
+                          const imageCandidates = buildImageCandidates(item);
+                          const initialImage = imageCandidates[0] || SEARCH_IMAGE_PLACEHOLDER;
+                          return (
+                            <img
+                              src={initialImage}
+                              alt={item.label}
+                              className="h-9 w-9 rounded-lg object-cover"
+                              data-candidates={imageCandidates.join("||")}
+                              data-candidate-index="0"
+                              onError={handlePreviewImageError}
+                            />
+                          );
+                        })()}
                         <div className="flex-1">
-                          <p className="text-sm font-semibold">{item.label}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold">{item.label}</p>
+                            {(item.kindTag || item.isDlc) && (
+                              <span className="rounded-full border border-primary/40 bg-primary/15 px-2 py-[1px] text-[10px] font-semibold uppercase tracking-[0.08em] text-primary">
+                                {item.kindTag === "BASE" ? t("store.base_game") : t("game.dlc")}
+                              </span>
+                            )}
+                          </div>
                           {item.meta && (
                             <p className="text-[11px] text-text-muted">{item.meta}</p>
                           )}
@@ -169,16 +240,29 @@ export default function StoreSubnav({
                           handleSelect(item);
                         }}
                       >
-                        {item.image && (
-                          <img
-                            src={item.image}
-                            alt={item.label}
-                            className="h-9 w-9 rounded-lg object-cover"
-                            onError={handlePreviewImageError}
-                          />
-                        )}
+                        {(() => {
+                          const imageCandidates = buildImageCandidates(item);
+                          const initialImage = imageCandidates[0] || SEARCH_IMAGE_PLACEHOLDER;
+                          return (
+                            <img
+                              src={initialImage}
+                              alt={item.label}
+                              className="h-9 w-9 rounded-lg object-cover"
+                              data-candidates={imageCandidates.join("||")}
+                              data-candidate-index="0"
+                              onError={handlePreviewImageError}
+                            />
+                          );
+                        })()}
                         <div className="flex-1">
-                          <p className="text-sm font-semibold">{item.label}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold">{item.label}</p>
+                            {(item.kindTag || item.isDlc) && (
+                              <span className="rounded-full border border-primary/40 bg-primary/15 px-2 py-[1px] text-[10px] font-semibold uppercase tracking-[0.08em] text-primary">
+                                {item.kindTag === "BASE" ? t("store.base_game") : t("game.dlc")}
+                              </span>
+                            )}
+                          </div>
                           {item.meta && (
                             <p className="text-[11px] text-text-muted">{item.meta}</p>
                           )}

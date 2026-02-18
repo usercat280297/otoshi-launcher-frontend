@@ -6,6 +6,8 @@ import { useSteamSearchMemory } from "../hooks/useSteamSearchMemory";
 import {
   fetchSteamCatalog,
   fetchSteamIndexCatalog,
+  fetchSteamIndexAssetsBatch,
+  prefetchSteamIndexAssets,
   searchSteamIndexCatalog,
 } from "../services/api";
 import { SteamCatalogItem } from "../types";
@@ -13,7 +15,64 @@ import { useLocale } from "../context/LocaleContext";
 
 const PAGE_SIZE = 24;
 const SEARCH_STORAGE_KEY = "otoshi.search.steam";
+const IMAGE_PLACEHOLDER = "/icons/game-placeholder.svg";
+const VISIBLE_FORCE_REFRESH_DEBOUNCE_MS = 300;
+const VISIBLE_FORCE_REFRESH_MAX_IDS = 120;
 const normalizeSearch = (value: string) => value.trim().toLowerCase();
+
+const pickSuggestionImage = (item: SteamCatalogItem) => {
+  const candidates = [
+    item.artwork?.t3,
+    item.artwork?.t2,
+    item.artwork?.t1,
+    item.capsuleImage,
+    item.headerImage,
+    item.background,
+    item.artwork?.t0,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate;
+    }
+  }
+  return IMAGE_PLACEHOLDER;
+};
+
+function mergeSteamGridAssets(
+  items: SteamCatalogItem[],
+  assetsByAppId: Record<
+    string,
+    { grid?: string | null; hero?: string | null; logo?: string | null; icon?: string | null } | null
+  >
+): SteamCatalogItem[] {
+  return items.map((item) => {
+    const key = String(item.appId || "").trim();
+    const assets = key ? assetsByAppId[key] : null;
+    if (!assets) {
+      return item;
+    }
+
+    const grid = assets.grid || item.artwork?.t3 || item.headerImage || item.capsuleImage || null;
+    const hero = assets.hero || item.background || item.artwork?.t4 || grid;
+    const icon = assets.icon || item.artwork?.t0 || item.capsuleImage || item.headerImage || null;
+
+    return {
+      ...item,
+      headerImage: grid || item.headerImage,
+      capsuleImage: grid || item.capsuleImage,
+      background: hero || item.background,
+      artwork: {
+        ...(item.artwork || {}),
+        t0: icon,
+        t1: grid || item.artwork?.t1 || item.capsuleImage || null,
+        t2: grid || item.artwork?.t2 || item.headerImage || null,
+        t3: grid || item.artwork?.t3 || item.capsuleImage || item.headerImage || null,
+        t4: hero || item.artwork?.t4 || item.background || item.headerImage || null,
+        version: Number(item.artwork?.version || 1) + 1,
+      },
+    };
+  });
+}
 
 export default function SteamCatalogPage() {
   const navigate = useNavigate();
@@ -29,6 +88,9 @@ export default function SteamCatalogPage() {
   const searchCacheRef = useRef(
     new Map<string, { items: SteamCatalogItem[]; total: number }>()
   );
+  const forceRefreshSeenRef = useRef(new Set<string>());
+  const forceRefreshInflightRef = useRef(new Set<string>());
+  const forceRefreshTimerRef = useRef<number | null>(null);
   const { suggestions, recordSearch } = useSteamSearchMemory();
 
   const load = useCallback(
@@ -58,7 +120,7 @@ export default function SteamCatalogPage() {
             data = await fetchSteamIndexCatalog({
               limit: PAGE_SIZE,
               offset: nextOffset,
-              sort: "recent",
+              sort: "priority",
               scope: "all",
             });
           }
@@ -74,9 +136,27 @@ export default function SteamCatalogPage() {
         const totalCount = data.total ?? 0;
         setTotal(totalCount);
         setPage(pageIndex);
-        setItems(data.items);
+        let enrichedItems = data.items;
+        if (enrichedItems.length) {
+          try {
+            const batchResult = await fetchSteamIndexAssetsBatch({
+              appIds: enrichedItems.map((item) => item.appId),
+            });
+            const assetsMap: Record<
+              string,
+              { grid?: string | null; hero?: string | null; logo?: string | null; icon?: string | null } | null
+            > = {};
+            for (const [appId, info] of Object.entries(batchResult)) {
+              assetsMap[String(appId)] = info?.assets ?? null;
+            }
+            enrichedItems = mergeSteamGridAssets(enrichedItems, assetsMap);
+          } catch {
+            // keep base Steam catalog assets on batch failure
+          }
+        }
+        setItems(enrichedItems);
         searchCacheRef.current.set(cacheKey, {
-          items: data.items,
+          items: enrichedItems,
           total: totalCount
         });
       } catch (err: any) {
@@ -155,8 +235,9 @@ export default function SteamCatalogPage() {
       label: item.name,
       value: item.name,
       kind: "result" as const,
-      image: item.headerImage ?? item.capsuleImage ?? null,
+      image: pickSuggestionImage(item),
       meta: `#${item.appId}`,
+      isDlc: Boolean(item.isDlc),
       appId: item.appId
     }));
   }, [activeQuery, items, query]);
@@ -165,6 +246,89 @@ export default function SteamCatalogPage() {
     () => [...resultSuggestions, ...suggestions],
     [resultSuggestions, suggestions]
   );
+
+  const visibleForceRefreshIds = useMemo(() => {
+    const ordered: string[] = [];
+    const add = (value?: string | null) => {
+      const normalized = String(value || "").trim();
+      if (!/^\d+$/.test(normalized)) return;
+      if (ordered.includes(normalized)) return;
+      ordered.push(normalized);
+    };
+
+    items.forEach((item) => add(item.appId));
+    resultSuggestions.forEach((item) => add(item.appId || null));
+    suggestions.forEach((item) => add(item.appId || null));
+    return ordered.slice(0, VISIBLE_FORCE_REFRESH_MAX_IDS);
+  }, [items, resultSuggestions, suggestions]);
+
+  useEffect(() => {
+    if (!visibleForceRefreshIds.length) {
+      return;
+    }
+    if (forceRefreshTimerRef.current != null) {
+      window.clearTimeout(forceRefreshTimerRef.current);
+    }
+
+    forceRefreshTimerRef.current = window.setTimeout(() => {
+      const pending = visibleForceRefreshIds.filter(
+        (appId) =>
+          !forceRefreshSeenRef.current.has(appId) &&
+          !forceRefreshInflightRef.current.has(appId)
+      );
+      if (!pending.length) {
+        return;
+      }
+      pending.forEach((appId) => forceRefreshInflightRef.current.add(appId));
+
+      void (async () => {
+        try {
+          await prefetchSteamIndexAssets({
+            appIds: pending,
+            forceRefresh: true,
+          }).catch(() => undefined);
+
+          const refreshed = await fetchSteamIndexAssetsBatch({
+            appIds: pending,
+            forceRefresh: true,
+          }).catch(() => ({} as Record<string, any>));
+
+          const assetsMap: Record<
+            string,
+            { grid?: string | null; hero?: string | null; logo?: string | null; icon?: string | null } | null
+          > = {};
+          const refreshedIds = new Set<string>();
+          for (const [appId, info] of Object.entries(refreshed || {})) {
+            assetsMap[String(appId)] = (info as any)?.assets ?? null;
+            refreshedIds.add(String(appId));
+          }
+          if (Object.keys(assetsMap).length) {
+            setItems((prev) => mergeSteamGridAssets(prev, assetsMap));
+            searchCacheRef.current.forEach((payload, cacheKey) => {
+              searchCacheRef.current.set(cacheKey, {
+                ...payload,
+                items: mergeSteamGridAssets(payload.items, assetsMap),
+              });
+            });
+          }
+
+          pending.forEach((appId) => {
+            if (refreshedIds.has(appId)) {
+              forceRefreshSeenRef.current.add(appId);
+            }
+          });
+        } finally {
+          pending.forEach((appId) => forceRefreshInflightRef.current.delete(appId));
+        }
+      })();
+    }, VISIBLE_FORCE_REFRESH_DEBOUNCE_MS);
+
+    return () => {
+      if (forceRefreshTimerRef.current != null) {
+        window.clearTimeout(forceRefreshTimerRef.current);
+      }
+    };
+  }, [visibleForceRefreshIds]);
 
   const totalPages = useMemo(() => {
     return Math.max(1, Math.ceil(total / PAGE_SIZE));

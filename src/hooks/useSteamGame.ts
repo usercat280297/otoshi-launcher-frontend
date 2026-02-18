@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { clearSteamGameBackendCache, fetchSteamGameDetail, fetchSteamGridAssets } from "../services/api";
 import { SteamGameDetail } from "../types";
 
-export function useSteamGame(appId?: string) {
+export function useSteamGame(appId?: string, locale?: string | null) {
   const [game, setGame] = useState<SteamGameDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,14 +39,14 @@ export function useSteamGame(appId?: string) {
           return moviesMissing || shotsAreFallback;
         };
 
-        let detail = await fetchSteamGameDetail(appId);
+        let detail = await fetchSteamGameDetail(appId, locale);
 
         // If Steam cache returned a minimal payload (common when upstream fetch failed once),
         // auto-clear backend cache and retry once so users don't need to manually reload.
         if (looksLikeFallbackMedia(detail)) {
           try {
             await clearSteamGameBackendCache(appId);
-            const refreshed = await fetchSteamGameDetail(appId);
+            const refreshed = await fetchSteamGameDetail(appId, locale);
             if (scoreMedia(refreshed) > scoreMedia(detail)) {
               detail = refreshed;
             }
@@ -101,7 +101,7 @@ export function useSteamGame(appId?: string) {
     return () => {
       mounted = false;
     };
-  }, [appId]);
+  }, [appId, locale]);
 
   return { game, loading, error };
 }
