@@ -203,7 +203,22 @@ impl ArtworkCacheService {
     ) -> Result<Option<String>> {
         let normalized_tier = tier.clamp(0, 4);
         let normalized_dpi = dpi.clamp(1, 4);
-        let cache_key = format!("{}:{}:{}", game_id, normalized_tier, normalized_dpi);
+        let source_url = sources
+            .and_then(|value| value.normalized_tier(normalized_tier))
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        let cache_key = source_url
+            .as_ref()
+            .map(|url| {
+                format!(
+                    "{}:{}:{}:{}",
+                    game_id,
+                    normalized_tier,
+                    normalized_dpi,
+                    source_fingerprint(url)
+                )
+            })
+            .unwrap_or_else(|| format!("{}:{}:{}", game_id, normalized_tier, normalized_dpi));
 
         if let Some(value) = self.lru.lock().ok().and_then(|mut lru| lru.get(&cache_key)) {
             self.bump_metric(|metrics| metrics.memory_hits = metrics.memory_hits.saturating_add(1));
@@ -224,7 +239,7 @@ impl ArtworkCacheService {
             return Ok(Some(data_url));
         }
 
-        let Some(source_url) = sources.and_then(|value| value.normalized_tier(normalized_tier)) else {
+        let Some(source_url) = source_url else {
             self.bump_metric(|metrics| metrics.misses = metrics.misses.saturating_add(1));
             return Ok(None);
         };
@@ -454,6 +469,11 @@ fn machine_fingerprint() -> String {
         return "unknown-machine".to_string();
     }
     parts.join("|")
+}
+
+fn source_fingerprint(source_url: &str) -> String {
+    let digest = blake3::hash(source_url.as_bytes());
+    digest.to_hex().to_string()
 }
 
 fn tier_width(tier: i32, dpi: i32) -> u32 {

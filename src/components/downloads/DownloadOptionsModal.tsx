@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   FolderOpen,
   HardDrive,
+  LoaderCircle,
   Pause,
   Play,
   ShieldCheck,
@@ -38,6 +39,7 @@ type DownloadOptionsModalProps = {
   onCancelTask?: (downloadId: string) => void;
   onClose: () => void;
   onSubmit: (payload: DownloadPreparePayload) => void;
+  submitPhase?: "prepare" | "scan" | "start" | null;
 };
 
 const formatBytes = (value?: number | null) => {
@@ -80,7 +82,8 @@ export default function DownloadOptionsModal({
   onResumeTask,
   onCancelTask,
   onClose,
-  onSubmit
+  onSubmit,
+  submitPhase
 }: DownloadOptionsModalProps) {
   const { t } = useLocale();
   const [method, setMethod] = useState("");
@@ -147,6 +150,26 @@ export default function DownloadOptionsModal({
     return item.note || null;
   };
 
+  const resolveMethodLabel = (item: DownloadMethod) => {
+    const key = `download_options.method.${item.id}.label`;
+    const translated = t(key);
+    return translated !== key ? translated : item.label;
+  };
+
+  const resolveMethodDescription = (item: DownloadMethod) => {
+    const key = `download_options.method.${item.id}.description`;
+    const translated = t(key);
+    if (translated !== key) {
+      return translated;
+    }
+    return item.description || null;
+  };
+
+  const translateWithFallback = (key: string, fallback: string) => {
+    const translated = t(key);
+    return translated !== key ? translated : fallback;
+  };
+
   const hfUnavailableMethod = useMemo(() => {
     if (!options) return null;
     return (
@@ -158,6 +181,25 @@ export default function DownloadOptionsModal({
       ) || null
     );
   }, [options]);
+
+  const selectedMethod = useMemo(
+    () => options?.methods.find((item) => item.id === method) ?? null,
+    [method, options]
+  );
+  const selectedMethodWarning =
+    selectedMethod && selectedMethod.enabled !== false && selectedMethod.noteKey === "max_speed_rate_limit_warning"
+      ? resolveMethodNote(selectedMethod)
+      : null;
+  const submitPhaseLabel = (() => {
+    if (!submitting) return null;
+    if (submitPhase === "scan") {
+      return translateWithFallback("download_options.preparing_stage.scan", "Quickly scanning files...");
+    }
+    if (submitPhase === "start") {
+      return translateWithFallback("download_options.preparing_stage.start", "Starting transfer...");
+    }
+    return translateWithFallback("download_options.preparing_stage.prepare", "Preparing download logic...");
+  })();
 
   const handleBrowse = async () => {
     setBrowseError(null);
@@ -209,6 +251,8 @@ export default function DownloadOptionsModal({
                   {options.methods.map((item) => {
                     const isDisabled = item.enabled === false;
                     const note = resolveMethodNote(item);
+                    const label = resolveMethodLabel(item);
+                    const description = resolveMethodDescription(item);
                     return (
                       <label
                         key={item.id}
@@ -228,8 +272,8 @@ export default function DownloadOptionsModal({
                             disabled={isDisabled}
                           />
                           <div>
-                            <p className="text-sm font-semibold">{item.label}</p>
-                            {item.description && <p className="text-xs text-text-muted">{item.description}</p>}
+                            <p className="text-sm font-semibold">{label}</p>
+                            {description && <p className="text-xs text-text-muted">{description}</p>}
                             {isDisabled && note && <p className="text-xs text-accent-amber">{note}</p>}
                           </div>
                         </div>
@@ -242,6 +286,11 @@ export default function DownloadOptionsModal({
                     );
                   })}
                 </div>
+                {selectedMethodWarning && (
+                  <div className="rounded-lg border border-accent-amber/50 bg-accent-amber/10 px-3 py-2 text-xs text-accent-amber">
+                    {selectedMethodWarning}
+                  </div>
+                )}
               </div>
 
               <div className="space-y-3">
@@ -409,8 +458,12 @@ export default function DownloadOptionsModal({
               <Button variant="ghost" onClick={onClose}>
                 {t("download_options.cancel")}
               </Button>
-              <Button onClick={handleSubmit} disabled={!method || submitting || !hasSpace}>
-                {submitting ? t("download_options.preparing_button") : t("download_options.download")}
+              <Button
+                onClick={handleSubmit}
+                disabled={!method || submitting || !hasSpace}
+                icon={submitting ? <LoaderCircle size={16} className="animate-spin" /> : undefined}
+              >
+                {submitting ? submitPhaseLabel || t("download_options.preparing_button") : t("download_options.download")}
               </Button>
             </div>
           </div>

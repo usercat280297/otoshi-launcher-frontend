@@ -59,5 +59,17 @@
   "download_options.note.auto_fallback_notice": "Chế độ tự động sẽ chuyển sang phương thức còn khả dụng.",
   "download_options.hf_unavailable_banner": "Game chưa được cập nhật. Chúng tôi sẽ cập nhật sớm.",
   "steam_detail.open_launcher_download": "Mở trang tải launcher",
-  "common.game": "Game"
+  "common.game": "Game",
+  "download_options.method.auto.label": "Tu dong",
+  "download_options.method.auto.description": "Khuyen nghi: toc do toi da va tu dong fallback.",
+  "download_options.method.cdn.label": "CDN",
+  "download_options.method.cdn.description": "Tuyen CDN on dinh.",
+  "download_options.method.balance.label": "Can bang",
+  "download_options.method.balance.description": "Can bang toc do va do on dinh.",
+  "download_options.method.max_speed.label": "Toc do toi da",
+  "download_options.method.max_speed.description": "Uu tien thong luong cao nhat.",
+  "download_options.preparing_stage.prepare": "Dang khoi tao logic tai xuong...",
+  "download_options.preparing_stage.scan": "Dang quet file rat nhanh...",
+  "download_options.preparing_stage.start": "Dang bat dau truyen du lieu...",
+  "download_options.note.max_speed_rate_limit_warning": "Canh bao: toc do qua cao co the bi rate limit."
 }

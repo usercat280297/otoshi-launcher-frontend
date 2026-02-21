@@ -20,6 +20,23 @@ const VISIBLE_FORCE_REFRESH_DEBOUNCE_MS = 300;
 const VISIBLE_FORCE_REFRESH_MAX_IDS = 120;
 const normalizeSearch = (value: string) => value.trim().toLowerCase();
 
+type IndexAssetEntry = {
+  selectedSource?: string | null;
+  assets?: { grid?: string | null; hero?: string | null; logo?: string | null; icon?: string | null } | null;
+};
+
+const isSteamGridUrl = (value?: string | null) =>
+  typeof value === "string" && value.toLowerCase().includes("steamgriddb.com");
+
+const shouldPreferSteamGridAssets = (entry?: IndexAssetEntry | null) => {
+  if (!entry?.assets) return false;
+  if (String(entry.selectedSource || "").toLowerCase() === "steamgriddb") {
+    return true;
+  }
+  const { grid, hero, logo, icon } = entry.assets;
+  return [grid, hero, logo, icon].some((value) => isSteamGridUrl(value));
+};
+
 const pickSuggestionImage = (item: SteamCatalogItem) => {
   const candidates = [
     item.artwork?.t3,
@@ -40,17 +57,16 @@ const pickSuggestionImage = (item: SteamCatalogItem) => {
 
 function mergeSteamGridAssets(
   items: SteamCatalogItem[],
-  assetsByAppId: Record<
-    string,
-    { grid?: string | null; hero?: string | null; logo?: string | null; icon?: string | null } | null
-  >
+  assetsByAppId: Record<string, IndexAssetEntry | null>
 ): SteamCatalogItem[] {
   return items.map((item) => {
     const key = String(item.appId || "").trim();
-    const assets = key ? assetsByAppId[key] : null;
-    if (!assets) {
+    const entry = key ? assetsByAppId[key] : null;
+    if (!entry || !shouldPreferSteamGridAssets(entry)) {
       return item;
     }
+    const assets = entry.assets;
+    if (!assets) return item;
 
     const grid = assets.grid || item.artwork?.t3 || item.headerImage || item.capsuleImage || null;
     const hero = assets.hero || item.background || item.artwork?.t4 || grid;
@@ -115,6 +131,8 @@ export default function SteamCatalogPage() {
               limit: PAGE_SIZE,
               offset: nextOffset,
               source: "global",
+              includeDlc: false,
+              mustHaveArtwork: true,
             });
           } else {
             data = await fetchSteamIndexCatalog({
@@ -122,6 +140,8 @@ export default function SteamCatalogPage() {
               offset: nextOffset,
               sort: "priority",
               scope: "all",
+              includeDlc: false,
+              mustHaveArtwork: true,
             });
           }
         } catch {
@@ -142,12 +162,12 @@ export default function SteamCatalogPage() {
             const batchResult = await fetchSteamIndexAssetsBatch({
               appIds: enrichedItems.map((item) => item.appId),
             });
-            const assetsMap: Record<
-              string,
-              { grid?: string | null; hero?: string | null; logo?: string | null; icon?: string | null } | null
-            > = {};
+            const assetsMap: Record<string, IndexAssetEntry | null> = {};
             for (const [appId, info] of Object.entries(batchResult)) {
-              assetsMap[String(appId)] = info?.assets ?? null;
+              assetsMap[String(appId)] = {
+                selectedSource: info?.selectedSource ?? null,
+                assets: info?.assets ?? null,
+              };
             }
             enrichedItems = mergeSteamGridAssets(enrichedItems, assetsMap);
           } catch {
@@ -293,14 +313,17 @@ export default function SteamCatalogPage() {
             forceRefresh: true,
           }).catch(() => ({} as Record<string, any>));
 
-          const assetsMap: Record<
-            string,
-            { grid?: string | null; hero?: string | null; logo?: string | null; icon?: string | null } | null
-          > = {};
+          const assetsMap: Record<string, IndexAssetEntry | null> = {};
           const refreshedIds = new Set<string>();
           for (const [appId, info] of Object.entries(refreshed || {})) {
-            assetsMap[String(appId)] = (info as any)?.assets ?? null;
-            refreshedIds.add(String(appId));
+            const entry: IndexAssetEntry = {
+              selectedSource: (info as any)?.selectedSource ?? null,
+              assets: (info as any)?.assets ?? null,
+            };
+            if (shouldPreferSteamGridAssets(entry)) {
+              assetsMap[String(appId)] = entry;
+              refreshedIds.add(String(appId));
+            }
           }
           if (Object.keys(assetsMap).length) {
             setItems((prev) => mergeSteamGridAssets(prev, assetsMap));

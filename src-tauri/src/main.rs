@@ -344,13 +344,26 @@ fn ensure_web_assets(app: &tauri::AppHandle) -> Result<()> {
     let web_dir = resource_dir.join("web");
     let index_path = web_dir.join("index.html");
 
-    let pack_path = resource_dir.join("web.pack");
-    if !pack_path.exists() {
+    let pack_candidates = [
+        resource_dir.join("web.pack"),
+        resource_dir.join("resources").join("web.pack"),
+    ];
+    let pack_path = pack_candidates
+        .iter()
+        .find(|candidate| candidate.exists())
+        .cloned();
+    let Some(pack_path) = pack_path else {
         if !index_path.exists() {
-            tracing::warn!("web assets missing and web.pack not found: {:?}", pack_path);
+            tracing::warn!(
+                "web assets missing and web.pack not found; checked {:?}",
+                pack_candidates
+                    .iter()
+                    .map(|value| value.display().to_string())
+                    .collect::<Vec<_>>()
+            );
         }
         return Ok(());
-    }
+    };
 
     let pack_stamp = pack_signature(&pack_path)?;
     let current_stamp = read_web_stamp(&web_dir);
@@ -818,5 +831,8 @@ fn main() {
             commands::lua::list_lua_files,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .unwrap_or_else(|error| {
+            tracing::error!("error while running tauri application: {error}");
+            eprintln!("error while running tauri application: {error}");
+        });
 }

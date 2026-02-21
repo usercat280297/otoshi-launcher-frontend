@@ -14,6 +14,7 @@ import {
   fetchSteamCatalog,
   fetchSteamIndexCatalog,
   fetchSteamIndexAssetsBatch,
+  fetchSteamPopular,
   prefetchSteamIndexAssets,
   searchSteamIndexCatalog,
   getApiDebugInfo,
@@ -25,36 +26,79 @@ import { useLocale } from "../context/LocaleContext";
 const ALL_GAMES_PAGE_SIZE = 48;
 const SEARCH_STORAGE_KEY = "otoshi.search.steam";
 const SEARCH_PREVIEW_LIMIT = 6;
-const CATALOG_CACHE_KEY = "otoshi.catalog.page2";
+const CATALOG_CACHE_KEY = "otoshi.catalog.page3";
 const CATALOG_CACHE_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours
 const CATALOG_FETCH_MAX_ATTEMPTS = 5;
 const CATALOG_FETCH_RETRY_BASE_MS = 500;
 const CATALOG_FETCH_RETRY_MAX_MS = 2500;
+const CATALOG_PRIMARY_REQUEST_TIMEOUT_MS = 12000;
 const FIRST_RUN_DIAGNOSTIC_KEY = "otoshi.first_run.diagnostics.v1";
 const IMAGE_PLACEHOLDER = "/icons/game-placeholder.svg";
 const VISIBLE_FORCE_REFRESH_DEBOUNCE_MS = 450;
 const VISIBLE_FORCE_REFRESH_MAX_IDS = 160;
+const INTRO_LOADING_FAILSAFE_MS = 10000;
+const STEAM_PLACEHOLDER_NAME_PATTERN = /^steam app\s+\d+$/i;
 const normalizeSearch = (value: string) => value.trim().toLowerCase();
 const DLC_QUERY_HINT = /\b(dlc|season pass|expansion|soundtrack|costume|pack|set|bonus|mission|pachislot)\b/i;
 const isDlcSearchQuery = (value: string) => DLC_QUERY_HINT.test(value.trim());
 const wait = (ms: number) =>
   new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+
+const withTimeout = <T,>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  timeoutMessage: string
+): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const timeoutId = window.setTimeout(
+      () => reject(new Error(timeoutMessage)),
+      timeoutMs
+    );
+    promise
+      .then((value) => {
+        window.clearTimeout(timeoutId);
+        resolve(value);
+      })
+      .catch((error) => {
+        window.clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
 const getCatalogRetryDelayMs = (attempt: number) =>
   Math.min(
     CATALOG_FETCH_RETRY_MAX_MS,
     CATALOG_FETCH_RETRY_BASE_MS * 2 ** Math.max(0, attempt - 1)
   );
 
+type IndexAssetEntry = {
+  selectedSource?: string | null;
+  assets?: { grid?: string | null; hero?: string | null; logo?: string | null; icon?: string | null } | null;
+};
+
+const isSteamGridUrl = (value?: string | null) =>
+  typeof value === "string" && value.toLowerCase().includes("steamgriddb.com");
+
+const shouldPreferSteamGridAssets = (entry?: IndexAssetEntry | null) => {
+  if (!entry?.assets) return false;
+  if (String(entry.selectedSource || "").toLowerCase() === "steamgriddb") {
+    return true;
+  }
+  const { grid, hero, logo, icon } = entry.assets;
+  return [grid, hero, logo, icon].some((value) => isSteamGridUrl(value));
+};
+
 function mergeSteamGridAssets(
   items: SteamCatalogItem[],
-  assetsByAppId: Record<string, { grid?: string | null; hero?: string | null; logo?: string | null; icon?: string | null } | null>
+  assetsByAppId: Record<string, IndexAssetEntry | null>
 ): SteamCatalogItem[] {
   return items.map((item) => {
     const key = String(item.appId || "").trim();
-    const assets = key ? assetsByAppId[key] : null;
-    if (!assets) {
+    const entry = key ? assetsByAppId[key] : null;
+    if (!entry || !shouldPreferSteamGridAssets(entry)) {
       return item;
     }
+    const assets = entry.assets;
+    if (!assets) return item;
 
     const grid = assets.grid || item.artwork?.t3 || item.headerImage || item.capsuleImage || null;
     const hero = assets.hero || item.background || item.artwork?.t4 || grid;
@@ -76,6 +120,74 @@ function mergeSteamGridAssets(
       },
     };
   });
+}
+
+function isPlaceholderCatalogTitle(name?: string | null, appId?: string | null): boolean {
+  const text = String(name || "").trim();
+  if (!text) return true;
+  if (/^\d+$/.test(text)) return true;
+  if (STEAM_PLACEHOLDER_NAME_PATTERN.test(text)) return true;
+  const normalizedAppId = String(appId || "").trim();
+  if (!normalizedAppId) return false;
+  const lowered = text.toLowerCase();
+  return lowered === normalizedAppId.toLowerCase() || lowered === `steam app ${normalizedAppId}`.toLowerCase();
+}
+
+function hasCatalogArtwork(item: SteamCatalogItem): boolean {
+  return Boolean(
+    item.artwork?.t3 ||
+      item.artwork?.t2 ||
+      item.artwork?.t1 ||
+      item.headerImage ||
+      item.capsuleImage ||
+      item.background
+  );
+}
+
+function evaluateCatalogQuality(items: SteamCatalogItem[]) {
+  const total = items.length;
+  if (!total) {
+    return { total: 0, placeholderRatio: 1, artworkRatio: 0 };
+  }
+  const placeholderCount = items.filter((item) =>
+    isPlaceholderCatalogTitle(item.name, item.appId)
+  ).length;
+  const artworkCount = items.filter((item) => hasCatalogArtwork(item)).length;
+  return {
+    total,
+    placeholderRatio: placeholderCount / total,
+    artworkRatio: artworkCount / total,
+  };
+}
+
+function isLowQualityCatalog(items: SteamCatalogItem[]): boolean {
+  const quality = evaluateCatalogQuality(items);
+  if (!quality.total) return true;
+  return quality.placeholderRatio >= 0.28 || quality.artworkRatio < 0.35;
+}
+
+function chooseBetterCatalog(
+  primary: SteamCatalogItem[],
+  candidate: SteamCatalogItem[]
+): SteamCatalogItem[] {
+  const primaryQuality = evaluateCatalogQuality(primary);
+  const candidateQuality = evaluateCatalogQuality(candidate);
+
+  if (!candidateQuality.total) return primary;
+  if (!primaryQuality.total) return candidate;
+  if (candidateQuality.placeholderRatio + 0.05 < primaryQuality.placeholderRatio) {
+    return candidate;
+  }
+  if (candidateQuality.placeholderRatio > primaryQuality.placeholderRatio + 0.05) {
+    return primary;
+  }
+  if (candidateQuality.artworkRatio > primaryQuality.artworkRatio + 0.08) {
+    return candidate;
+  }
+  if (candidateQuality.artworkRatio + 0.08 < primaryQuality.artworkRatio) {
+    return primary;
+  }
+  return candidateQuality.total >= primaryQuality.total ? candidate : primary;
 }
 
 function pickSuggestionImage(item: SteamCatalogItem): string | null {
@@ -159,6 +271,11 @@ export default function StorePage() {
         window.localStorage.removeItem(CATALOG_CACHE_KEY);
         return null;
       }
+      const cachedItems = Array.isArray(parsed.data.items) ? parsed.data.items : [];
+      if (!cachedItems.length || isLowQualityCatalog(cachedItems)) {
+        window.localStorage.removeItem(CATALOG_CACHE_KEY);
+        return null;
+      }
       return parsed.data;
     } catch {
       return null;
@@ -185,12 +302,18 @@ export default function StorePage() {
           const offset = pageIndex * ALL_GAMES_PAGE_SIZE;
           let data: { total: number; offset: number; limit: number; items: SteamCatalogItem[] };
           try {
-            data = await fetchSteamIndexCatalog({
-              limit: ALL_GAMES_PAGE_SIZE,
-              offset,
-              sort: "priority",
-              scope: "all",
-            });
+            data = await withTimeout(
+              fetchSteamIndexCatalog({
+                limit: ALL_GAMES_PAGE_SIZE,
+                offset,
+                sort: "priority",
+                scope: "all",
+                includeDlc: false,
+                mustHaveArtwork: true,
+              }),
+              CATALOG_PRIMARY_REQUEST_TIMEOUT_MS,
+              "Global index catalog request timed out"
+            );
           } catch {
             data = await fetchSteamCatalog({
               limit: ALL_GAMES_PAGE_SIZE,
@@ -200,24 +323,48 @@ export default function StorePage() {
             });
           }
           let enrichedItems = data.items;
-          if (enrichedItems.length) {
+          const enrichWithBatchAssets = async (items: SteamCatalogItem[]) => {
+            if (!items.length) {
+              return items;
+            }
             try {
               const batchResult = await fetchSteamIndexAssetsBatch({
-                appIds: enrichedItems.map((item) => item.appId),
+                appIds: items.map((item) => item.appId),
               });
-              const assetsMap: Record<
-                string,
-                { grid?: string | null; hero?: string | null; logo?: string | null; icon?: string | null } | null
-              > = {};
+              const assetsMap: Record<string, IndexAssetEntry | null> = {};
               for (const [appId, info] of Object.entries(batchResult)) {
-                assetsMap[String(appId)] = info?.assets ?? null;
+                assetsMap[String(appId)] = {
+                  selectedSource: info?.selectedSource ?? null,
+                  assets: info?.assets ?? null,
+                };
               }
-              enrichedItems = mergeSteamGridAssets(enrichedItems, assetsMap);
+              return mergeSteamGridAssets(items, assetsMap);
             } catch {
-              // keep base Steam catalog assets on batch failure
+              return items;
+            }
+          };
+
+          enrichedItems = await enrichWithBatchAssets(enrichedItems);
+
+          let totalCount = data.total ?? 0;
+          if (pageIndex === 0 && isLowQualityCatalog(enrichedItems)) {
+            try {
+              const popular = await fetchSteamPopular(ALL_GAMES_PAGE_SIZE, offset);
+              let fallbackItems = Array.isArray(popular.items) ? popular.items : [];
+              fallbackItems = fallbackItems.filter(
+                (item) => !(item.isDlc || item.itemType === "dlc")
+              );
+              fallbackItems = await enrichWithBatchAssets(fallbackItems);
+              const chosen = chooseBetterCatalog(enrichedItems, fallbackItems);
+              if (chosen !== enrichedItems) {
+                enrichedItems = chosen;
+                totalCount = Math.max(totalCount, Number(popular.total ?? 0));
+              }
+            } catch {
+              // keep original catalog if popular fallback fails
             }
           }
-          const totalCount = data.total ?? 0;
+
           const payload = { items: enrichedItems, total: totalCount };
           allPageCacheRef.current.set(pageIndex, payload);
           if (pageIndex === 0) {
@@ -556,14 +703,17 @@ export default function StorePage() {
             forceRefresh: true,
           }).catch(() => ({} as Record<string, any>));
 
-          const assetsMap: Record<
-            string,
-            { grid?: string | null; hero?: string | null; logo?: string | null; icon?: string | null } | null
-          > = {};
+          const assetsMap: Record<string, IndexAssetEntry | null> = {};
           const refreshedIds = new Set<string>();
           for (const [appId, info] of Object.entries(refreshed || {})) {
-            assetsMap[String(appId)] = (info as any)?.assets ?? null;
-            refreshedIds.add(String(appId));
+            const entry: IndexAssetEntry = {
+              selectedSource: (info as any)?.selectedSource ?? null,
+              assets: (info as any)?.assets ?? null,
+            };
+            if (shouldPreferSteamGridAssets(entry)) {
+              assetsMap[String(appId)] = entry;
+              refreshedIds.add(String(appId));
+            }
           }
 
           if (Object.keys(assetsMap).length) {
@@ -711,13 +861,10 @@ export default function StorePage() {
     }
   }, []);
 
-  const requiresHeroReady = !loading && !error && games.length > 0;
+  const hasPrimaryStoreData = !loading && (Boolean(error) || games.length > 0);
+  const requiresHeroReady = hasPrimaryStoreData && !error && games.length > 0;
   const initialStoreContentReady =
-    !loading &&
-    (Boolean(error) || games.length > 0) &&
-    !allLoading &&
-    (Boolean(allError) || allGames.length > 0) &&
-    (!requiresHeroReady || heroImageReady);
+    hasPrimaryStoreData && (!requiresHeroReady || heroImageReady);
 
   useEffect(() => {
     if (!introLoading) return;
@@ -725,6 +872,15 @@ export default function StorePage() {
     const timer = window.setTimeout(() => setIntroLoading(false), 400);
     return () => window.clearTimeout(timer);
   }, [introLoading, initialStoreContentReady]);
+
+  useEffect(() => {
+    if (!introLoading) return;
+    const timer = window.setTimeout(
+      () => setIntroLoading(false),
+      INTRO_LOADING_FAILSAFE_MS
+    );
+    return () => window.clearTimeout(timer);
+  }, [introLoading]);
 
   const tourSteps = useMemo(
     () => [
@@ -1178,8 +1334,16 @@ export default function StorePage() {
           </div>
         )}
       {!showIntroLoading && loading && (
-        <div className="glass-panel p-8 text-sm text-text-secondary">
-          {t("store.syncing")}
+        <div className="glass-panel flex min-h-[260px] items-center justify-center p-8">
+          <div className="mx-auto flex max-w-md flex-col items-center gap-4 text-center">
+            <div className="h-11 w-11 animate-spin rounded-full border-2 border-primary/25 border-t-primary" />
+            <p className="text-xs uppercase tracking-[0.32em] text-text-secondary">
+              {t("store.syncing")}
+            </p>
+            <p className="text-sm text-text-muted">
+              {t("store.syncing_description")}
+            </p>
+          </div>
         </div>
       )}
 

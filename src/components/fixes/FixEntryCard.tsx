@@ -1,8 +1,60 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { fetchSteamGridAssets } from "../../services/api";
 import { useLocale } from "../../context/LocaleContext";
 import { FixEntry } from "../../types";
 import Badge from "../common/Badge";
+
+const PLACEHOLDER_STEAM_APP_PATTERN = /^steam app\s+\d+$/i;
+const TITLE_SUFFIX_PATTERN =
+  /\b(demo|showcase|trial|prologue|playtest|benchmark|alpha|beta|open\s*beta|closed\s*beta|technical\s*test|test\s*server|edition|deluxe|ultimate|goty|remaster|remastered|enhanced)\b.*$/i;
+
+function isPlaceholderTitle(value?: string | null, appId?: string) {
+  const text = String(value || "").trim();
+  if (!text) return true;
+  if (/^\d+$/.test(text)) return true;
+  if (PLACEHOLDER_STEAM_APP_PATTERN.test(text)) return true;
+  const normalizedAppId = String(appId || "").trim();
+  if (!normalizedAppId) return false;
+  const lowered = text.toLowerCase();
+  return lowered === normalizedAppId.toLowerCase() || lowered === `steam app ${normalizedAppId}`.toLowerCase();
+}
+
+function normalizeTitleForLookup(value: string): string {
+  const cleaned = value.replace(/[™®©]/g, "").trim();
+  if (!cleaned) return "";
+  const trimmed = cleaned.replace(TITLE_SUFFIX_PATTERN, "").trim().replace(/[-:]+$/, "").trim();
+  return trimmed || cleaned;
+}
+
+function buildLookupTitles(entry: FixEntry, preferredTitle: string): string[] {
+  const optionNames = entry.options
+    .map((option) => String(option.name || "").trim())
+    .filter((value) => value.length > 0);
+
+  const rawCandidates = [
+    preferredTitle,
+    ...optionNames,
+    String(entry.name || "").trim(),
+    String(entry.steam?.name || "").trim(),
+  ];
+
+  const normalized = rawCandidates
+    .map((value) => normalizeTitleForLookup(value))
+    .filter((value) => value.length > 0);
+  const merged = [...rawCandidates, ...normalized]
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+
+  const output: string[] = [];
+  const seen = new Set<string>();
+  for (const candidate of merged) {
+    const key = candidate.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push(candidate);
+  }
+  return output;
+}
 
 export default function FixEntryCard({
   entry,
@@ -17,13 +69,36 @@ export default function FixEntryCard({
   const base = `https://cdn.cloudflare.steamstatic.com/steam/apps/${entry.appId}`;
   const fallbackGrid = `${base}/library_600x900.jpg`;
   const fallbackLogo = `${base}/logo.png`;
-  const title = entry.steam?.name || entry.name;
+  const title = useMemo(() => {
+    const optionNames = entry.options
+      .map((option) => String(option.name || "").trim())
+      .filter((value) => value.length > 0);
+    const candidates = [entry.name, ...optionNames, entry.steam?.name];
+    for (const candidate of candidates) {
+      if (!isPlaceholderTitle(candidate, entry.appId)) {
+        return String(candidate || "").trim();
+      }
+    }
+    for (const candidate of candidates) {
+      const text = String(candidate || "").trim();
+      if (text) return text;
+    }
+    return `Steam App ${entry.appId}`;
+  }, [entry.appId, entry.name, entry.options, entry.steam?.name]);
+  const lookupTitles = useMemo(
+    () => buildLookupTitles(entry, title),
+    [entry, title]
+  );
   const description = entry.steam?.shortDescription || "";
   const baseImage =
     gridImage ||
+    entry.steam?.artwork?.t3 ||
+    entry.steam?.artwork?.t2 ||
     entry.steam?.headerImage ||
     entry.steam?.capsuleImage ||
+    entry.steam?.background ||
     fallbackGrid;
+  const resolvedLogo = logoImage || entry.steam?.artwork?.t0 || fallbackLogo;
   const hasDenuvo = Boolean(entry.denuvo ?? entry.steam?.denuvo);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
@@ -35,17 +110,22 @@ export default function FixEntryCard({
 
   useEffect(() => {
     let mounted = true;
-    fetchSteamGridAssets(title, entry.appId)
-      .then((asset) => {
-        if (!mounted || !asset) return;
-        setGridImage(asset.grid ?? null);
-        setLogoImage(asset.logo ?? null);
-      })
-      .catch(() => undefined);
+    const run = async () => {
+      for (const candidate of lookupTitles) {
+        const asset = await fetchSteamGridAssets(candidate, entry.appId).catch(() => null);
+        if (!mounted || !asset) continue;
+        if (asset.grid || asset.hero || asset.logo || asset.icon) {
+          setGridImage(asset.grid ?? asset.hero ?? null);
+          setLogoImage(asset.logo ?? asset.icon ?? null);
+          return;
+        }
+      }
+    };
+    void run();
     return () => {
       mounted = false;
     };
-  }, [entry.appId, title]);
+  }, [entry.appId, lookupTitles]);
 
   return (
     <div className="rounded-2xl border border-background-border bg-background-elevated p-4">
@@ -76,10 +156,10 @@ export default function FixEntryCard({
               <Badge label="Denuvo" tone="danger" />
             </div>
           )}
-          {(logoImage || fallbackLogo) && (
+          {resolvedLogo && (
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-background via-background/60 to-transparent p-3">
               <img
-                src={logoImage || fallbackLogo}
+                src={resolvedLogo}
                 alt={`${title} logo`}
                 className="h-6 w-auto max-w-full"
               />

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import {
@@ -80,6 +80,19 @@ const formatEta = (seconds: number): string => {
   return `${hours}h ${mins}m`;
 };
 
+const PLACEHOLDER_STEAM_APP_PATTERN = /^steam app\s+\d+$/i;
+
+const isPlaceholderTitle = (value?: string | null, appId?: string) => {
+  const text = String(value || "").trim();
+  if (!text) return true;
+  if (/^\d+$/.test(text)) return true;
+  if (PLACEHOLDER_STEAM_APP_PATTERN.test(text)) return true;
+  const normalizedAppId = String(appId || "").trim();
+  if (!normalizedAppId) return false;
+  const lowered = text.toLowerCase();
+  return lowered === normalizedAppId.toLowerCase() || lowered === `steam app ${normalizedAppId}`.toLowerCase();
+};
+
 export default function CrackDownloadModal({ open, entry, onClose }: Props) {
   const { t } = useLocale();
   const navigate = useNavigate();
@@ -137,7 +150,7 @@ export default function CrackDownloadModal({ open, entry, onClose }: Props) {
   useEffect(() => {
     setHeaderLoaded(false);
     setHeaderError(false);
-  }, [entry?.steam?.headerImage, entry?.appId]);
+  }, [entry?.steam?.headerImage, entry?.steam?.artwork?.t3, entry?.steam?.artwork?.t2, entry?.appId]);
 
   useEffect(() => {
     if (!open || !entry?.appId) return;
@@ -252,14 +265,36 @@ export default function CrackDownloadModal({ open, entry, onClose }: Props) {
     }
   }, [entry, gameInfo]);
 
-  if (!entry) return null;
-
-  const title = entry.steam?.name || entry.name;
-  const hasMultipleOptions = entry.options.length > 1;
-  const hasDenuvo = Boolean(entry.denuvo ?? entry.steam?.denuvo);
+  const title = useMemo(() => {
+    if (!entry) return "";
+    const optionNames = entry.options
+      .map((option) => String(option.name || "").trim())
+      .filter((value) => value.length > 0);
+    const candidates = [entry.name, ...optionNames, entry.steam?.name];
+    for (const candidate of candidates) {
+      if (!isPlaceholderTitle(candidate, entry.appId)) {
+        return String(candidate || "").trim();
+      }
+    }
+    for (const candidate of candidates) {
+      const text = String(candidate || "").trim();
+      if (text) return text;
+    }
+    return `Steam App ${entry.appId}`;
+  }, [entry]);
+  const headerImage =
+    entry?.steam?.artwork?.t3 ||
+    entry?.steam?.artwork?.t2 ||
+    entry?.steam?.headerImage ||
+    entry?.steam?.capsuleImage ||
+    null;
+  const hasMultipleOptions = Boolean(entry && entry.options.length > 1);
+  const hasDenuvo = Boolean(entry?.denuvo ?? entry?.steam?.denuvo);
   const statusText = progress?.status
     ? t(`crack.status.${progress.status}`)
     : "";
+
+  if (!entry) return null;
 
   return (
     <Modal isOpen={open} onClose={onClose} title={t("crack.download_title")} size="lg">
@@ -273,9 +308,9 @@ export default function CrackDownloadModal({ open, entry, onClose }: Props) {
               }`}
               aria-hidden
             />
-            {entry.steam?.headerImage && (
+            {headerImage && (
               <img
-                src={entry.steam.headerImage}
+                src={headerImage}
                 alt={title}
                 onLoad={() => setHeaderLoaded(true)}
                 onError={() => setHeaderError(true)}

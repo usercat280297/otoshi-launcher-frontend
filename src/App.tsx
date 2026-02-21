@@ -1,4 +1,4 @@
-import { Routes, Route, useNavigate } from "react-router-dom";
+import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { isTauri as isTauriRuntime } from "@tauri-apps/api/core";
 import MainLayout from "./components/layout/MainLayout";
@@ -14,6 +14,7 @@ import { useLocale } from "./context/LocaleContext";
 import { openExternal } from "./utils/openExternal";
 import Modal from "./components/common/Modal";
 import Button from "./components/common/Button";
+import StartupAnnouncementModal from "./components/common/StartupAnnouncementModal";
 
 type DownloadToastPayload = {
   type: "success" | "error";
@@ -56,9 +57,13 @@ const IntroPage = lazy(() => import("./pages/IntroPage"));
 
 function AppContent() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { setLocale, t } = useLocale();
   const [downloadToast, setDownloadToast] = useState<DownloadToastPayload | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const startupAnnouncementEnabled =
+    !location.pathname.startsWith("/overlay") &&
+    !location.pathname.startsWith("/big-picture");
 
   // Initialize media protection to prevent IDM and download managers
   useEffect(() => {
@@ -269,6 +274,7 @@ function AppContent() {
     <>
       <GlobalRipple />
       <CookieConsentBanner />
+      <StartupAnnouncementModal enabled={startupAnnouncementEnabled} />
       <Modal isOpen={aboutOpen} onClose={() => setAboutOpen(false)} title={t("app.about.title")} size="sm">
         <div className="space-y-4">
           <p className="text-sm text-text-secondary">

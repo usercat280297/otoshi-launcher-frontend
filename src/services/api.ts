@@ -77,7 +77,22 @@ const debugLog = (...args: unknown[]) => {
     console.log(...args);
   }
 };
-// Default backend port is 8000 (primary) with additional dev fallbacks.
+
+const normalizeApiBase = (base: string): string =>
+  String(base || "").trim().replace(/\/+$/, "");
+
+const resolveDevWebBase = (): string => {
+  const port = String(BACKEND_PORT || "8000");
+  if (typeof window !== "undefined") {
+    const host = String(window.location.hostname || "").trim().toLowerCase();
+    if (host === "127.0.0.1" || host === "localhost") {
+      return `http://${host}:${port}`;
+    }
+  }
+  return `http://127.0.0.1:${port}`;
+};
+
+// Default backend port is 8000 (primary).
 const BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || import.meta.env.BACKEND_PORT;
 const desktopDefaultBase = BACKEND_PORT
   ? `http://127.0.0.1:${BACKEND_PORT}`
@@ -85,28 +100,27 @@ const desktopDefaultBase = BACKEND_PORT
 const desktopApiBase =
   import.meta.env.VITE_DESKTOP_API_URL || desktopDefaultBase;
 const webApiBase =
-  import.meta.env.VITE_API_URL || (isDev ? desktopDefaultBase : "");
+  import.meta.env.VITE_API_URL || (isDev ? resolveDevWebBase() : "");
 const API_URL = isDesktop ? desktopApiBase : webApiBase;
 
 const toLocalFallbacks = (base: string): string[] => {
-  const trimmed = String(base || "").trim().replace(/\/+$/, "");
+  const trimmed = normalizeApiBase(base);
   if (!trimmed) return [];
   const out = [trimmed];
   try {
     const u = new URL(trimmed);
-    if (u.hostname === "127.0.0.1" || u.hostname === "localhost") {
-      const hostVariants = ["127.0.0.1", "localhost"];
-      const ports = [u.port || "8000", "8000", "8001", "8002", "8003"];
-      for (const host of hostVariants) {
-        for (const port of ports) {
-          out.push(`${u.protocol}//${host}:${port}`);
-        }
-      }
+    const host = u.hostname.toLowerCase();
+    const port = u.port || (u.protocol === "https:" ? "443" : "80");
+    // Desktop can tolerate localhost/127 differences on the same resolved runtime port.
+    // Web dev should stay pinned to a single host to avoid noisy CORS/connection churn.
+    if (isDesktop && (host === "127.0.0.1" || host === "localhost")) {
+      const alternateHost = host === "127.0.0.1" ? "localhost" : "127.0.0.1";
+      out.push(`${u.protocol}//${alternateHost}:${port}`);
     }
   } catch {
     // ignore malformed base values
   }
-  return out;
+  return Array.from(new Set(out.map(normalizeApiBase).filter(Boolean)));
 };
 
 const envFallbackBases = String(import.meta.env.VITE_API_FALLBACKS || "")
@@ -117,22 +131,14 @@ const desktopFallbackBases = isDesktop
   ? Array.from(
       new Set([
         ...toLocalFallbacks(desktopApiBase),
-        ...toLocalFallbacks("http://127.0.0.1:8000"),
-        ...toLocalFallbacks("http://127.0.0.1:8001"),
-        ...toLocalFallbacks("http://127.0.0.1:8002"),
-        ...toLocalFallbacks("http://127.0.0.1:8003"),
-        ...envFallbackBases
+        ...envFallbackBases.flatMap(toLocalFallbacks)
       ])
     )
   : [];
 const webFallbackBases = Array.from(
   new Set([
     ...toLocalFallbacks(API_URL),
-    ...(isDev ? toLocalFallbacks("http://127.0.0.1:8000") : []),
-    ...(isDev ? toLocalFallbacks("http://127.0.0.1:8001") : []),
-    ...(isDev ? toLocalFallbacks("http://127.0.0.1:8002") : []),
-    ...(isDev ? toLocalFallbacks("http://127.0.0.1:8003") : []),
-    ...envFallbackBases
+    ...envFallbackBases.flatMap(toLocalFallbacks)
   ])
 );
 const API_FALLBACKS = isDesktop ? desktopFallbackBases : webFallbackBases;
@@ -254,10 +260,7 @@ async function selectBestDesktopApiBase() {
   if (!isDesktop || !API_BASES.length) return;
   const candidates = Array.from(
     new Set(
-      (resolvedApiBase
-        ? [resolvedApiBase, ...API_BASES.filter((base) => base !== resolvedApiBase)]
-        : API_BASES
-      ).filter(Boolean)
+      (resolvedApiBase ? [resolvedApiBase] : API_BASES).filter(Boolean)
     )
   );
   if (!candidates.length) return;
@@ -342,10 +345,7 @@ async function ensureDesktopRuntimeReady() {
 
     const candidates = Array.from(
       new Set(
-        (resolvedApiBase
-          ? [resolvedApiBase, ...API_BASES.filter((base) => base !== resolvedApiBase)]
-          : API_BASES
-        ).filter(Boolean)
+        (resolvedApiBase ? [resolvedApiBase] : API_BASES).filter(Boolean)
       )
     );
     if (!candidates.length) {
@@ -375,7 +375,7 @@ async function ensureDesktopRuntimeReady() {
 }
 
 export const getPreferredApiBase = () =>
-  resolvedApiBase || API_BASES[0] || (isDev ? "http://127.0.0.1:8000" : "");
+  resolvedApiBase || API_BASES[0] || (isDev ? normalizeApiBase(webApiBase || desktopDefaultBase) : "");
 
 export function getApiDebugInfo() {
   return {
@@ -543,7 +543,18 @@ const steamGridInFlight = new Map<string, Promise<SteamGridDBAsset | null>>();
 const steamGridMissCache = new Map<string, number>();
 const STEAMGRID_CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
 const STEAMGRID_NEGATIVE_TTL_MS = 1000 * 20; // retry failed lookups quickly without forcing app reload
-const STEAMGRID_STORAGE_PREFIX = 'otoshi.steamgrid:';
+const STEAMGRID_STORAGE_PREFIX = 'otoshi.steamgrid.v2:';
+const isSteamGridHostedAsset = (url?: string | null) => {
+  if (!url) return false;
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host.endsWith("steamgriddb.com");
+  } catch {
+    return String(url).toLowerCase().includes("steamgriddb.com");
+  }
+};
+const hasSteamGridHostedAsset = (data?: SteamGridDBAsset | null) =>
+  Boolean(data && [data.grid, data.hero, data.logo, data.icon].some((value) => isSteamGridHostedAsset(value)));
 const loadSteamGridFromStorage = (key: string): SteamGridDBAsset | null => {
   if (typeof window === 'undefined') return null;
   try {
@@ -656,7 +667,7 @@ async function requestJson<T>(
   const bases =
     resolvedApiBase
       ? (canFallback
-          ? [resolvedApiBase, ...API_BASES.filter((base) => base !== resolvedApiBase)]
+          ? [resolvedApiBase, ...(isDesktop ? [] : API_BASES.filter((base) => base !== resolvedApiBase))]
           : [resolvedApiBase])
       : API_BASES;
   let lastError: Error | null = null;
@@ -753,7 +764,7 @@ async function requestForm<T>(
 
   const bases =
     resolvedApiBase && shouldRetry(path)
-      ? [resolvedApiBase, ...API_BASES.filter((base) => base !== resolvedApiBase)]
+      ? [resolvedApiBase, ...(isDesktop ? [] : API_BASES.filter((base) => base !== resolvedApiBase))]
       : resolvedApiBase
         ? [resolvedApiBase]
         : API_BASES;
@@ -830,16 +841,19 @@ export async function fetchSteamGridAssets(
   }
   const cachedLocal = loadSteamGridFromStorage(key);
   if (cachedLocal) {
-    steamGridCache.set(key, cachedLocal);
-    steamGridMissCache.delete(key);
-    return cachedLocal;
+    if (!hasSteamGridHostedAsset(cachedLocal)) {
+      // Purge legacy fallback entries so we can re-fetch real SteamGridDB art.
+      saveSteamGridToStorage(key, null);
+    } else {
+      steamGridCache.set(key, cachedLocal);
+      steamGridMissCache.delete(key);
+      return cachedLocal;
+    }
   }
   if (steamGridInFlight.has(key)) {
     return steamGridInFlight.get(key) || null;
   }
   const task = scheduleSteamGrid(async () => {
-    const hasAssets = (data?: SteamGridDBAsset | null) =>
-      Boolean(data?.grid || data?.hero || data?.logo || data?.icon);
     try {
       const params = new URLSearchParams();
       params.set("title", title);
@@ -849,7 +863,7 @@ export async function fetchSteamGridAssets(
       const data = await requestJson<SteamGridDBAsset>(
         `/steamgriddb/lookup?${params.toString()}`
       );
-      return hasAssets(data) ? data : null;
+      return hasSteamGridHostedAsset(data) ? data : null;
     } catch {
       return null;
     }
@@ -860,7 +874,11 @@ export async function fetchSteamGridAssets(
     if (result) {
       steamGridCache.set(key, result);
       steamGridMissCache.delete(key);
-      saveSteamGridToStorage(key, result);
+      if (hasSteamGridHostedAsset(result)) {
+        saveSteamGridToStorage(key, result);
+      } else {
+        saveSteamGridToStorage(key, null);
+      }
       return result;
     }
     steamGridCache.delete(key);
@@ -894,7 +912,8 @@ export async function fetchSteamGridAssetsBatch(
   const rawItems = data?.items && typeof data.items === "object" ? data.items : {};
   const result: Record<string, SteamGridDBAsset | null> = {};
   for (const [appId, raw] of Object.entries(rawItems)) {
-    result[String(appId)] = raw ? (raw as SteamGridDBAsset) : null;
+    const parsed = raw ? (raw as SteamGridDBAsset) : null;
+    result[String(appId)] = hasSteamGridHostedAsset(parsed) ? parsed : null;
   }
   return result;
 }
@@ -928,12 +947,20 @@ export async function fetchSteamIndexCatalog(params: {
   offset?: number;
   sort?: string;
   scope?: "all" | "library" | "owned";
+  includeDlc?: boolean;
+  mustHaveArtwork?: boolean;
 }): Promise<{ total: number; offset: number; limit: number; items: SteamCatalogItem[] }> {
   const query = new URLSearchParams();
   if (params.limit) query.set("limit", String(params.limit));
   if (params.offset) query.set("offset", String(params.offset));
   if (params.sort) query.set("sort", params.sort);
   if (params.scope) query.set("scope", params.scope);
+  if (typeof params.includeDlc === "boolean") {
+    query.set("include_dlc", params.includeDlc ? "true" : "false");
+  }
+  if (typeof params.mustHaveArtwork === "boolean") {
+    query.set("must_have_artwork", params.mustHaveArtwork ? "true" : "false");
+  }
   const data = await requestJson<any>(`/steam/index/catalog?${query.toString()}`);
   return {
     total: data.total ?? 0,
@@ -957,9 +984,13 @@ export async function searchSteamIndexCatalog(params: {
   if (params.limit) query.set("limit", String(params.limit));
   if (params.offset) query.set("offset", String(params.offset));
   if (params.source) query.set("source", params.source);
-  if (typeof params.includeDlc === "boolean") query.set("include_dlc", params.includeDlc ? "1" : "0");
+  if (typeof params.includeDlc === "boolean") {
+    query.set("include_dlc", params.includeDlc ? "true" : "false");
+  }
   if (params.rankingMode) query.set("ranking_mode", params.rankingMode);
-  if (params.mustHaveArtwork) query.set("must_have_artwork", "1");
+  if (typeof params.mustHaveArtwork === "boolean") {
+    query.set("must_have_artwork", params.mustHaveArtwork ? "true" : "false");
+  }
   const data = await requestJson<any>(`/steam/index/search?${query.toString()}`);
   return {
     total: data.total ?? 0,
@@ -978,7 +1009,7 @@ export async function fetchSteamIndexAssets(
   appId: string,
   forceRefresh = false
 ): Promise<SteamIndexAssetInfo> {
-  const query = forceRefresh ? "?force_refresh=1" : "";
+  const query = forceRefresh ? "?force_refresh=true" : "";
   const data = await requestJson<any>(`/steam/index/assets/${appId}${query}`);
   return {
     appId: String(data.app_id ?? appId),
@@ -1122,7 +1153,7 @@ export async function fetchSteamIndexTopRanking(params?: {
   if (params?.limit) query.set("limit", String(params.limit));
   if (params?.offset) query.set("offset", String(params.offset));
   if (typeof params?.includeDlc === "boolean") {
-    query.set("include_dlc", params.includeDlc ? "1" : "0");
+    query.set("include_dlc", params.includeDlc ? "true" : "false");
   }
   const suffix = query.toString();
   const data = await requestJson<any>(`/steam/index/ranking/top${suffix ? `?${suffix}` : ""}`);
@@ -2087,6 +2118,43 @@ function inferSteamAppId(raw: any): string {
   return "";
 }
 
+const STEAM_PLACEHOLDER_NAME_PATTERN = /^steam app\s+\d+$/i;
+
+function isPlaceholderSteamName(name?: string | null, appId?: string | null): boolean {
+  const text = String(name || "").trim();
+  if (!text) return true;
+  if (/^\d+$/.test(text)) return true;
+  if (STEAM_PLACEHOLDER_NAME_PATTERN.test(text)) return true;
+  const normalizedAppId = String(appId || "").trim();
+  if (!normalizedAppId) return false;
+  const lowered = text.toLowerCase();
+  return lowered === normalizedAppId.toLowerCase() || lowered === `steam app ${normalizedAppId}`.toLowerCase();
+}
+
+function resolveSteamCatalogName(raw: any, appId: string): string {
+  const candidates = [
+    raw?.name,
+    raw?.title,
+    raw?.display_name,
+    raw?.displayName,
+    raw?.game_name,
+    raw?.gameName,
+  ]
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter((value) => value.length > 0);
+
+  for (const candidate of candidates) {
+    if (!isPlaceholderSteamName(candidate, appId)) {
+      return candidate;
+    }
+  }
+
+  if (candidates.length) {
+    return candidates[0];
+  }
+  return appId ? `Steam App ${appId}` : "";
+}
+
 function mapSteamCatalogItem(raw: any): SteamCatalogItem {
   const toThumb = (
     url?: string | null,
@@ -2095,6 +2163,13 @@ function mapSteamCatalogItem(raw: any): SteamCatalogItem {
   ) => toBackendThumbnail(url, width, mode);
   const rawArtwork = raw?.artwork && typeof raw.artwork === "object" ? raw.artwork : {};
   const appId = inferSteamAppId(raw);
+  const steamStaticBase =
+    appId && /^\d+$/.test(appId)
+      ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}`
+      : null;
+  const steamHeaderFallback = steamStaticBase ? `${steamStaticBase}/header.jpg` : null;
+  const steamCapsuleFallback = steamStaticBase ? `${steamStaticBase}/capsule_616x353.jpg` : null;
+  const steamHeroFallback = steamStaticBase ? `${steamStaticBase}/library_hero.jpg` : null;
   const cardImageSource =
     rawArtwork.t3 ??
     raw.capsule_image ??
@@ -2103,6 +2178,8 @@ function mapSteamCatalogItem(raw: any): SteamCatalogItem {
     raw.headerImage ??
     raw.background ??
     raw.background_raw ??
+    steamCapsuleFallback ??
+    steamHeaderFallback ??
     null;
   const heroImageSource =
     rawArtwork.t4 ??
@@ -2111,17 +2188,22 @@ function mapSteamCatalogItem(raw: any): SteamCatalogItem {
     raw.hero_image ??
     raw.header_image ??
     raw.headerImage ??
+    steamHeroFallback ??
+    steamHeaderFallback ??
     cardImageSource;
   const backgroundSource =
     raw.background ??
     raw.background_image ??
     raw.hero_image ??
+    steamHeroFallback ??
+    steamHeaderFallback ??
     heroImageSource ??
     null;
+  const resolvedName = resolveSteamCatalogName(raw, appId);
   const artwork = {
-    t0: toThumb(rawArtwork.t0 ?? null, 120),
-    t1: toThumb(rawArtwork.t1 ?? null, 220),
-    t2: toThumb(rawArtwork.t2 ?? null, 360),
+    t0: toThumb(rawArtwork.t0 ?? steamCapsuleFallback ?? steamHeaderFallback ?? null, 120),
+    t1: toThumb(rawArtwork.t1 ?? steamCapsuleFallback ?? steamHeaderFallback ?? null, 220),
+    t2: toThumb(rawArtwork.t2 ?? steamCapsuleFallback ?? steamHeaderFallback ?? null, 360),
     t3: toThumb(cardImageSource, 560, "adaptive"),
     t4: toThumb(heroImageSource, 1600, "high"),
     version: Number.isFinite(Number(rawArtwork.version)) ? Number(rawArtwork.version) : 1,
@@ -2152,14 +2234,25 @@ function mapSteamCatalogItem(raw: any): SteamCatalogItem {
       : undefined;
   return {
     appId,
-    name: raw.name ?? (appId ? `Steam App ${appId}` : ""),
+    name: resolvedName,
     shortDescription: raw.short_description ?? raw.shortDescription ?? null,
     headerImage: toThumb(
-      raw.header_image ?? raw.headerImage ?? raw.tiny_image ?? cardImageSource ?? null,
+      raw.header_image ??
+        raw.headerImage ??
+        raw.tiny_image ??
+        cardImageSource ??
+        steamHeaderFallback ??
+        null,
       560
     ),
     capsuleImage: toThumb(
-      raw.capsule_image ?? raw.capsuleImage ?? raw.header_image ?? raw.headerImage ?? null,
+      raw.capsule_image ??
+        raw.capsuleImage ??
+        raw.header_image ??
+        raw.headerImage ??
+        steamCapsuleFallback ??
+        steamHeaderFallback ??
+        null,
       420
     ),
     background: backgroundSource,
@@ -2369,12 +2462,44 @@ function mapFixGuide(raw: any, kind: "online-fix" | "bypass", fallbackName: stri
   };
 }
 
+function resolveFixEntryDisplayName(
+  appId: string,
+  rawName: unknown,
+  steamName: unknown,
+  options: FixOption[]
+): string {
+  const optionNames = options
+    .map((option) => (typeof option.name === "string" ? option.name.trim() : ""))
+    .filter((value) => value.length > 0);
+  const candidates = [
+    typeof rawName === "string" ? rawName.trim() : "",
+    ...optionNames,
+    typeof steamName === "string" ? steamName.trim() : "",
+  ].filter((value) => value.length > 0);
+
+  for (const candidate of candidates) {
+    if (!isPlaceholderSteamName(candidate, appId)) {
+      return candidate;
+    }
+  }
+  for (const candidate of candidates) {
+    if (candidate) return candidate;
+  }
+  return appId;
+}
+
 function mapFixEntry(raw: any): FixEntry {
+    const appId = String(raw.app_id ?? raw.appId ?? "");
+    const options = Array.isArray(raw.options) ? raw.options.map(mapFixOption) : [];
+    const steam = raw.steam ? mapSteamCatalogItem(raw.steam) : null;
+    const name = resolveFixEntryDisplayName(appId, raw.name, steam?.name, options);
+    const patchedSteam =
+      steam && isPlaceholderSteamName(steam.name, appId) ? { ...steam, name } : steam;
     return {
-      appId: String(raw.app_id ?? raw.appId ?? ""),
-      name: raw.name ?? "",
-      steam: raw.steam ? mapSteamCatalogItem(raw.steam) : null,
-      options: Array.isArray(raw.options) ? raw.options.map(mapFixOption) : [],
+      appId,
+      name,
+      steam: patchedSteam,
+      options,
       denuvo: Boolean(
         raw.denuvo ??
           raw.has_denuvo ??

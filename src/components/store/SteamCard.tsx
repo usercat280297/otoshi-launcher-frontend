@@ -126,8 +126,6 @@ export default function SteamCard({ item, onOpen, prefetchItems = [] }: SteamCar
       `${steamStaticBase}/capsule_231x87.jpg`,
       `${steamStaticBase}/capsule_sm_120.jpg`,
       `${steamStaticBase}/capsule_184x69.jpg`,
-      `${steamStaticBase}/icon.jpg`,
-      `${steamStaticBase}/logo.png`,
       POSTER_PLACEHOLDER,
     ];
     const out: string[] = [];

@@ -202,6 +202,10 @@ const messages: Record<string, Record<Locale, string>> = {
   "store.all_loaded": { en: "All games loaded.", vi: "Đã tải tất cả game." },
   "store.api_offline": { en: "API offline, showing local catalog snapshot.", vi: "API không khả dụng, hiển thị dữ liệu cục bộ." },
   "store.syncing": { en: "Syncing catalog...", vi: "Đang đồng bộ danh mục..." },
+  "store.syncing_description": {
+    en: "Updating game list, images, and latest metadata. Please wait a moment.",
+    vi: "Dang cap nhat danh sach game, anh bia va du lieu moi nhat. Vui long cho trong giay lat.",
+  },
   "store.top_sellers": { en: "Top Sellers", vi: "Bán chạy nhất" },
   "store.most_played": { en: "Most Played", vi: "Chơi nhiều nhất" },
   "store.top_wishlisted": { en: "Top Upcoming Wishlisted", vi: "Được yêu thích nhất" },
@@ -870,6 +874,12 @@ const messages: Record<string, Record<Locale, string>> = {
   "guide.note.b1launcher_check": { en: "The b1 Launcher.exe will check if VT-x/SVM are properly enabled", vi: "b1 Launcher.exe sẽ kiểm tra xem VT-x/SVM có được bật đúng cách hay không" },
   "guide.note.restart_requirement": { en: "Some systems may require a restart after enabling virtualization", vi: "Một số hệ thống có thể cần khởi động lại sau khi bật ảo hóa" },
   "guide.note.crack_folder_copy": { en: "Ensure the entire crack folder is properly copied to the game directory", vi: "Đảm bảo toàn bộ thư mục crack được sao chép đúng cách vào thư mục trò chơi" },
+  "guide.bypass.3489700.title": { en: "Stellar Blade - Hypervisor Setup", vi: "Stellar Blade - Cau Hinh Hypervisor" },
+  "guide.bypass.3489700.summary": { en: "Simplified setup guide for Stellar Blade. Follow 4 simple steps to install and run.", vi: "Huong dan cau hinh don gian cho Stellar Blade. Thuc hien 4 buoc de cai dat va chay." },
+  "guide.step.enable_vtx_svm_desc_stellar_blade": { en: "Enable VT-x (Intel) or SVM (AMD) virtualization in BIOS. You can verify these features are enabled by opening stellar blade launcher.exe - if they're disabled, you can click the 'Open BIOS' button to configure them.", vi: "Bat VT-x (Intel) hoac SVM (AMD) virtualization trong BIOS. Ban co the xac minh cac tinh nang nay bang cach mo stellar blade launcher.exe - neu chung bi tat, ban co the nhap nut 'Open BIOS' de cau hinh chung." },
+  "guide.step.launch_game_desc_stellar_blade": { en: "Open stellar blade launcher.exe and run the game. If your system requires a restart, please follow the instructions provided.", vi: "Mo stellar blade launcher.exe va chay tro choi. Neu he thong cua ban yeu cau khoi dong lai, vui long tuan theo huong dan duoc cung cap." },
+  "guide.warning.stellar_blade_launcher_only": { en: "Only run stellar blade launcher.exe from the game directory", vi: "Chi chay stellar blade launcher.exe tu thu muc tro choi" },
+  "guide.note.stellar_blade_launcher_check": { en: "The stellar blade launcher.exe will check if VT-x/SVM are properly enabled", vi: "stellar blade launcher.exe se kiem tra VT-x/SVM da duoc bat dung cach hay chua" },
 };
 
 const normalizeLocale = (value: string | null | undefined): Locale => {

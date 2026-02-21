@@ -72,6 +72,7 @@ export default function SteamGameDetailPage() {
   const [downloadOptionsLoading, setDownloadOptionsLoading] = useState(false);
   const [downloadOptionsError, setDownloadOptionsError] = useState<string | null>(null);
   const [downloadSubmitting, setDownloadSubmitting] = useState(false);
+  const [downloadSubmitPhase, setDownloadSubmitPhase] = useState<"prepare" | "scan" | "start" | null>(null);
   const [downloadSubmitError, setDownloadSubmitError] = useState<string | null>(null);
   const [ageGateOpen, setAgeGateOpen] = useState(false);
   const [ageGateError, setAgeGateError] = useState<string | null>(null);
@@ -306,6 +307,7 @@ export default function SteamGameDetailPage() {
     setActionError(null);
     setDownloadSubmitError(null);
     setDownloadSubmitting(true);
+    setDownloadSubmitPhase("prepare");
     setStartingDownload(true);
     try {
       console.log("[DownloadFlow] preparing steam download", { appId, payload });
@@ -324,6 +326,8 @@ export default function SteamGameDetailPage() {
         setDownloadSubmitError(t("download_options.storage_not_enough"));
         return;
       }
+      setDownloadSubmitPhase("scan");
+      await new Promise((resolve) => window.setTimeout(resolve, 220));
       const preparedInstallPath = (prepared.installPath || "").trim();
       const startPayload: DownloadPreparePayload = preparedInstallPath
         ? {
@@ -332,6 +336,8 @@ export default function SteamGameDetailPage() {
             createSubfolder: false
           }
         : payload;
+      setDownloadSubmitPhase("start");
+      await new Promise((resolve) => window.setTimeout(resolve, 180));
       console.log("[DownloadFlow] starting download", { appId, startPayload });
       await startSteamDownloadWithOptions(appId, startPayload, token);
       setDownloadModalOpen(false);
@@ -354,6 +360,7 @@ export default function SteamGameDetailPage() {
       );
     } finally {
       setDownloadSubmitting(false);
+      setDownloadSubmitPhase(null);
       setStartingDownload(false);
     }
   };
@@ -478,6 +485,7 @@ export default function SteamGameDetailPage() {
         loading={downloadOptionsLoading}
         error={downloadOptionsError}
         submitting={downloadSubmitting}
+        submitPhase={downloadSubmitPhase}
         submitError={downloadSubmitError}
         activeTask={currentGameTask}
         onPauseTask={(downloadId) => void pause(downloadId)}

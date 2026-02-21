@@ -186,13 +186,44 @@ function Get-FreePort {
     }
 }
 
+function Normalize-PathText([string]$value) {
+    if (-not $value) { return "" }
+    return ($value -replace "/", "\\").Trim().ToLowerInvariant()
+}
+
+$script:ExpectedBackendDbPath = ""
+try {
+    $resolved = Resolve-Path "..\\backend\\otoshi.db" -ErrorAction Stop
+    $script:ExpectedBackendDbPath = Normalize-PathText $resolved.Path
+} catch {
+    $script:ExpectedBackendDbPath = ""
+}
+
 function Test-BackendHealthy([int]$port) {
     try {
         $resp = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$port/health" -TimeoutSec 2
         if ($resp.StatusCode -eq 200 -and $resp.Content -match '"status"\s*:\s*"ok"') {
             # Ensure backend is the updated build (news_enhanced flag present)
             if ($resp.Content -match '"news_enhanced"\s*:\s*true') {
-                return $true
+                try {
+                    $runtime = Invoke-RestMethod -Uri "http://127.0.0.1:$port/health/runtime" -TimeoutSec 2
+                    if (-not $runtime) { return $false }
+                    if ($runtime.status -ne "ok") { return $false }
+                    if (-not $runtime.db_exists) { return $false }
+                    if ($runtime.ingest_state -eq "failed" -or $runtime.ingest_state -eq "error") {
+                        return $false
+                    }
+                    if ($script:ExpectedBackendDbPath) {
+                        $runtimeDbPath = Normalize-PathText ([string]$runtime.db_path)
+                        if ($runtimeDbPath -and $runtimeDbPath -ne $script:ExpectedBackendDbPath) {
+                            Write-Host "Backend on port $port uses unexpected DB path: $($runtime.db_path)" -ForegroundColor Yellow
+                            return $false
+                        }
+                    }
+                    return $true
+                } catch {
+                    return $false
+                }
             }
         }
     } catch { }

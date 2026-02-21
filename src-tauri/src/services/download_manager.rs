@@ -15,7 +15,7 @@ use sha2::{Digest, Sha256};
 use sysinfo::Disks;
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
-use tokio::sync::{mpsc, watch, Semaphore};
+use tokio::sync::{mpsc, watch, OwnedSemaphorePermit, Semaphore};
 use tokio::time::sleep;
 use zip::ZipArchive;
 
@@ -24,7 +24,10 @@ use crate::db::Database;
 use crate::errors::{LauncherError, Result};
 use crate::models::{DownloadChunk, DownloadState, LocalDownload};
 use crate::services::download_service::DownloadProgressUpdate;
-use crate::services::{ApiClient, DownloadService};
+use crate::services::{
+    build_chunk_peer_urls, peer_url_fingerprint, ApiClient, DownloadService, PeerCacheServer,
+    PeerCandidate, PeerCoordinator,
+};
 use crate::utils::file::FileManager;
 
 const DEFAULT_CHUNK_SIZE: u64 = 1024 * 1024;
@@ -58,6 +61,8 @@ pub struct DownloadManager {
     throttle: BandwidthThrottler,
     max_concurrent_chunks: usize,
     depot_cache: DepotCache,
+    peer_server: Option<PeerCacheServer>,
+    peer_coordinator: Option<PeerCoordinator>,
 }
 
 #[derive(Clone)]
@@ -250,6 +255,18 @@ struct ProgressTracker {
     start_time: Instant,
 }
 
+#[derive(Clone)]
+struct AdaptiveConcurrencyGovernor {
+    enabled: bool,
+    mode: String,
+    semaphore: Arc<Semaphore>,
+    reserved: Arc<tokio::sync::Mutex<Vec<OwnedSemaphorePermit>>>,
+    min_permits: usize,
+    max_permits: usize,
+    last_pressure: Arc<tokio::sync::Mutex<Option<Instant>>>,
+    last_relax: Arc<tokio::sync::Mutex<Instant>>,
+}
+
 #[derive(Clone, Serialize)]
 struct DownloadRuntimeErrorPayload {
     download_id: String,
@@ -288,6 +305,100 @@ impl ProgressTracker {
         let remaining = self.total_bytes.saturating_sub(downloaded);
         let eta = if speed > 0 { remaining / speed } else { 0 };
         (progress, speed, eta, downloaded, self.total_bytes)
+    }
+}
+
+impl AdaptiveConcurrencyGovernor {
+    fn new(method_key: &str, semaphore: Arc<Semaphore>, max_permits: usize) -> Self {
+        let normalized = method_key.trim().to_ascii_lowercase();
+        let enabled =
+            normalized.eq("auto") || normalized.eq("max_speed") || normalized.eq("balance");
+        let min_permits = match normalized.as_str() {
+            "auto" => (max_permits / 3).clamp(8, 24),
+            "max_speed" => (max_permits / 2).clamp(12, 32),
+            "balance" => (max_permits / 2).clamp(6, 16),
+            _ => max_permits,
+        }
+        .min(max_permits);
+
+        Self {
+            enabled,
+            mode: normalized,
+            semaphore,
+            reserved: Arc::new(tokio::sync::Mutex::new(Vec::new())),
+            min_permits,
+            max_permits,
+            last_pressure: Arc::new(tokio::sync::Mutex::new(None)),
+            last_relax: Arc::new(tokio::sync::Mutex::new(Instant::now())),
+        }
+    }
+
+    async fn current_limit(&self) -> usize {
+        let reserved = self.reserved.lock().await;
+        self.max_permits.saturating_sub(reserved.len())
+    }
+
+    async fn on_network_pressure(&self, source: &str, reason: &str) {
+        if !self.enabled {
+            return;
+        }
+
+        let now = Instant::now();
+        {
+            let mut last_pressure = self.last_pressure.lock().await;
+            *last_pressure = Some(now);
+        }
+
+        let current = self.current_limit().await;
+        if current <= self.min_permits {
+            return;
+        }
+
+        if let Ok(permit) = self.semaphore.clone().try_acquire_owned() {
+            let mut reserved = self.reserved.lock().await;
+            reserved.push(permit);
+            let reduced = self.max_permits.saturating_sub(reserved.len());
+            tracing::warn!(
+                "adaptive download governor reduced concurrency mode={} source={} reason={} limit={}/{}",
+                self.mode,
+                source,
+                reason,
+                reduced,
+                self.max_permits
+            );
+        }
+    }
+
+    async fn maybe_relax(&self) {
+        if !self.enabled {
+            return;
+        }
+
+        let now = Instant::now();
+        let last_pressure = { *self.last_pressure.lock().await };
+        let pressure_age = last_pressure
+            .map(|value| now.saturating_duration_since(value))
+            .unwrap_or(Duration::from_secs(3600));
+        if pressure_age < Duration::from_secs(4) {
+            return;
+        }
+
+        let mut last_relax = self.last_relax.lock().await;
+        if now.saturating_duration_since(*last_relax) < Duration::from_secs(2) {
+            return;
+        }
+
+        let mut reserved = self.reserved.lock().await;
+        if reserved.pop().is_some() {
+            *last_relax = now;
+            let restored = self.max_permits.saturating_sub(reserved.len());
+            tracing::info!(
+                "adaptive download governor restored concurrency mode={} limit={}/{}",
+                self.mode,
+                restored,
+                self.max_permits
+            );
+        }
     }
 }
 
@@ -393,7 +504,11 @@ fn scan_manifest_file(
     mode: IntegrityScanMode,
     preflight_hash_limit_bytes: u64,
 ) -> IntegrityFileResult {
-    let relative = file.path.replace('\\', "/").trim_start_matches('/').to_string();
+    let relative = file
+        .path
+        .replace('\\', "/")
+        .trim_start_matches('/')
+        .to_string();
     let target = install_dir.join(&relative);
     let expected_hash = sanitize_hash(&file.hash);
 
@@ -819,6 +934,13 @@ impl DownloadManager {
         let throttle = BandwidthThrottler::new(max_bps);
         throttle.start_reset_task();
         let depot_cache = DepotCache::new(resolve_depot_cache_root(&file_manager));
+        let peer_server = PeerCacheServer::start(depot_cache.root.clone());
+        let peer_coordinator = peer_server
+            .as_ref()
+            .and_then(|server| PeerCoordinator::new(api.clone(), server.advertise_info()));
+        if let Some(coordination) = peer_coordinator.as_ref() {
+            coordination.start();
+        }
 
         Self {
             app_handle,
@@ -831,6 +953,8 @@ impl DownloadManager {
             throttle,
             max_concurrent_chunks,
             depot_cache,
+            peer_server,
+            peer_coordinator,
         }
     }
 
@@ -880,7 +1004,9 @@ impl DownloadManager {
             let _ = manager.depot_cache.gc_if_needed();
             if let Err(err) = result {
                 let err_message = err.to_string();
-                let cancelled = err_message.to_ascii_lowercase().contains("download cancelled");
+                let cancelled = err_message
+                    .to_ascii_lowercase()
+                    .contains("download cancelled");
                 tracing::error!(
                     "download failed id={} game_id={} slug={} error={}",
                     download_id,
@@ -889,7 +1015,9 @@ impl DownloadManager {
                     err_message
                 );
                 let final_status = if cancelled { "cancelled" } else { "failed" };
-                let _ = manager.db.update_download_status(&download_id, final_status);
+                let _ = manager
+                    .db
+                    .update_download_status(&download_id, final_status);
                 let _ = manager
                     .downloads_api
                     .update_status(&download_id, final_status)
@@ -1033,19 +1161,38 @@ impl DownloadManager {
             .map(|chunk| ((chunk.file_id, chunk.chunk_index), chunk.hash))
             .collect();
 
-        let plan = build_download_plan(
+        let method_key = requested_method_text(requested_method);
+        let mut plan = build_download_plan(
             &manifest,
             &install_dir,
             &completed_map,
             old_manifest.as_ref(),
         )?;
+        if method_allows_peer_assist(&method_key) {
+            if let Some(coordination) = self.peer_coordinator.as_ref() {
+                let peers = coordination.peers_for_game(game_id).await;
+                if !peers.is_empty() {
+                    apply_peer_sources(&mut plan, &peers);
+                    tracing::info!(
+                        "p2p peer assist enabled slug={} peers={} chunks={} method={}",
+                        slug,
+                        peers.len(),
+                        plan.chunks.len(),
+                        method_key
+                    );
+                }
+            }
+        } else {
+            tracing::info!(
+                "p2p peer assist skipped for slug={} method={}",
+                slug,
+                method_key
+            );
+        }
 
-        let preflight_scan = scan_manifest_integrity(
-            &install_dir,
-            &manifest.files,
-            IntegrityScanMode::Preflight,
-        )
-        .await?;
+        let preflight_scan =
+            scan_manifest_integrity(&install_dir, &manifest.files, IntegrityScanMode::Preflight)
+                .await?;
         tracing::info!(
             "preflight scan slug={} total={} ok={} missing={} corrupt={} error={} hashed={} elapsed_ms={}",
             slug,
@@ -1093,7 +1240,6 @@ impl DownloadManager {
 
         delete_files(&plan.delete_files).await;
         prepare_files(&plan.files_to_finalize).await?;
-        let mut plan = plan;
         let hydrated_bytes =
             hydrate_from_depot_cache(&mut plan, &self.depot_cache, &self.db, download_id).await?;
         if hydrated_bytes > 0 {
@@ -1106,11 +1252,13 @@ impl DownloadManager {
 
         let tracker = ProgressTracker::new(plan.total_bytes, plan.preexisting_bytes);
         let mut reporter = ProgressReporter::new(plan.preexisting_bytes);
-        let requested_method_text = requested_method_text(requested_method);
+        let requested_method_text = method_key;
+        let effective_concurrency =
+            resolve_method_concurrency(&requested_method_text, self.max_concurrent_chunks);
         let mut engine = resolve_download_engine(requested_method);
         let mut aria2_config = None;
         if engine == DownloadEngine::Aria2c {
-            let config = resolve_aria2_config(self.max_concurrent_chunks);
+            let config = resolve_aria2_config(effective_concurrency);
             match ensure_aria2_available(&config) {
                 Ok(_) => aria2_config = Some(config),
                 Err(err) => {
@@ -1123,18 +1271,25 @@ impl DownloadManager {
             }
         }
         tracing::info!(
-            "download engine={} slug={} method={}",
+            "download engine={} slug={} method={} concurrency={}",
             if engine == DownloadEngine::Aria2c {
                 "aria2c"
             } else {
                 "reqwest"
             },
             slug,
-            requested_method_text
+            requested_method_text,
+            effective_concurrency
         );
 
         let (tx, mut rx) = mpsc::channel::<ChunkResult>(256);
-        let semaphore = Arc::new(Semaphore::new(self.max_concurrent_chunks));
+        let semaphore = Arc::new(Semaphore::new(effective_concurrency));
+        let governor = AdaptiveConcurrencyGovernor::new(
+            &requested_method_text,
+            semaphore.clone(),
+            effective_concurrency,
+        );
+        let session_peer_blacklist = Arc::new(Mutex::new(HashSet::<String>::new()));
 
         for job in plan.chunks {
             let tx = tx.clone();
@@ -1144,6 +1299,7 @@ impl DownloadManager {
             let throttle = self.throttle.clone();
             let aria2_config = aria2_config.clone();
             let depot_cache = self.depot_cache.clone();
+            let peer_blacklist = session_peer_blacklist.clone();
 
             tokio::spawn(async move {
                 let _permit = semaphore.acquire().await.ok();
@@ -1159,24 +1315,13 @@ impl DownloadManager {
                     aria2_config.as_ref(),
                     &tx,
                     &mut control,
+                    &peer_blacklist,
                 )
                 .await
                 {
                     Ok(payload) => {
-                        let mut data = payload.data;
+                        let data = payload.data;
                         throttle.acquire(data.len() as u64).await;
-                        if let Err(err) = decompress_if_needed(&job, &mut data) {
-                            let _ = tx.send(ChunkResult::Error { error: err }).await;
-                            return;
-                        }
-                        if !verify_chunk(&data, &job.hash) {
-                            let _ = tx
-                                .send(ChunkResult::Error {
-                                    error: LauncherError::Config("chunk hash mismatch".to_string()),
-                                })
-                                .await;
-                            return;
-                        }
                         if let Err(err) = write_chunk(&job, &data).await {
                             let _ = tx.send(ChunkResult::Error { error: err }).await;
                             return;
@@ -1213,6 +1358,7 @@ impl DownloadManager {
                     if bytes == 0 {
                         continue;
                     }
+                    governor.maybe_relax().await;
                     tracker.add_bytes(bytes).await;
                     let (progress, speed, eta, downloaded, total) = tracker.snapshot().await;
                     reporter
@@ -1236,6 +1382,7 @@ impl DownloadManager {
                     hash,
                     accounted_bytes,
                 } => {
+                    governor.maybe_relax().await;
                     let remaining = size.saturating_sub(accounted_bytes);
                     if remaining > 0 {
                         tracker.add_bytes(remaining).await;
@@ -1264,6 +1411,9 @@ impl DownloadManager {
                             total,
                         )
                         .await?;
+                }
+                ChunkResult::NetworkPressure { source, reason } => {
+                    governor.on_network_pressure(source, reason).await;
                 }
                 ChunkResult::Error { error } => {
                     self.db.update_download_status(download_id, "failed")?;
@@ -1304,10 +1454,7 @@ impl DownloadManager {
             self.db.update_download_status(download_id, "failed")?;
             return Err(LauncherError::Config(format!(
                 "post-download verification failed (missing={}, corrupt={}, error={}): {}",
-                post_scan.missing_files,
-                post_scan.corrupt_files,
-                post_scan.error_files,
-                details
+                post_scan.missing_files, post_scan.corrupt_files, post_scan.error_files, details
             )));
         }
         if is_archive_mode(&manifest) {
@@ -1479,18 +1626,38 @@ fn env_usize(key: &str) -> Option<usize> {
         .and_then(|value| value.trim().parse::<usize>().ok())
 }
 
-fn resolve_download_engine(requested_method: Option<&str>) -> DownloadEngine {
-    if requested_method
-        .map(|value| value.eq_ignore_ascii_case("auto"))
-        .unwrap_or(false)
-    {
-        return DownloadEngine::Aria2c;
+fn normalize_download_method(requested_method: Option<&str>) -> String {
+    let normalized = requested_method
+        .map(|value| value.trim().to_ascii_lowercase())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "auto".to_string());
+    match normalized.as_str() {
+        "aria2c" => "max_speed".to_string(),
+        "cdn_direct" => "cdn".to_string(),
+        "hf_chunks" => "balance".to_string(),
+        _ => normalized,
     }
+}
 
-    if requested_method
-        .map(|value| value.eq_ignore_ascii_case("aria2c"))
-        .unwrap_or(false)
-    {
+fn method_allows_peer_assist(method_key: &str) -> bool {
+    !method_key.eq_ignore_ascii_case("cdn")
+}
+
+fn resolve_method_concurrency(method_key: &str, max_concurrent_chunks: usize) -> usize {
+    let base = max_concurrent_chunks.clamp(1, MAX_CONCURRENT_CHUNKS);
+    match method_key.trim().to_ascii_lowercase().as_str() {
+        // Auto is recommended and still max-speed by default.
+        "auto" => (base.saturating_mul(2)).clamp(16, MAX_CONCURRENT_CHUNKS),
+        "max_speed" => (base.saturating_mul(2).saturating_add(8)).clamp(20, MAX_CONCURRENT_CHUNKS),
+        "balance" => base.clamp(12, 40),
+        "cdn" => (base / 2).clamp(6, 20),
+        _ => base,
+    }
+}
+
+fn resolve_download_engine(requested_method: Option<&str>) -> DownloadEngine {
+    let method_key = normalize_download_method(requested_method);
+    if method_key.eq_ignore_ascii_case("auto") || method_key.eq_ignore_ascii_case("max_speed") {
         return DownloadEngine::Aria2c;
     }
 
@@ -1504,10 +1671,7 @@ fn resolve_download_engine(requested_method: Option<&str>) -> DownloadEngine {
 }
 
 fn requested_method_text(requested_method: Option<&str>) -> String {
-    requested_method
-        .map(|value| value.trim().to_ascii_lowercase())
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| "auto".to_string())
+    normalize_download_method(requested_method)
 }
 
 fn resolve_aria2_config(max_concurrent_chunks: usize) -> Aria2Config {
@@ -1786,6 +1950,10 @@ enum ChunkResult {
     Progress {
         bytes: u64,
     },
+    NetworkPressure {
+        source: &'static str,
+        reason: &'static str,
+    },
     Success {
         file_id: String,
         chunk_index: u64,
@@ -1828,12 +1996,17 @@ async fn download_chunk(
     aria2_config: Option<&Aria2Config>,
     progress_tx: &mpsc::Sender<ChunkResult>,
     control: &mut watch::Receiver<DownloadControl>,
+    peer_blacklist: &Arc<Mutex<HashSet<String>>>,
 ) -> Result<DownloadChunkPayload> {
     wait_for_running(control).await?;
     if engine == DownloadEngine::Aria2c {
         if let Some(config) = aria2_config {
             match download_chunk_with_aria2(job, config).await {
-                Ok(data) => {
+                Ok(mut data) => {
+                    decompress_if_needed(job, &mut data)?;
+                    if !verify_chunk(&data, &job.hash) {
+                        return Err(LauncherError::Config("chunk hash mismatch".to_string()));
+                    }
                     return Ok(DownloadChunkPayload {
                         data,
                         accounted_bytes: 0,
@@ -1866,25 +2039,35 @@ async fn download_chunk(
     urls.push(job.url.clone());
     urls.extend(job.fallback_urls.clone());
     let mut failures: Vec<String> = Vec::new();
-    let max_attempts = env_usize("LAUNCHER_HTTP_CHUNK_MAX_ATTEMPTS")
-        .unwrap_or(6)
-        .clamp(1, 8);
-    let retry_wait_ms = env_usize("LAUNCHER_HTTP_CHUNK_RETRY_WAIT_MS")
-        .unwrap_or(900)
-        .clamp(0, 30000) as u64;
 
     for url in urls {
+        let peer_key = peer_url_fingerprint(&url);
+        if let Some(key) = peer_key.as_ref() {
+            let is_blocked = peer_blacklist
+                .lock()
+                .map(|locked| locked.contains(key))
+                .unwrap_or(false);
+            if is_blocked {
+                failures.push(format!("{} -> skipped blacklisted peer", url));
+                continue;
+            }
+        }
+
+        let (max_attempts, retry_wait_ms, timeout_ms) =
+            resolve_http_retry_policy(peer_key.is_some());
         let mut last_failure: Option<String> = None;
         for attempt in 1..=max_attempts {
-            let response = client.get(&url).send().await;
+            let response = client
+                .get(&url)
+                .timeout(Duration::from_millis(timeout_ms))
+                .send()
+                .await;
             match response {
                 Ok(resp) => {
                     if resp.status().is_success() {
-                        const PROGRESS_EMIT_BYTES: u64 = 1024 * 1024;
                         let mut stream = resp.bytes_stream();
                         let mut data = Vec::with_capacity(job.size.min(16 * 1024 * 1024) as usize);
                         let mut accounted = 0u64;
-                        let mut pending = 0u64;
 
                         loop {
                             tokio::select! {
@@ -1907,29 +2090,44 @@ async fn download_chunk(
                                     let bytes = next?;
                                     data.extend_from_slice(&bytes);
 
-                                    let room = job.size.saturating_sub(accounted.saturating_add(pending));
+                                    let room = job.size.saturating_sub(accounted);
                                     if room == 0 {
                                         continue;
                                     }
                                     let delta = (bytes.len() as u64).min(room);
-                                    pending = pending.saturating_add(delta);
-
-                                    if pending >= PROGRESS_EMIT_BYTES {
-                                        let _ = progress_tx
-                                            .send(ChunkResult::Progress { bytes: pending })
-                                            .await;
-                                        accounted = accounted.saturating_add(pending);
-                                        pending = 0;
-                                    }
+                                    accounted = accounted.saturating_add(delta);
                                 }
                             }
                         }
 
-                        if pending > 0 {
-                            let _ = progress_tx.send(ChunkResult::Progress { bytes: pending }).await;
-                            accounted = accounted.saturating_add(pending);
+                        if let Err(err) = decompress_if_needed(job, &mut data) {
+                            if let Some(key) = peer_key.as_ref() {
+                                if let Ok(mut locked) = peer_blacklist.lock() {
+                                    locked.insert(key.clone());
+                                }
+                            }
+                            last_failure = Some(format!("{} -> decompress failed ({})", url, err));
+                            break;
                         }
 
+                        if !verify_chunk(&data, &job.hash) {
+                            if let Some(key) = peer_key.as_ref() {
+                                if let Ok(mut locked) = peer_blacklist.lock() {
+                                    locked.insert(key.clone());
+                                }
+                            }
+                            last_failure = Some(format!(
+                                "{} -> hash mismatch [attempt {}/{}]",
+                                url, attempt, max_attempts
+                            ));
+                            break;
+                        }
+
+                        if accounted > 0 {
+                            let _ = progress_tx
+                                .send(ChunkResult::Progress { bytes: accounted })
+                                .await;
+                        }
                         return Ok(DownloadChunkPayload {
                             data,
                             accounted_bytes: accounted,
@@ -1951,6 +2149,17 @@ async fn download_chunk(
                         || status == reqwest::StatusCode::REQUEST_TIMEOUT
                         || status == reqwest::StatusCode::TOO_MANY_REQUESTS;
                     if retryable && attempt < max_attempts {
+                        let source = if peer_key.is_some() { "peer" } else { "cdn" };
+                        let reason = if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                            "rate_limited"
+                        } else if status == reqwest::StatusCode::REQUEST_TIMEOUT {
+                            "http_timeout"
+                        } else {
+                            "http_retryable"
+                        };
+                        let _ = progress_tx
+                            .send(ChunkResult::NetworkPressure { source, reason })
+                            .await;
                         sleep(Duration::from_millis(retry_wait_ms * attempt as u64)).await;
                         continue;
                     }
@@ -1963,6 +2172,15 @@ async fn download_chunk(
                     ));
                     let retryable = err.is_timeout() || err.is_connect();
                     if retryable && attempt < max_attempts {
+                        let source = if peer_key.is_some() { "peer" } else { "cdn" };
+                        let reason = if err.is_timeout() {
+                            "socket_timeout"
+                        } else {
+                            "socket_connect"
+                        };
+                        let _ = progress_tx
+                            .send(ChunkResult::NetworkPressure { source, reason })
+                            .await;
                         sleep(Duration::from_millis(retry_wait_ms * attempt as u64)).await;
                         continue;
                     }
@@ -1976,10 +2194,10 @@ async fn download_chunk(
     }
 
     if failures.is_empty() {
-        return Err(LauncherError::Http("all cdn endpoints failed".to_string()));
+        return Err(LauncherError::Http("all endpoints failed".to_string()));
     }
     Err(LauncherError::Http(format!(
-        "all cdn endpoints failed: {}",
+        "all endpoints failed: {}",
         failures.join(" | ")
     )))
 }
@@ -2000,6 +2218,32 @@ fn trim_text_snippet(value: &str) -> String {
         .collect::<String>()
         .trim()
         .to_string()
+}
+
+fn resolve_http_retry_policy(is_peer: bool) -> (usize, u64, u64) {
+    if is_peer {
+        let attempts = env_usize("LAUNCHER_P2P_CHUNK_MAX_ATTEMPTS")
+            .unwrap_or(2)
+            .clamp(1, 4);
+        let retry_wait_ms = env_usize("LAUNCHER_P2P_CHUNK_RETRY_WAIT_MS")
+            .unwrap_or(250)
+            .clamp(0, 3000) as u64;
+        let timeout_ms = env_usize("LAUNCHER_P2P_CHUNK_TIMEOUT_MS")
+            .unwrap_or(1200)
+            .clamp(300, 20000) as u64;
+        return (attempts, retry_wait_ms, timeout_ms);
+    }
+
+    let attempts = env_usize("LAUNCHER_HTTP_CHUNK_MAX_ATTEMPTS")
+        .unwrap_or(6)
+        .clamp(1, 8);
+    let retry_wait_ms = env_usize("LAUNCHER_HTTP_CHUNK_RETRY_WAIT_MS")
+        .unwrap_or(900)
+        .clamp(0, 30000) as u64;
+    let timeout_ms = env_usize("LAUNCHER_HTTP_CHUNK_TIMEOUT_MS")
+        .unwrap_or(60000)
+        .clamp(1000, 600000) as u64;
+    (attempts, retry_wait_ms, timeout_ms)
 }
 
 fn sanitize_filename_token(value: &str) -> String {
@@ -2274,6 +2518,43 @@ fn build_download_plan(
         delete_files,
         precompleted_chunks,
     })
+}
+
+fn apply_peer_sources(plan: &mut DownloadPlan, peers: &[PeerCandidate]) {
+    let fanout = env_usize("LAUNCHER_P2P_FANOUT").unwrap_or(3).clamp(1, 6);
+    for job in &mut plan.chunks {
+        let peer_urls = build_chunk_peer_urls(&job.hash, peers, fanout);
+        if peer_urls.is_empty() {
+            continue;
+        }
+
+        let mut merged = Vec::with_capacity(peer_urls.len() + 1 + job.fallback_urls.len());
+        merged.extend(peer_urls);
+        merged.push(job.url.clone());
+        merged.extend(job.fallback_urls.clone());
+        let merged = dedupe_url_list(merged);
+        if merged.is_empty() {
+            continue;
+        }
+        job.url = merged[0].clone();
+        job.fallback_urls = merged.into_iter().skip(1).collect();
+    }
+}
+
+fn dedupe_url_list(urls: Vec<String>) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut seen = HashSet::new();
+    for raw in urls {
+        let value = raw.trim().to_string();
+        if value.is_empty() {
+            continue;
+        }
+        let key = value.to_ascii_lowercase();
+        if seen.insert(key) {
+            out.push(value);
+        }
+    }
+    out
 }
 
 async fn prepare_files(files: &[FilePlan]) -> Result<()> {

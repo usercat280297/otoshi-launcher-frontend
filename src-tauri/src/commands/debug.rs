@@ -109,10 +109,19 @@ pub async fn open_logs_folder(app: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn toggle_devtools(window: tauri::WebviewWindow) -> Result<(), String> {
+    #[cfg(not(debug_assertions))]
+    {
+        let _ = window;
+        return Ok(());
+    }
+
+    #[cfg(debug_assertions)]
+    {
     if window.is_devtools_open() {
         window.close_devtools();
     } else {
         window.open_devtools();
+    }
     }
     Ok(())
 }

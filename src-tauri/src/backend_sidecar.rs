@@ -125,21 +125,40 @@ fn backend_supports_large_chunk_requests(host: &str, port: u16) -> bool {
     let mut observed_limit = body
         .get("cdn_chunk_size_limit_bytes")
         .and_then(parse_u64_value);
+    let health_ok = body
+        .get("status")
+        .and_then(|value| value.as_str())
+        .map(|value| value.eq_ignore_ascii_case("ok"))
+        .unwrap_or(false);
 
     // Probe the validator directly with an intentionally too-large size so both
     // old and new backends fail fast with 422, but expose different `lt` limits.
     let probe_url = format!("http://{host}:{port}/cdn/chunks/_probe/_probe/0?size=2147483649");
     if let Ok(resp) = client.get(probe_url).send() {
-        if resp.status().as_u16() == 422 {
-            if let Ok(payload) = resp.json::<serde_json::Value>() {
-                if let Some(limit) = parse_probe_limit(&payload) {
-                    observed_limit = Some(limit);
-                }
+        let status = resp.status().as_u16();
+        // New backends reject oversized probes with 422 even if they do not include
+        // the legacy validation payload body. Treat this as compatible.
+        if status == 422 {
+            return true;
+        }
+        if status == 404 {
+            return false;
+        }
+        if let Ok(payload) = resp.json::<serde_json::Value>() {
+            if let Some(limit) = parse_probe_limit(&payload) {
+                observed_limit = Some(limit);
             }
+        } else if (200..300).contains(&status) {
+            return true;
         }
     }
 
-    observed_limit.unwrap_or(0) >= 100 * 1024 * 1024
+    if let Some(limit) = observed_limit {
+        return limit >= 100 * 1024 * 1024;
+    }
+
+    // Fail open for healthy sidecars so we do not kill unrelated listeners on port 8000.
+    health_ok
 }
 
 #[cfg(target_os = "windows")]
@@ -195,31 +214,103 @@ fn listener_pids_for_port(port: u16) -> Vec<u32> {
 }
 
 #[cfg(target_os = "windows")]
-fn kill_process_tree(pid: u32) {
+fn process_name_for_pid(pid: u32) -> Option<String> {
+    let output = Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    let line = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .next()?
+        .trim()
+        .to_string();
+    if line.is_empty() || line.starts_with("INFO:") {
+        return None;
+    }
+
+    // CSV first field is process image name enclosed in quotes.
+    let mut chars = line.chars();
+    if chars.next()? != '"' {
+        return None;
+    }
+    let mut image_name = String::new();
+    for ch in chars {
+        if ch == '"' {
+            break;
+        }
+        image_name.push(ch);
+    }
+    if image_name.is_empty() {
+        None
+    } else {
+        Some(image_name)
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn is_safe_backend_listener_pid(pid: u32) -> bool {
+    let Some(name) = process_name_for_pid(pid) else {
+        return false;
+    };
+    let normalized = name.to_ascii_lowercase();
+    normalized == "otoshi-backend.exe"
+}
+
+#[cfg(target_os = "windows")]
+fn kill_process_pid(pid: u32) {
     let _ = Command::new("taskkill")
-        .args(["/PID", &pid.to_string(), "/T", "/F"])
+        .args(["/PID", &pid.to_string(), "/F"])
         .creation_flags(CREATE_NO_WINDOW)
         .status();
 }
 
 #[cfg(target_os = "windows")]
-fn stop_backend_listener_on_port(port: u16) {
+fn stop_backend_listener_on_port(port: u16) -> usize {
     let pids = listener_pids_for_port(port);
     if pids.is_empty() {
-        return;
+        return 0;
     }
     tracing::warn!(
         "Attempting to stop existing listener(s) on port {}: {:?}",
         port,
         pids
     );
+    let mut stopped = 0usize;
     for pid in pids {
-        kill_process_tree(pid);
+        if is_safe_backend_listener_pid(pid) {
+            kill_process_pid(pid);
+            stopped += 1;
+        } else {
+            tracing::warn!(
+                "Skipping listener PID {} on port {} because it is not otoshi-backend.exe",
+                pid,
+                port
+            );
+        }
     }
+    stopped
 }
 
 #[cfg(not(target_os = "windows"))]
-fn stop_backend_listener_on_port(_port: u16) {}
+fn stop_backend_listener_on_port(_port: u16) -> usize {
+    0
+}
+
+#[cfg(target_os = "windows")]
+fn has_safe_backend_listener_on_port(port: u16) -> bool {
+    let pids = listener_pids_for_port(port);
+    !pids.is_empty() && pids.into_iter().all(is_safe_backend_listener_pid)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn has_safe_backend_listener_on_port(_port: u16) -> bool {
+    true
+}
 
 fn sqlite_database_url(path: &std::path::Path) -> String {
     // For sqlite file URLs on Windows, a path like `C:\...` must be converted to a file URL.
@@ -252,42 +343,70 @@ pub fn spawn_backend(app: &tauri::AppHandle) -> Result<Option<Child>> {
 
     if is_running("127.0.0.1", base_port) {
         if backend_supports_large_chunk_requests("127.0.0.1", base_port) {
-            tracing::info!(
-                "Compatible backend already running on port {}, skipping spawn",
-                base_port
-            );
-            std::env::set_var("LAUNCHER_API_URL", format!("http://127.0.0.1:{base_port}"));
-            return Ok(None);
-        }
-
-        tracing::warn!(
-            "Existing backend on port {} is stale/incompatible (missing large chunk support); attempting restart",
-            base_port
-        );
-        stop_backend_listener_on_port(base_port);
-
-        for _ in 0..20 {
-            if !is_running("127.0.0.1", base_port) {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(100));
-        }
-
-        if is_running("127.0.0.1", base_port) {
-            if let Some(fallback_port) = pick_fallback_port(base_port) {
-                tracing::warn!(
-                    "Port {} remains occupied by stale backend; switching launcher sidecar to fallback port {}",
-                    base_port,
-                    fallback_port
-                );
-                spawn_port = fallback_port;
-            } else {
-                tracing::warn!(
-                    "Port {} remains occupied and no fallback port is available; reusing currently running backend",
+            if has_safe_backend_listener_on_port(base_port) {
+                tracing::info!(
+                    "Compatible Otoshi backend already running on port {}, skipping spawn",
                     base_port
                 );
                 std::env::set_var("LAUNCHER_API_URL", format!("http://127.0.0.1:{base_port}"));
                 return Ok(None);
+            }
+
+            tracing::warn!(
+                "Compatible listener on port {} is not owned by otoshi-backend.exe; trying dedicated fallback port",
+                base_port
+            );
+            if let Some(fallback_port) = pick_fallback_port(base_port) {
+                tracing::info!(
+                    "Using dedicated launcher sidecar port {} instead of reusing external listener on {}",
+                    fallback_port,
+                    base_port
+                );
+                spawn_port = fallback_port;
+            } else {
+                tracing::warn!(
+                    "No fallback port available; reusing external listener on port {}",
+                    base_port
+                );
+                std::env::set_var("LAUNCHER_API_URL", format!("http://127.0.0.1:{base_port}"));
+                return Ok(None);
+            }
+        } else {
+            tracing::warn!(
+                "Existing backend on port {} is stale/incompatible (missing large chunk support); attempting restart",
+                base_port
+            );
+            let stopped = stop_backend_listener_on_port(base_port);
+            if stopped == 0 {
+                tracing::warn!(
+                    "No safe Otoshi backend listener terminated on port {}; will prefer fallback port if busy",
+                    base_port
+                );
+            }
+
+            for _ in 0..20 {
+                if !is_running("127.0.0.1", base_port) {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+
+            if is_running("127.0.0.1", base_port) {
+                if let Some(fallback_port) = pick_fallback_port(base_port) {
+                    tracing::warn!(
+                        "Port {} remains occupied by stale backend; switching launcher sidecar to fallback port {}",
+                        base_port,
+                        fallback_port
+                    );
+                    spawn_port = fallback_port;
+                } else {
+                    tracing::warn!(
+                        "Port {} remains occupied and no fallback port is available; reusing currently running backend",
+                        base_port
+                    );
+                    std::env::set_var("LAUNCHER_API_URL", format!("http://127.0.0.1:{base_port}"));
+                    return Ok(None);
+                }
             }
         }
     } else if !can_bind_local_port(base_port) {

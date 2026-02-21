@@ -11,7 +11,20 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
 
-const DEFAULT_API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const resolveApiBase = (): string => {
+  const fromEnv = String(import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
+  if (fromEnv) return fromEnv;
+  const port = String(import.meta.env.VITE_BACKEND_PORT || import.meta.env.BACKEND_PORT || '8000');
+  if (typeof window !== 'undefined') {
+    const host = String(window.location.hostname || '').trim().toLowerCase();
+    if (host === '127.0.0.1' || host === 'localhost') {
+      return `http://${host}:${port}`;
+    }
+  }
+  return `http://127.0.0.1:${port}`;
+};
+
+const DEFAULT_API_BASE = resolveApiBase();
 
 // Note: For file operations, use fetch API instead of tauri fs module
 // This avoids dependency issues and works with both Tauri and browser environments
