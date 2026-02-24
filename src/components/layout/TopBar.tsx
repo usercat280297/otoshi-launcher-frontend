@@ -25,6 +25,7 @@ export default function TopBar() {
   const supportLink = "https://discord.gg/6q7YRdWGZJ";
   const closeSupport = () => setSupportOpen(false);
   const openSupport = () => setSupportOpen(true);
+  const handleLogoReload = () => window.location.reload();
 
   const handleMinimize = async () => {
     if (!tauriRuntime) return;
@@ -107,11 +108,19 @@ export default function TopBar() {
       <div className="flex items-center gap-2 sm:gap-4">
         <div className="flex flex-wrap items-center gap-2 sm:gap-6">
           <div className="flex items-center gap-3">
-            <img
-              src="/OTOSHI_icon.png"
-              alt="Otoshi"
-              className="h-9 w-9 rounded-md bg-background-elevated p-1 object-contain"
-            />
+            <button
+              type="button"
+              onClick={handleLogoReload}
+              className="rounded-md bg-background-elevated p-1 transition hover:opacity-90"
+              title="Reload launcher"
+              aria-label="Reload launcher"
+            >
+              <img
+                src="/OTOSHI_icon.png"
+                alt="Otoshi"
+                className="h-9 w-9 object-contain"
+              />
+            </button>
             <NavLink to="/store" className="text-sm font-semibold uppercase tracking-[0.2em] text-text-primary sm:tracking-[0.25em]">
               {t("nav.store")}
             </NavLink>

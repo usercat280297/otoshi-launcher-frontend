@@ -73,6 +73,7 @@ export default function Sidebar() {
       ? t("sidebar.paused")
       : `${t("sidebar.bandwidth")}: ${activeTask.speed}`
     : t("sidebar.no_downloads");
+  const handleLogoReload = () => window.location.reload();
 
   return (
     <aside
@@ -81,11 +82,19 @@ export default function Sidebar() {
     >
       <div className="flex h-full min-h-0 flex-col gap-6">
         <div className="flex items-center gap-3">
-          <img
-            src="/OTOSHI_icon.png"
-            alt="Otoshi"
-            className="h-10 w-10 rounded-md bg-background-elevated p-1 object-contain"
-          />
+          <button
+            type="button"
+            onClick={handleLogoReload}
+            className="rounded-md bg-background-elevated p-1 transition hover:opacity-90"
+            title="Reload launcher"
+            aria-label="Reload launcher"
+          >
+            <img
+              src="/OTOSHI_icon.png"
+              alt="Otoshi"
+              className="h-10 w-10 object-contain"
+            />
+          </button>
           <div>
             <p className="text-[11px] uppercase tracking-[0.35em] text-text-muted">{t("sidebar.launcher")}</p>
             <h1 className="text-lg font-semibold">Otoshi</h1>
