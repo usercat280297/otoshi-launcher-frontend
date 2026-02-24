@@ -809,21 +809,21 @@ export default function SettingsPage() {
                 <Button
                   variant="secondary"
                   icon={<ExternalLink size={16} />}
-                  onClick={() => void openExternal("https://www.otoshi-launcher.me")}
+                  onClick={() => void openExternal("https://otoshi-launcher.me")}
                 >
                   Official Website
                 </Button>
                 <Button
                   variant="secondary"
                   icon={<ExternalLink size={16} />}
-                  onClick={() => void openExternal("https://www.otoshi-launcher.me/privacy-policy")}
+                  onClick={() => void openExternal("https://otoshi-launcher.me/privacy-policy")}
                 >
                   Privacy Policy
                 </Button>
                 <Button
                   variant="secondary"
                   icon={<ExternalLink size={16} />}
-                  onClick={() => void openExternal("https://www.otoshi-launcher.me/terms-of-service")}
+                  onClick={() => void openExternal("https://otoshi-launcher.me/terms-of-service")}
                 >
                   Terms of Service
                 </Button>

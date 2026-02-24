@@ -1,0 +1,5 @@
+# Canonical domain
+https://www.otoshi-launcher.me/* https://otoshi-launcher.me/:splat 301!
+
+# SPA fallback (deep links like /store, /library, /settings)
+/* /index.html 200
