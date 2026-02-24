@@ -1,8 +1,15 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ShieldOff } from "lucide-react";
+import { Search, ShieldOff } from "lucide-react";
+import Input from "../components/common/Input";
 import FixEntryCard from "../components/fixes/FixEntryCard";
-import { fetchBypassCategories, BypassCategory } from "../services/api";
+import FixesDonateBar from "../components/fixes/FixesDonateBar";
+import {
+  fetchBypassByCategory,
+  fetchBypassCategories,
+  BypassCategory,
+  BypassCategoryResult,
+} from "../services/api";
 import { useLocale } from "../context/LocaleContext";
 import { FixEntry } from "../types";
 
@@ -49,12 +56,16 @@ export default function BypassPage() {
   const navigate = useNavigate();
   const [categories, setCategories] = useState<BypassCategory[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [categoryResults, setCategoryResults] = useState<Record<string, BypassCategoryResult>>({});
+  const [searchByCategory, setSearchByCategory] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [loadingItems, setLoadingItems] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
     setLoading(true);
+    setError(null);
     fetchBypassCategories()
       .then((data) => {
         if (mounted) {
@@ -79,12 +90,54 @@ export default function BypassPage() {
     };
   }, [t]);
 
+  const currentSearch = selectedCategory ? searchByCategory[selectedCategory] ?? "" : "";
+
+  useEffect(() => {
+    if (!selectedCategory) return;
+
+    let mounted = true;
+    setLoadingItems(true);
+    setError(null);
+
+    fetchBypassByCategory(selectedCategory, {
+      limit: 200,
+      offset: 0,
+      search: currentSearch.trim() || undefined,
+    })
+      .then((data) => {
+        if (mounted) {
+          setCategoryResults((prev) => ({ ...prev, [selectedCategory]: data }));
+        }
+      })
+      .catch((err: any) => {
+        if (mounted) {
+          setError(err.message || t("bypass.error"));
+        }
+      })
+      .finally(() => {
+        if (mounted) {
+          setLoadingItems(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [currentSearch, selectedCategory, t]);
+
   const handleOpen = (entry: FixEntry) => {
     navigate(`/fixes/bypass/${entry.appId}`);
   };
 
   const currentCategory = categories.find((c) => c.id === selectedCategory);
+  const currentCategoryResult = selectedCategory ? categoryResults[selectedCategory] : null;
+  const visibleItems = currentCategoryResult?.items ?? [];
   const totalGames = categories.reduce((sum, cat) => sum + cat.total, 0);
+
+  const handleCategorySearchChange = (value: string) => {
+    if (!selectedCategory) return;
+    setSearchByCategory((prev) => ({ ...prev, [selectedCategory]: value }));
+  };
 
   return (
     <div className="space-y-6">
@@ -158,10 +211,24 @@ export default function BypassPage() {
             </div>
           )}
 
+          <section className="glass-panel space-y-4 p-4">
+            <FixesDonateBar />
+            <Input
+              value={currentSearch}
+              onChange={(event) => handleCategorySearchChange(event.target.value)}
+              placeholder={`${t("store.search_placeholder")} (RE4, BMW, 2050650)`}
+              icon={<Search size={18} />}
+            />
+          </section>
+
           {/* Games Grid */}
-          {currentCategory && currentCategory.games.length > 0 && (
+          {loadingItems && (
+            <div className="glass-panel p-4 text-sm text-text-secondary">{t("common.loading")}</div>
+          )}
+
+          {currentCategory && visibleItems.length > 0 && (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {currentCategory.games.map((entry) => (
+              {visibleItems.map((entry) => (
                 <FixEntryCard
                   key={entry.appId}
                   entry={entry}
@@ -171,7 +238,7 @@ export default function BypassPage() {
             </div>
           )}
 
-          {currentCategory && currentCategory.games.length === 0 && (
+          {currentCategory && !loadingItems && visibleItems.length === 0 && (
             <div className="glass-panel p-6 text-sm text-text-secondary">
               {t("bypass.category_empty")}
             </div>

@@ -28,20 +28,95 @@ interface RemoteConfig {
   maintenance_message: string;
 }
 
-const resolveApiBase = (): string => {
-  const fromEnv = String(import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
-  if (fromEnv) return fromEnv;
-  const port = String(import.meta.env.VITE_BACKEND_PORT || import.meta.env.BACKEND_PORT || '8000');
-  if (typeof window !== 'undefined') {
-    const host = String(window.location.hostname || '').trim().toLowerCase();
-    if (host === '127.0.0.1' || host === 'localhost') {
-      return `http://${host}:${port}`;
-    }
+const normalizeApiBase = (base: string): string =>
+  String(base || '').trim().replace(/\/+$/, '');
+
+const isLoopbackBase = (base: string): boolean => {
+  try {
+    const host = new URL(base).hostname.toLowerCase();
+    return host === '127.0.0.1' || host === 'localhost';
+  } catch {
+    return false;
   }
-  return `http://127.0.0.1:${port}`;
 };
 
-const API_BASE = resolveApiBase();
+const resolveApiBases = (): string[] => {
+  const fromEnv = normalizeApiBase(String(import.meta.env.VITE_API_URL || ''));
+  const remoteFallback = normalizeApiBase(
+    String(import.meta.env.VITE_REMOTE_API_FALLBACK || 'https://api.otoshi-launcher.me')
+  );
+  const envFallbacks = String(import.meta.env.VITE_API_FALLBACKS || '')
+    .split(',')
+    .map((value) => normalizeApiBase(value))
+    .filter(Boolean);
+
+  let primaryBase = fromEnv;
+  if (!primaryBase) {
+    const port = String(import.meta.env.VITE_BACKEND_PORT || import.meta.env.BACKEND_PORT || '8000');
+    if (typeof window !== 'undefined') {
+      const host = String(window.location.hostname || '').trim().toLowerCase();
+      if (host === '127.0.0.1' || host === 'localhost') {
+        primaryBase = `http://${host}:${port}`;
+      } else {
+        primaryBase = `http://127.0.0.1:${port}`;
+      }
+    } else {
+      primaryBase = `http://127.0.0.1:${port}`;
+    }
+  }
+
+  const shouldIncludeRemoteFallback =
+    Boolean(remoteFallback) &&
+    (!primaryBase || isLoopbackBase(primaryBase) || Boolean(import.meta.env.DEV));
+
+  return Array.from(
+    new Set(
+      [primaryBase, ...(shouldIncludeRemoteFallback ? [remoteFallback] : []), ...envFallbacks]
+        .map(normalizeApiBase)
+        .filter(Boolean)
+    )
+  );
+};
+
+const API_BASES = resolveApiBases();
+const initialResolvedBase =
+  Boolean(import.meta.env.DEV) &&
+  API_BASES.length > 1 &&
+  isLoopbackBase(API_BASES[0])
+    ? API_BASES.find((base) => !isLoopbackBase(base)) || API_BASES[0]
+    : API_BASES[0];
+let resolvedApiBase: string | null = initialResolvedBase || null;
+
+async function requestJsonWithFallback<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const bases = resolvedApiBase
+    ? [resolvedApiBase, ...API_BASES.filter((base) => base !== resolvedApiBase)]
+    : API_BASES;
+  let lastError: Error | null = null;
+
+  const headers = new Headers(init.headers || {});
+  if (init.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  for (const base of bases) {
+    try {
+      const response = await fetch(`${base}${path}`, {
+        ...init,
+        headers
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      const payload = (await response.json()) as T;
+      resolvedApiBase = base;
+      return payload;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error('Failed to fetch');
+    }
+  }
+
+  throw lastError || new Error('Failed to fetch');
+}
 
 export function useAutoUpdate() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
@@ -56,15 +131,9 @@ export function useAutoUpdate() {
     
     try {
       const version = currentVersion || '0.1.0';
-      const response = await fetch(
-        `${API_BASE}/updates/check?current_version=${encodeURIComponent(version)}`
+      const result = await requestJsonWithFallback<UpdateCheckResult>(
+        `/updates/check?current_version=${encodeURIComponent(version)}`
       );
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const result: UpdateCheckResult = await response.json();
       setUpdateAvailable(result.update_available);
       setUpdateInfo(result.update_info || null);
       setLastChecked(new Date());
@@ -100,13 +169,7 @@ export function useRemoteConfig() {
     setError(null);
     
     try {
-      const response = await fetch(`${API_BASE}/updates/config`);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const result: RemoteConfig = await response.json();
+      const result = await requestJsonWithFallback<RemoteConfig>('/updates/config');
       setConfig(result);
       return result;
     } catch (err) {
@@ -154,13 +217,9 @@ export function useManifestRefresh() {
     setError(null);
     
     try {
-      const response = await fetch(`${API_BASE}/updates/manifest/refresh`);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const result = await response.json();
+      const result = await requestJsonWithFallback<any>('/updates/manifest/refresh', {
+        method: 'POST'
+      });
       setLastRefreshed(new Date());
       
       if (!result.success) {

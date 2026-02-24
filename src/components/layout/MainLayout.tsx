@@ -1,14 +1,17 @@
-import { Outlet } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { Outlet, useLocation } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
 import { isTauri as isTauriRuntimeFn } from "@tauri-apps/api/core";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
 import MobileNav from "./MobileNav";
 import Modal from "../common/Modal";
 import { useLocale } from "../../context/LocaleContext";
+import { resetRouteScrollPositions } from "../../utils/routeScroll";
 
 export default function MainLayout() {
   const { t } = useLocale();
+  const location = useLocation();
+  const mainRef = useRef<HTMLElement | null>(null);
   const [luaMissing, setLuaMissing] = useState(false);
   const isTauriRuntime = (() => {
     try {
@@ -29,6 +32,23 @@ export default function MainLayout() {
     };
   }, []);
 
+  useEffect(() => {
+    const runScrollReset = () => {
+      resetRouteScrollPositions();
+      mainRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      if (mainRef.current) {
+        mainRef.current.scrollTop = 0;
+      }
+    };
+    runScrollReset();
+    const frame = window.requestAnimationFrame(runScrollReset);
+    const timeout = window.setTimeout(runScrollReset, 120);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timeout);
+    };
+  }, [location.key, location.pathname, location.search]);
+
   return (
     <div
       className={
@@ -48,6 +68,7 @@ export default function MainLayout() {
         >
           <TopBar />
           <main
+            ref={mainRef}
             className={
               isTauriRuntime
                 ? "min-h-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-elegant"

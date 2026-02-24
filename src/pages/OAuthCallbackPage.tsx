@@ -3,6 +3,10 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLocale } from "../context/LocaleContext";
 
+// Dev StrictMode can mount/unmount and re-run effects, which may trigger
+// duplicate code exchange requests. Keep a module-level in-flight map to dedupe.
+const oauthExchangeInFlight = new Map<string, Promise<void>>();
+
 export default function OAuthCallbackPage() {
   const { exchangeOAuth } = useAuth();
   const { t } = useLocale();
@@ -11,6 +15,7 @@ export default function OAuthCallbackPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
     const params = new URLSearchParams(location.search);
     const code = params.get("code");
     const next = params.get("next") || "/store";
@@ -19,11 +24,33 @@ export default function OAuthCallbackPage() {
       return;
     }
 
-    exchangeOAuth(code)
-      .then(() => navigate(next, { replace: true }))
-      .catch((err: any) =>
-        setError(err?.message || t("auth.oauth_unable_complete_sign_in"))
+    const runExchange = () => exchangeOAuth(code);
+    const deduped = oauthExchangeInFlight.get(code) ?? runExchange();
+
+    if (!oauthExchangeInFlight.has(code)) {
+      oauthExchangeInFlight.set(
+        code,
+        deduped.finally(() => {
+          oauthExchangeInFlight.delete(code);
+        })
       );
+    }
+
+    deduped
+      .then(() => {
+        if (active) {
+          navigate(next, { replace: true });
+        }
+      })
+      .catch((err: any) => {
+        if (active) {
+          setError(err?.message || t("auth.oauth_unable_complete_sign_in"));
+        }
+      });
+
+    return () => {
+      active = false;
+    };
   }, [exchangeOAuth, location.search, navigate, t]);
 
   return (

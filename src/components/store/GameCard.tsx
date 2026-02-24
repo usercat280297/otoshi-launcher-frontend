@@ -3,6 +3,7 @@ import { artworkGet, artworkPrefetch } from "../../services/api";
 import { Game } from "../../types";
 import { getMediaProtectionProps } from "../../utils/mediaProtection";
 import Badge from "../common/Badge";
+import { useLocale } from "../../context/LocaleContext";
 
 const POSTER_PLACEHOLDER = "/icons/game-placeholder.svg";
 
@@ -15,9 +16,16 @@ export default function GameCard({
   onOpen: (game: Game) => void;
   prefetchGames?: Game[];
 }) {
-  const discounted = game.discountPercent > 0;
+  const { t } = useLocale();
+  const priceKnown = game.priceKnown !== false;
+  const discounted = priceKnown && game.discountPercent > 0;
   const price = (game.price * (1 - game.discountPercent / 100)).toFixed(2);
-  const displayPrice = game.price <= 0 ? "Free" : `$${price}`;
+  const unknownPriceLabel = game.priceLabel || t("common.price_unavailable");
+  const displayPrice = !priceKnown
+    ? unknownPriceLabel
+    : game.price <= 0
+      ? t("common.free")
+      : `$${price}`;
   const [activeImage, setActiveImage] = useState<string | null>(null);
   const [incomingImage, setIncomingImage] = useState<string | null>(null);
   const [incomingReady, setIncomingReady] = useState(false);
@@ -224,9 +232,16 @@ export default function GameCard({
         )}
       </div>
       <div className="mt-3 space-y-1">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-text-muted">
-          Base Game
-        </p>
+        <div className="flex items-center gap-2">
+          <p className="text-[10px] uppercase tracking-[0.3em] text-text-muted">
+            {t("store.base_game")}
+          </p>
+          {game.isDlc && (
+            <span className="rounded-full border border-violet-400/55 bg-violet-500/25 px-2 py-[1px] text-[10px] font-semibold uppercase tracking-[0.08em] text-violet-100">
+              {t("game.dlc")}
+            </span>
+          )}
+        </div>
         <h4 className="text-sm font-semibold text-text-primary">{game.title}</h4>
         <div className="flex items-center gap-2 text-xs text-text-secondary">
           {discounted ? (
@@ -237,7 +252,13 @@ export default function GameCard({
               </span>
             </>
           ) : (
-            <span className="font-semibold text-text-primary">{displayPrice}</span>
+            <span className="font-semibold text-text-primary">
+              {!priceKnown
+                ? unknownPriceLabel
+                : game.price <= 0
+                  ? t("common.free")
+                  : displayPrice}
+            </span>
           )}
         </div>
       </div>

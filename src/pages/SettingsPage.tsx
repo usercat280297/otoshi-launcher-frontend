@@ -8,13 +8,18 @@ import Button from "../components/common/Button";
 import { openExternal } from "../utils/openExternal";
 import {
   applyRuntimeTuning,
+  deletePrivacyData,
+  exportPrivacyData,
+  fetchPrivacyConsent,
   probeAsmCpuCapabilities,
   recommendRuntimeTuning,
   rollbackRuntimeTuning,
+  setPrivacyConsent,
 } from "../services/api";
 import type { AsmCpuCapabilities, RuntimeTuningProfile } from "../types";
 
 type SettingsSection = "account" | "downloads" | "notifications" | "privacy" | "performance" | "about";
+type AiConsentCategory = "search" | "recommendation" | "support" | "anti_cheat";
 
 type SettingsState = {
   displayName: string;
@@ -40,6 +45,39 @@ type SettingsState = {
 };
 
 const SETTINGS_KEY = "otoshi.launcher.settings";
+const AI_CONSENT_ITEMS: Array<{
+  key: AiConsentCategory;
+  label: string;
+  description: string;
+}> = [
+  {
+    key: "search",
+    label: "AI search analytics",
+    description: "Allow search interaction signals to improve relevance.",
+  },
+  {
+    key: "recommendation",
+    label: "AI recommendations",
+    description: "Allow recommendation impressions and feedback tracking.",
+  },
+  {
+    key: "support",
+    label: "Support copilot",
+    description: "Allow AI support suggestions and support session memory.",
+  },
+  {
+    key: "anti_cheat",
+    label: "Anti-cheat risk detection",
+    description: "Allow anti-cheat signal processing for fraud detection.",
+  },
+];
+
+const DEFAULT_AI_CONSENT: Record<AiConsentCategory, boolean> = {
+  search: false,
+  recommendation: false,
+  support: false,
+  anti_cheat: false,
+};
 
 const defaultSettings: SettingsState = {
   displayName: "",
@@ -85,10 +123,15 @@ const isTauriRuntime = () =>
   typeof window !== "undefined" && "__TAURI__" in window;
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { t } = useLocale();
   const [activeSection, setActiveSection] = useState<SettingsSection>("account");
   const [status, setStatus] = useState<string | null>(null);
+  const [privacyStatus, setPrivacyStatus] = useState<string | null>(null);
+  const [privacyBusy, setPrivacyBusy] = useState(false);
+  const [aiConsent, setAiConsent] = useState<Record<AiConsentCategory, boolean>>(
+    DEFAULT_AI_CONSENT
+  );
   const [tuningBusy, setTuningBusy] = useState(false);
   const [capabilities, setCapabilities] = useState<AsmCpuCapabilities | null>(null);
   const [settings, setSettings] = useState<SettingsState>(() => {
@@ -133,6 +176,58 @@ export default function SettingsPage() {
       window.removeEventListener("otoshi:telemetry-setting", handleTelemetry as EventListener);
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!token) {
+      setAiConsent({ ...DEFAULT_AI_CONSENT });
+      setPrivacyBusy(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setPrivacyBusy(true);
+    void fetchPrivacyConsent(token)
+      .then((rows) => {
+        if (cancelled) return;
+        const nextConsent = { ...DEFAULT_AI_CONSENT };
+        let telemetryConsent: boolean | null = null;
+        for (const row of rows) {
+          const category = String(row.category || "").trim().toLowerCase();
+          const granted = Boolean(row.granted);
+          if (category === "telemetry") {
+            telemetryConsent = granted;
+            continue;
+          }
+          if (category in nextConsent) {
+            nextConsent[category as AiConsentCategory] = granted;
+          }
+        }
+        setAiConsent(nextConsent);
+        if (telemetryConsent !== null) {
+          setSettings((prev) => ({
+            ...prev,
+            privacy: {
+              ...prev.privacy,
+              telemetry: telemetryConsent,
+            },
+          }));
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPrivacyStatus("Unable to load privacy consent.");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setPrivacyBusy(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   useEffect(() => {
     const shouldResolve =
@@ -277,6 +372,114 @@ export default function SettingsPage() {
       setStatus("Unable to rollback runtime tuning.");
     } finally {
       setTuningBusy(false);
+    }
+  };
+
+  const syncTelemetryConsentRemote = async (enabled: boolean) => {
+    if (!token) {
+      setPrivacyStatus("Sign in to sync telemetry consent.");
+      return;
+    }
+    setPrivacyBusy(true);
+    setPrivacyStatus(null);
+    try {
+      await setPrivacyConsent(
+        {
+          category: "telemetry",
+          granted: Boolean(enabled),
+          source: "settings",
+          payload: { key: "telemetry" },
+        },
+        token
+      );
+      setPrivacyStatus("Telemetry consent synced.");
+    } catch {
+      setPrivacyStatus("Unable to sync telemetry consent.");
+    } finally {
+      setPrivacyBusy(false);
+    }
+  };
+
+  const syncAiConsentRemote = async (
+    category: AiConsentCategory,
+    granted: boolean,
+    previousValue: boolean
+  ) => {
+    if (!token) {
+      setAiConsent((prev) => ({ ...prev, [category]: previousValue }));
+      setPrivacyStatus("Sign in to sync AI consent.");
+      return;
+    }
+    setPrivacyBusy(true);
+    setPrivacyStatus(null);
+    try {
+      await setPrivacyConsent(
+        {
+          category,
+          granted: Boolean(granted),
+          source: "settings",
+          payload: { key: `ai.${category}` },
+        },
+        token
+      );
+      setPrivacyStatus("AI consent updated.");
+    } catch {
+      setAiConsent((prev) => ({ ...prev, [category]: previousValue }));
+      setPrivacyStatus("Unable to sync AI consent.");
+    } finally {
+      setPrivacyBusy(false);
+    }
+  };
+
+  const handleExportPrivacyData = async () => {
+    if (!token) {
+      setPrivacyStatus("Sign in to export privacy data.");
+      return;
+    }
+    setPrivacyBusy(true);
+    setPrivacyStatus(null);
+    try {
+      const payload = await exportPrivacyData(token);
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const fileName = `otoshi-privacy-export-${new Date()
+        .toISOString()
+        .replace(/[:.]/g, "-")}.json`;
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+      setPrivacyStatus("Privacy export downloaded.");
+    } catch {
+      setPrivacyStatus("Unable to export privacy data.");
+    } finally {
+      setPrivacyBusy(false);
+    }
+  };
+
+  const handleDeletePrivacyData = async () => {
+    if (!token) {
+      setPrivacyStatus("Sign in to delete privacy data.");
+      return;
+    }
+    setPrivacyBusy(true);
+    setPrivacyStatus(null);
+    try {
+      const response = await deletePrivacyData(token);
+      setPrivacyStatus(
+        response.status === "completed"
+          ? "Privacy data deleted."
+          : "Privacy delete request submitted."
+      );
+    } catch {
+      setPrivacyStatus("Unable to delete privacy data.");
+    } finally {
+      setPrivacyBusy(false);
     }
   };
 
@@ -446,19 +649,74 @@ export default function SettingsPage() {
                   <input
                     type="checkbox"
                     checked={settings.privacy[item.key as keyof SettingsState["privacy"]]}
-                    onChange={(event) =>
+                    disabled={privacyBusy && item.key === "telemetry"}
+                    onChange={(event) => {
+                      const checked = event.target.checked;
                       setSettings((prev) => ({
                         ...prev,
                         privacy: {
                           ...prev.privacy,
-                          [item.key]: event.target.checked
-                        }
-                      }))
-                    }
+                          [item.key]: checked,
+                        },
+                      }));
+                      if (item.key === "telemetry") {
+                        void syncTelemetryConsentRemote(checked);
+                      }
+                    }}
                     className="h-5 w-5 accent-primary"
                   />
                 </label>
               ))}
+              <div className="glass-card space-y-3 p-4 text-sm text-text-secondary">
+                <p className="text-text-primary">AI feature consent</p>
+                <div className="space-y-3">
+                  {AI_CONSENT_ITEMS.map((item) => (
+                    <label
+                      key={item.key}
+                      className="flex items-center justify-between gap-3 rounded-md border border-border/60 p-3"
+                    >
+                      <div>
+                        <p className="text-sm text-text-primary">{item.label}</p>
+                        <p className="text-xs text-text-muted">{item.description}</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={aiConsent[item.key]}
+                        disabled={privacyBusy}
+                        onChange={(event) => {
+                          const checked = event.target.checked;
+                          const previousValue = aiConsent[item.key];
+                          setAiConsent((prev) => ({ ...prev, [item.key]: checked }));
+                          void syncAiConsentRemote(item.key, checked, previousValue);
+                        }}
+                        className="h-5 w-5 accent-primary"
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="glass-card space-y-3 p-4 text-sm text-text-secondary">
+                <p className="text-text-primary">AI data controls</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={privacyBusy}
+                    onClick={handleExportPrivacyData}
+                  >
+                    Export AI data
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={privacyBusy}
+                    onClick={handleDeletePrivacyData}
+                  >
+                    Delete AI data
+                  </Button>
+                </div>
+                {privacyStatus && <p className="text-xs text-text-muted">{privacyStatus}</p>}
+              </div>
             </div>
           )}
 

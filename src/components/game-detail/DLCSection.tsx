@@ -2,15 +2,20 @@ import { ExternalLink, Package } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { SteamDLC, SteamPrice } from "../../types";
 import { openExternal } from "../../utils/openExternal";
+import { useLocale } from "../../context/LocaleContext";
 
-function formatDLCPrice(price?: SteamPrice | null): string {
-  if (!price) return "Free";
-  if (price.finalFormatted) return price.finalFormatted;
-  if (price.formatted) return price.formatted;
-  if (price.final != null) {
-    return `$${(price.final / 100).toFixed(2)}`;
+function formatDLCPrice(price: SteamPrice | null | undefined, unknownLabel: string, freeLabel: string): string {
+  if (!price) return unknownLabel;
+  const finalFormatted = typeof price.finalFormatted === "string" ? price.finalFormatted.trim() : "";
+  if (finalFormatted) return finalFormatted;
+  const formatted = typeof price.formatted === "string" ? price.formatted.trim() : "";
+  if (formatted) return formatted;
+  const cents = typeof price.final === "number" ? price.final : price.initial;
+  if (typeof cents === "number" && Number.isFinite(cents)) {
+    if (cents <= 0) return freeLabel;
+    return `$${(cents / 100).toFixed(2)}`;
   }
-  return "Free";
+  return unknownLabel;
 }
 
 type DLCSectionProps = {
@@ -78,13 +83,11 @@ function DLCImage({ dlc }: { dlc: SteamDLC }) {
 }
 
 export default function DLCSection({ dlcList, appId, gameName }: DLCSectionProps) {
+  const { t } = useLocale();
   const [expanded, setExpanded] = useState(false);
-
-  if (!dlcList || dlcList.length === 0) {
-    return null;
-  }
-
-  const displayDlc = expanded ? dlcList : dlcList.slice(0, 9);
+  const safeList = Array.isArray(dlcList) ? dlcList : [];
+  const hasDlc = safeList.length > 0;
+  const displayDlc = expanded ? safeList : safeList.slice(0, 9);
 
   return (
     <div className="space-y-4">
@@ -95,55 +98,77 @@ export default function DLCSection({ dlcList, appId, gameName }: DLCSectionProps
             Downloadable Content
           </p>
         </div>
-        <span className="text-xs text-text-muted">{dlcList.length} DLC available</span>
+        <span className="text-xs text-text-muted">
+          {hasDlc ? `${safeList.length} DLC available` : "No DLC listed yet"}
+        </span>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {displayDlc.map((dlc) => (
+      {hasDlc ? (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {displayDlc.map((dlc) => (
+              <button
+                type="button"
+                key={dlc.appId}
+                onClick={() => void openExternal(`https://store.steampowered.com/app/${dlc.appId}`)}
+                className="group flex items-center gap-3 rounded-lg border border-background-border bg-background-surface p-3 transition-all duration-200 hover:border-primary hover:bg-primary/5 hover:scale-[1.02] hover:shadow-lg text-left"
+              >
+                <DLCImage dlc={dlc} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-text-primary transition-colors group-hover:text-primary">
+                    {dlc.name}
+                  </p>
+                  <p className="text-xs text-text-muted">
+                    {formatDLCPrice(dlc.price, t("common.price_unavailable"), t("common.free"))}
+                  </p>
+                  {dlc.releaseDate && (
+                    <p className="text-[11px] uppercase tracking-[0.2em] text-text-muted">
+                      {dlc.releaseDate}
+                    </p>
+                  )}
+                  <p className="mt-1 text-xs text-text-muted line-clamp-2">
+                    {dlc.description || "Additional content for this game."}
+                  </p>
+                </div>
+                <ExternalLink size={14} className="flex-shrink-0 text-text-muted opacity-0 transition group-hover:opacity-100" />
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-4">
+            {safeList.length > 9 && (
+              <button
+                onClick={() => setExpanded(!expanded)}
+                className="text-xs text-primary transition hover:underline"
+              >
+                {expanded ? "Show less" : `Show all ${safeList.length} DLC`}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => void openExternal(`https://store.steampowered.com/dlc/${appId}/${encodeURIComponent(gameName.replace(/\s+/g, "_"))}/`)}
+              className="inline-flex items-center gap-1 text-xs text-text-muted transition hover:text-text-primary"
+            >
+              View on Steam
+              <ExternalLink size={11} />
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="rounded-lg border border-background-border bg-background-surface p-4">
+          <p className="text-sm text-text-secondary">
+            No DLC found for this title right now.
+          </p>
           <button
             type="button"
-            key={dlc.appId}
-            onClick={() => void openExternal(`https://store.steampowered.com/app/${dlc.appId}`)}
-            className="group flex items-center gap-3 rounded-lg border border-background-border bg-background-surface p-3 transition-all duration-200 hover:border-primary hover:bg-primary/5 hover:scale-[1.02] hover:shadow-lg text-left"
+            onClick={() => void openExternal(`https://store.steampowered.com/dlc/${appId}/${encodeURIComponent(gameName.replace(/\s+/g, "_"))}/`)}
+            className="mt-3 inline-flex items-center gap-1 text-xs text-text-muted transition hover:text-text-primary"
           >
-            <DLCImage dlc={dlc} />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-text-primary transition-colors group-hover:text-primary">
-                {dlc.name}
-              </p>
-              <p className="text-xs text-text-muted">{formatDLCPrice(dlc.price)}</p>
-              {dlc.releaseDate && (
-                <p className="text-[11px] uppercase tracking-[0.2em] text-text-muted">
-                  {dlc.releaseDate}
-                </p>
-              )}
-              <p className="mt-1 text-xs text-text-muted line-clamp-2">
-                {dlc.description || "Additional content for this game."}
-              </p>
-            </div>
-            <ExternalLink size={14} className="flex-shrink-0 text-text-muted opacity-0 transition group-hover:opacity-100" />
+            View on Steam
+            <ExternalLink size={11} />
           </button>
-        ))}
-      </div>
-
-      <div className="flex items-center gap-4">
-        {dlcList.length > 9 && (
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="text-xs text-primary transition hover:underline"
-          >
-            {expanded ? "Show less" : `Show all ${dlcList.length} DLC`}
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => void openExternal(`https://store.steampowered.com/dlc/${appId}/${encodeURIComponent(gameName.replace(/\s+/g, "_"))}/`)}
-          className="inline-flex items-center gap-1 text-xs text-text-muted transition hover:text-text-primary"
-        >
-          View on Steam
-          <ExternalLink size={11} />
-        </button>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

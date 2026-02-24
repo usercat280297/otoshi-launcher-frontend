@@ -13,6 +13,7 @@ import {
   startSteamDownloadWithOptions,
   verifyAgeGate,
   fetchSteamExtended,
+  fetchSteamDLC,
   clearGameCache
 } from "../services/api";
 import type { DownloadOptions, DownloadPreparePayload, SteamPrice, FixEntry, FixOption, SteamExtendedData } from "../types";
@@ -32,17 +33,26 @@ import PropertiesSection from "../components/game-detail/PropertiesSection";
 import CommunityCommentsSection from "../components/game-detail/CommunityCommentsSection";
 import { isAgeGateAllowed, resolveRequiredAge, storeAgeGate } from "../utils/ageGate";
 import { getMediaProtectionProps } from "../utils/mediaProtection";
+import { isLikelyDlcName } from "../utils/steamSearch";
+import {
+  readPersistentCacheValue,
+  writePersistentCacheValue,
+} from "../utils/persistentCache";
 import Modal from "../components/common/Modal";
 
-function formatPrice(price?: SteamPrice | null) {
-  if (!price) return "Free";
-  if (price.finalFormatted) return price.finalFormatted;
-  if (price.formatted) return price.formatted;
-  if (price.final != null) {
-    const value = (price.final / 100).toFixed(2);
+function formatPrice(price?: SteamPrice | null, unknownLabel = "Price") {
+  if (!price) return unknownLabel;
+  const finalFormatted = typeof price.finalFormatted === "string" ? price.finalFormatted.trim() : "";
+  if (finalFormatted) return finalFormatted;
+  const formatted = typeof price.formatted === "string" ? price.formatted.trim() : "";
+  if (formatted) return formatted;
+  const cents = typeof price.final === "number" ? price.final : price.initial;
+  if (typeof cents === "number" && Number.isFinite(cents)) {
+    if (cents <= 0) return "Free";
+    const value = (cents / 100).toFixed(2);
     return price.currency ? `${value} ${price.currency}` : `$${value}`;
   }
-  return "Free";
+  return unknownLabel;
 }
 
 function renderParagraphs(text?: string | null) {
@@ -57,6 +67,13 @@ function renderParagraphs(text?: string | null) {
       </p>
     ));
 }
+
+const STEAM_EXTENDED_CACHE_KEY = "otoshi.cache.steam.extended.v1";
+const STEAM_EXTENDED_CACHE_TTL_MS = 1000 * 60 * 20;
+const STEAM_EXTENDED_CACHE_MAX_ENTRIES = 36;
+
+const resolveExtendedCacheEntryKey = (appId: string) =>
+  String(appId || "").trim();
 
 export default function SteamGameDetailPage() {
   const { appId } = useParams();
@@ -195,19 +212,52 @@ export default function SteamGameDetailPage() {
   }, [appId]);
 
   // Fetch extended data (DLC, achievements, news, reviews, player count)
-  // Always skip frontend cache to ensure fresh DLC data
+  // Uses persistent local cache for instant paint, then revalidates.
   useEffect(() => {
     if (!appId || !ageGateAllowed) return;
 
     let mounted = true;
-    setExtendedLoading(true);
+    const cacheEntryKey = resolveExtendedCacheEntryKey(appId);
+    const cachedExtended = readPersistentCacheValue<SteamExtendedData>(
+      STEAM_EXTENDED_CACHE_KEY,
+      cacheEntryKey
+    );
 
-    // Clear cache and fetch fresh data with skipCache=true
-    clearGameCache(appId);
-    fetchSteamExtended(appId, true)
-      .then((data) => {
+    if (cachedExtended) {
+      setExtendedData(cachedExtended);
+    }
+    setExtendedLoading(!cachedExtended);
+
+    fetchSteamExtended(appId, false)
+      .then(async (data) => {
+        let resolved = data;
+        if ((data?.dlc?.total ?? 0) <= 0) {
+          try {
+            const dlcFallback = await fetchSteamDLC(appId, false);
+            if ((dlcFallback?.total ?? 0) > 0) {
+              resolved = {
+                ...data,
+                dlc: {
+                  items: dlcFallback.items,
+                  total: dlcFallback.total,
+                },
+              };
+            }
+          } catch {
+            // Keep extended payload if fallback DLC request fails.
+          }
+        }
         if (mounted) {
-          setExtendedData(data);
+          setExtendedData(resolved);
+          writePersistentCacheValue(
+            STEAM_EXTENDED_CACHE_KEY,
+            cacheEntryKey,
+            resolved,
+            {
+              ttlMs: STEAM_EXTENDED_CACHE_TTL_MS,
+              maxEntries: STEAM_EXTENDED_CACHE_MAX_ENTRIES,
+            }
+          );
         }
       })
       .catch((err) => {
@@ -372,7 +422,33 @@ export default function SteamGameDetailPage() {
       // Clear cache and fetch fresh DLC data
       clearGameCache(appId);
       const data = await fetchSteamExtended(appId, true);
-      setExtendedData(data);
+      let resolved = data;
+      if ((data?.dlc?.total ?? 0) <= 0) {
+        try {
+          const dlcFallback = await fetchSteamDLC(appId, true);
+          if ((dlcFallback?.total ?? 0) > 0) {
+            resolved = {
+              ...data,
+              dlc: {
+                items: dlcFallback.items,
+                total: dlcFallback.total,
+              },
+            };
+          }
+        } catch {
+          // Keep original payload if fallback fails.
+        }
+      }
+      setExtendedData(resolved);
+      writePersistentCacheValue(
+        STEAM_EXTENDED_CACHE_KEY,
+        resolveExtendedCacheEntryKey(appId),
+        resolved,
+        {
+          ttlMs: STEAM_EXTENDED_CACHE_TTL_MS,
+          maxEntries: STEAM_EXTENDED_CACHE_MAX_ENTRIES,
+        }
+      );
       console.log("[DLC] Refreshed DLC data for app", appId);
     } catch (err) {
       console.error("[DLC] Failed to refresh DLC data:", err);
@@ -380,6 +456,16 @@ export default function SteamGameDetailPage() {
       setExtendedLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!game) return;
+    const titleIsDlc = Boolean(
+      game.isDlc || game.itemType === "dlc" || isLikelyDlcName(game.name)
+    );
+    if (titleIsDlc && activeTab === "dlc") {
+      setActiveTab("about");
+    }
+  }, [activeTab, game]);
 
   if (loading) {
     return (
@@ -421,17 +507,18 @@ export default function SteamGameDetailPage() {
     );
   }
 
-  const displayPrice = formatPrice(game.price);
+  const displayPrice = formatPrice(game.price, t("common.price_unavailable"));
   const tags = [...(game.genres || []), ...(game.categories || [])].slice(0, 6);
   const heroImage = game.heroImage || game.background || game.headerImage || "";
   const platformLabel = (game.platforms || []).join(", ") || "Unknown";
   const iconImage = game.iconImage || game.logoImage || game.headerImage || "";
-  const isCurrentTitleDlc = Boolean(game.isDlc || game.itemType === "dlc");
+  const isCurrentTitleDlc = Boolean(game.isDlc || game.itemType === "dlc" || isLikelyDlcName(game.name));
   const resolvedDlcCount = Math.max(
     Number(game.dlcCount || 0),
     Number(extendedData?.dlc?.total || 0),
     Number(extendedData?.dlc?.items?.length || 0)
   );
+  const showDlcTab = !isCurrentTitleDlc;
   const richBlocks = Array.from(
     new Set(
       [game.aboutTheGameHtml, game.detailedDescriptionHtml]
@@ -763,7 +850,7 @@ export default function SteamGameDetailPage() {
                 <Info size={16} />
                 About
               </button>
-              {resolvedDlcCount > 0 && (
+              {showDlcTab && (
                 <button
                   onClick={() => setActiveTab("dlc")}
                   className={`shrink-0 flex items-center gap-2 px-4 py-3 text-xs font-medium transition sm:px-6 sm:py-4 sm:text-sm ${
@@ -774,9 +861,11 @@ export default function SteamGameDetailPage() {
                 >
                   <Package size={16} />
                   DLC
-                  <span className="ml-1 rounded-full bg-background-muted px-2 py-0.5 text-xs">
-                    {resolvedDlcCount}
-                  </span>
+                  {resolvedDlcCount > 0 ? (
+                    <span className="ml-1 rounded-full bg-background-muted px-2 py-0.5 text-xs">
+                      {resolvedDlcCount}
+                    </span>
+                  ) : null}
                 </button>
               )}
               {extendedData && extendedData.achievements.items.length > 0 && (

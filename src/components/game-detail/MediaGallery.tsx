@@ -41,6 +41,7 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const waitingTimerRef = useRef<number | null>(null);
+  const imageTimerRef = useRef<number | null>(null);
   const hasVideoStartedRef = useRef(false);
   const loadedVideoKeysRef = useRef<Set<string>>(new Set());
 
@@ -57,6 +58,21 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
       setVideoLoading(true);
       waitingTimerRef.current = null;
     }, 320);
+  };
+
+  const clearImageTimer = () => {
+    if (imageTimerRef.current !== null) {
+      window.clearTimeout(imageTimerRef.current);
+      imageTimerRef.current = null;
+    }
+  };
+
+  const scheduleImageLoadingFallback = () => {
+    clearImageTimer();
+    imageTimerRef.current = window.setTimeout(() => {
+      setImageLoading(false);
+      imageTimerRef.current = null;
+    }, 7000);
   };
 
   useEffect(() => {
@@ -107,6 +123,7 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
     if (!current) return;
     if (current.type === "video") {
       clearWaitingTimer();
+      clearImageTimer();
       hasVideoStartedRef.current = currentVideoAlreadyLoaded;
       setVideoLoading(shouldLoadVideo && !currentVideoAlreadyLoaded);
       setImageLoading(false);
@@ -114,6 +131,7 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
     }
     clearWaitingTimer();
     setImageLoading(true);
+    scheduleImageLoadingFallback();
     setVideoLoading(false);
   }, [current?.type, current?.url, currentVideoAlreadyLoaded, shouldLoadVideo]);
 
@@ -202,7 +220,13 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
     shouldLoadVideo
   ]);
 
-  useEffect(() => () => clearWaitingTimer(), []);
+  useEffect(
+    () => () => {
+      clearWaitingTimer();
+      clearImageTimer();
+    },
+    []
+  );
 
   if (!current) {
     return (
@@ -289,8 +313,14 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
               <img
                 src={current.url}
                 alt="Screenshot"
-                onLoad={() => setImageLoading(false)}
-                onError={() => setImageLoading(false)}
+                onLoad={() => {
+                  clearImageTimer();
+                  setImageLoading(false);
+                }}
+                onError={() => {
+                  clearImageTimer();
+                  setImageLoading(false);
+                }}
                 className="h-full w-full object-cover"
                 {...getMediaProtectionProps()}
               />

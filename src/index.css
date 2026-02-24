@@ -547,13 +547,6 @@ html[data-theme="light"] {
     z-index: 9992;
   }
 
-  .tour-highlight {
-    position: relative;
-    box-shadow: 0 0 0 2px rgba(38, 187, 255, 0.5), 0 0 24px rgba(38, 187, 255, 0.3);
-    border-radius: 12px;
-    transition: box-shadow 0.3s ease;
-  }
-
   .tour-skip {
     font-size: 10px;
     text-transform: uppercase;
@@ -685,4 +678,18 @@ html[data-theme="light"] {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+@keyframes otoshi-spinner-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner-force-motion {
+  transform-origin: center;
+  animation: otoshi-spinner-rotate 0.8s linear infinite !important;
 }

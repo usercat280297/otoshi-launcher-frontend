@@ -1,6 +1,6 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { ShoppingCart } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { artworkGet, artworkPrefetch } from "../../services/api";
 import { Game } from "../../types";
 import Button from "../common/Button";
@@ -52,8 +52,14 @@ export default function Hero({
 
   const [activeIndex, setActiveIndex] = useState(0);
   const prefetchedRef = useRef(new Set<string>());
+  const resolveHeroSource = (item: Game) =>
+    item.backgroundImage ||
+    item.heroImage ||
+    item.headerImage ||
+    item.capsuleImage ||
+    null;
   const [heroImageSrc, setHeroImageSrc] = useState(
-    game.backgroundImage || game.heroImage || game.headerImage
+    resolveHeroSource(game)
   );
   const [railImages, setRailImages] = useState<Record<string, string>>({});
 
@@ -81,18 +87,30 @@ export default function Hero({
   }, [activeIndex, autoAdvanceMs, playlist.length]);
 
   const activeGame = playlist[activeIndex] ?? game;
-  const discounted = activeGame.discountPercent > 0;
+  const priceKnown = activeGame.priceKnown !== false;
+  const discounted = priceKnown && activeGame.discountPercent > 0;
   const price = (activeGame.price * (1 - activeGame.discountPercent / 100)).toFixed(2);
-  const displayPrice = activeGame.price <= 0 ? t("common.free") : `$${price}`;
+  const unknownPriceLabel = activeGame.priceLabel || t("common.price_unavailable");
+  const displayPrice = !priceKnown
+    ? unknownPriceLabel
+    : activeGame.price <= 0
+      ? t("common.free")
+      : `$${price}`;
   const slidesForRail = playlist.slice(0, 5);
 
+  useLayoutEffect(() => {
+    // Keep hero background in lockstep with active slide to prevent
+    // text/logo from changing while the previous game's backdrop remains.
+    setHeroImageSrc(resolveHeroSource(activeGame));
+  }, [
+    activeGame.id,
+    activeGame.backgroundImage,
+    activeGame.heroImage,
+    activeGame.headerImage,
+    activeGame.capsuleImage,
+  ]);
+
   useEffect(() => {
-    setHeroImageSrc(
-      activeGame.backgroundImage ||
-      activeGame.heroImage ||
-      activeGame.headerImage ||
-      activeGame.capsuleImage
-    );
     let cancelled = false;
     const dpr = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
 
@@ -164,19 +182,16 @@ export default function Hero({
       viewport={{ once: true, amount: 0.35 }}
     >
       <div className="relative min-h-[360px] overflow-hidden rounded-2xl border border-background-border bg-background-elevated shadow-panel">
-        <AnimatePresence mode="wait">
-          <motion.img
-            key={`${activeGame.id}:${heroImageSrc}`}
-            src={heroImageSrc}
-            alt={activeGame.title}
-            className="absolute inset-0 h-full w-full object-cover"
-            initial={{ opacity: 0, scale: 1.02 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 1.02 }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
-            loading="eager"
-          />
-        </AnimatePresence>
+        <motion.img
+          key={`${activeGame.id}:${heroImageSrc}`}
+          src={heroImageSrc}
+          alt={activeGame.title}
+          className="absolute inset-0 h-full w-full object-cover"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
+          loading="eager"
+        />
         <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/35 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-t from-background/70 via-transparent to-transparent" />
         <div className="relative z-10 flex h-full flex-col justify-end gap-4 px-8 py-8">
@@ -212,7 +227,13 @@ export default function Hero({
               {t("action.save_now")}
             </button>
             <Button size="sm" variant="secondary" icon={<ShoppingCart size={14} />}>
-              {discounted ? displayPrice : `$${activeGame.price.toFixed(2)}`}
+              {discounted
+                ? displayPrice
+                : priceKnown
+                  ? activeGame.price <= 0
+                    ? t("common.free")
+                    : `$${activeGame.price.toFixed(2)}`
+                  : unknownPriceLabel}
             </Button>
             <button
               onClick={() => onOpen(activeGame)}
@@ -256,6 +277,7 @@ export default function Hero({
                     onOpen(item);
                     return;
                   }
+                  setHeroImageSrc(resolveHeroSource(item));
                   setActiveIndex(index);
                 }}
                 className={`relative flex w-full items-center gap-3 overflow-hidden rounded-xl border px-3 py-3 text-left transition ${
@@ -286,7 +308,11 @@ export default function Hero({
                   <div className="flex-1 space-y-1">
                     <p className="text-sm font-semibold">{item.title}</p>
                     <p className="text-xs text-text-muted">
-                      {item.price <= 0 ? t("common.free") : `$${item.price.toFixed(2)}`}
+                      {item.priceKnown === false
+                        ? item.priceLabel || t("common.price_unavailable")
+                        : item.price <= 0
+                          ? t("common.free")
+                          : `$${item.price.toFixed(2)}`}
                     </p>
                   </div>
                 </div>

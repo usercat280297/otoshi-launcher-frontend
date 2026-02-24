@@ -32,11 +32,6 @@ export default function GuidedTour({
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
 
-  const clearHighlights = () => {
-    const previous = document.querySelectorAll(".tour-highlight");
-    previous.forEach((node) => node.classList.remove("tour-highlight"));
-  };
-
   const updateTargetRect = () => {
     if (!step) return;
     const target = document.querySelector(step.selector) as HTMLElement | null;
@@ -50,11 +45,9 @@ export default function GuidedTour({
 
   useEffect(() => {
     if (!open || !step) return;
-    clearHighlights();
     const target = document.querySelector(step.selector) as HTMLElement | null;
     if (target) {
       target.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
-      target.classList.add("tour-highlight");
     }
     const raf = window.requestAnimationFrame(updateTargetRect);
     const timer = window.setTimeout(updateTargetRect, 280);
@@ -73,7 +66,6 @@ export default function GuidedTour({
       window.removeEventListener("scroll", handleScroll, true);
       window.removeEventListener("resize", handleScroll);
       window.removeEventListener("keydown", handleKey);
-      clearHighlights();
     };
   }, [open, step, onClose, onNext, onPrev]);
 

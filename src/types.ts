@@ -10,10 +10,14 @@ export type Game = {
   releaseDate: string;
   genres: string[];
   price: number;
+  priceKnown?: boolean;
+  priceLabel?: string | null;
   discountPercent: number;
   rating: number;
   requiredAge?: number;
   denuvo?: boolean;
+  isDlc?: boolean;
+  dlcCount?: number;
   headerImage: string;
   capsuleImage?: string | null;
   heroImage: string;
@@ -108,6 +112,9 @@ export type SteamCatalogItem = {
   classificationConfidence?: number;
   artworkCoverage?: "sgdb" | "epic" | "steam" | "mixed";
   dlcCount?: number;
+  reasonCodes?: string[];
+  scoreBreakdown?: Record<string, number | string | null>;
+  searchScore?: number;
 };
 
 export type SteamIndexAssetInfo = {
@@ -586,6 +593,131 @@ export type SteamGameDetail = SteamCatalogItem & {
   heroImage?: string | null;
   logoImage?: string | null;
   iconImage?: string | null;
+};
+
+export type AiSearchEventIn = {
+  query: string;
+  action?: string;
+  appId?: string | null;
+  dwellMs?: number;
+  payload?: Record<string, any>;
+};
+
+export type AiSearchEventOut = {
+  stored: number;
+  skipped: number;
+  consentRequired: boolean;
+};
+
+export type RecommendationImpressionIn = {
+  gameId?: string | null;
+  appId?: string | null;
+  recommendationId?: string | null;
+  rankPosition?: number;
+  algorithmVersion?: string;
+  context?: string;
+  payload?: Record<string, any>;
+};
+
+export type RecommendationFeedbackIn = {
+  impressionId?: string | null;
+  gameId?: string | null;
+  appId?: string | null;
+  feedbackType: string;
+  value?: number;
+  payload?: Record<string, any>;
+};
+
+export type RecommendationTrackingOut = {
+  id: string;
+  createdAt: string;
+};
+
+export type SupportSuggestIn = {
+  sessionId?: string | null;
+  topic?: string | null;
+  message: string;
+  context?: Record<string, any>;
+  preferredProvider?: string | null;
+  preferredModel?: string | null;
+};
+
+export type SupportSuggestOut = {
+  sessionId: string;
+  suggestionId: string;
+  provider: string;
+  model: string;
+  cached: boolean;
+  confidence: number;
+  suggestion: string;
+  reasonCodes: string[];
+};
+
+export type AntiCheatSignalIn = {
+  deviceId: string;
+  signalType: string;
+  severity?: number;
+  observedAt?: string | null;
+  payload?: Record<string, any>;
+};
+
+export type AntiCheatSignalOut = {
+  signalId: string;
+  caseId: string;
+  riskScore: number;
+  riskLevel: string;
+  recommendedAction: string;
+  reasonCodes: string[];
+};
+
+export type AntiCheatCase = {
+  id: string;
+  userId?: string | null;
+  deviceId: string;
+  status: string;
+  riskScore: number;
+  riskLevel: string;
+  reasonCodes: string[];
+  recommendedAction: string;
+  latestSignalAt?: string | null;
+  payload?: Record<string, any>;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+export type PrivacyConsentPayload = {
+  category?: string;
+  categories?: string[];
+  granted: boolean;
+  source?: string;
+  payload?: Record<string, any>;
+};
+
+export type PrivacyConsentRecord = {
+  category: string;
+  granted: boolean;
+  source: string;
+  updatedAt?: string | null;
+};
+
+export type PrivacyExport = {
+  userId: string;
+  consents: PrivacyConsentRecord[];
+  telemetryEvents: any[];
+  behaviorEvents: any[];
+  searchInteractions: any[];
+  recommendationImpressions: any[];
+  recommendationFeedback: any[];
+  antiCheatSignals: any[];
+  antiCheatCases: any[];
+  supportSessions: any[];
+  supportSuggestions: any[];
+};
+
+export type PrivacyDeleteOut = {
+  requestId: string;
+  status: string;
+  deletedCounts: Record<string, number>;
 };
 
 export type LibraryEntry = {

@@ -5,20 +5,50 @@ import SteamCard from "../components/store/SteamCard";
 import { useSteamSearchMemory } from "../hooks/useSteamSearchMemory";
 import {
   fetchSteamCatalog,
+  fetchSteamGridAssets,
   fetchSteamIndexCatalog,
   fetchSteamIndexAssetsBatch,
+  fetchSteamIndexGameDetail,
   prefetchSteamIndexAssets,
+  sendAiSearchEvents,
   searchSteamIndexCatalog,
 } from "../services/api";
 import { SteamCatalogItem } from "../types";
 import { useLocale } from "../context/LocaleContext";
+import { useAuth } from "../context/AuthContext";
+import {
+  enrichCatalogItemsWithDetail,
+  hasBrokenSteamFallbackArt,
+  hasCatalogArtwork,
+  isDlcQuery,
+  isLikelyDlcName,
+  mergeAndRankSteamSearchResults,
+  rankSteamSearchItems,
+  shouldUseSteamSearchFallback,
+} from "../utils/steamSearch";
+import {
+  readPersistentCacheValue,
+  writePersistentCacheValue,
+} from "../utils/persistentCache";
 
 const PAGE_SIZE = 24;
 const SEARCH_STORAGE_KEY = "otoshi.search.steam";
+const SEARCH_RESULTS_CACHE_KEY = "otoshi.cache.steam.catalog_search.v1";
+const SEARCH_RESULTS_CACHE_TTL_MS = 1000 * 60 * 30;
+const SEARCH_RESULTS_CACHE_MAX_ENTRIES = 120;
 const IMAGE_PLACEHOLDER = "/icons/game-placeholder.svg";
 const VISIBLE_FORCE_REFRESH_DEBOUNCE_MS = 300;
 const VISIBLE_FORCE_REFRESH_MAX_IDS = 120;
+const DETAIL_ENRICH_LIMIT = 16;
+const DETAIL_ENRICH_CONCURRENCY = 3;
+const GRID_ENRICH_LIMIT = 12;
+const GRID_ENRICH_CONCURRENCY = 2;
+const SEARCH_EVENT_BATCH_SIZE = 20;
+const SEARCH_EVENT_FLUSH_MS = 1200;
+const SEARCH_VIEW_EVENT_LIMIT = 12;
 const normalizeSearch = (value: string) => value.trim().toLowerCase();
+const resolveSearchCacheEntryKey = (query: string, pageIndex: number) =>
+  `${normalizeSearch(query)}::${Math.max(0, pageIndex)}`;
 
 type IndexAssetEntry = {
   selectedSource?: string | null;
@@ -28,13 +58,29 @@ type IndexAssetEntry = {
 const isSteamGridUrl = (value?: string | null) =>
   typeof value === "string" && value.toLowerCase().includes("steamgriddb.com");
 
-const shouldPreferSteamGridAssets = (entry?: IndexAssetEntry | null) => {
+const hasRenderableAsset = (value?: string | null) =>
+  typeof value === "string" && value.trim().length > 0;
+
+const shouldApplyIndexAssets = (entry: IndexAssetEntry | null | undefined, item: SteamCatalogItem) => {
   if (!entry?.assets) return false;
-  if (String(entry.selectedSource || "").toLowerCase() === "steamgriddb") {
+  const source = String(entry.selectedSource || "").toLowerCase();
+  const { grid, hero, logo, icon } = entry.assets;
+  const hasAnyAsset = [grid, hero, logo, icon].some((value) => hasRenderableAsset(value));
+  if (!hasAnyAsset) return false;
+  const hasSteamGridHostedAsset = [grid, hero, logo, icon].some((value) => isSteamGridUrl(value));
+  if (source === "epic" || source === "mixed") {
     return true;
   }
-  const { grid, hero, logo, icon } = entry.assets;
-  return [grid, hero, logo, icon].some((value) => isSteamGridUrl(value));
+  if (source === "steamgriddb") {
+    if (hasSteamGridHostedAsset) {
+      return true;
+    }
+    return !hasCatalogArtwork(item);
+  }
+  if (hasSteamGridHostedAsset) {
+    return true;
+  }
+  return !hasCatalogArtwork(item);
 };
 
 const pickSuggestionImage = (item: SteamCatalogItem) => {
@@ -62,7 +108,7 @@ function mergeSteamGridAssets(
   return items.map((item) => {
     const key = String(item.appId || "").trim();
     const entry = key ? assetsByAppId[key] : null;
-    if (!entry || !shouldPreferSteamGridAssets(entry)) {
+    if (!shouldApplyIndexAssets(entry, item)) {
       return item;
     }
     const assets = entry.assets;
@@ -90,9 +136,64 @@ function mergeSteamGridAssets(
   });
 }
 
+async function enrichMissingArtworkViaGrid(
+  items: SteamCatalogItem[]
+): Promise<SteamCatalogItem[]> {
+  const targets = items
+    .filter((item) => !hasCatalogArtwork(item) || hasBrokenSteamFallbackArt(item))
+    .slice(0, GRID_ENRICH_LIMIT);
+
+  if (!targets.length) return items;
+
+  const patches = new Map<string, Partial<SteamCatalogItem>>();
+  let cursor = 0;
+
+  const workers = Array.from({ length: GRID_ENRICH_CONCURRENCY }, async () => {
+    while (cursor < targets.length) {
+      const current = targets[cursor];
+      cursor += 1;
+      const appId = String(current.appId || "").trim();
+      if (!appId) continue;
+      try {
+        const asset = await fetchSteamGridAssets(current.name, appId);
+        const grid = asset?.grid || null;
+        const hero = asset?.hero || null;
+        const icon = asset?.icon || null;
+        if (!grid && !hero && !icon) continue;
+        patches.set(appId, {
+          headerImage: grid || current.headerImage || null,
+          capsuleImage: grid || current.capsuleImage || current.headerImage || null,
+          background: hero || current.background || grid || current.headerImage || null,
+          artwork: {
+            ...(current.artwork || {}),
+            t0: icon || current.artwork?.t0 || current.capsuleImage || null,
+            t1: grid || current.artwork?.t1 || current.capsuleImage || null,
+            t2: grid || current.artwork?.t2 || current.headerImage || null,
+            t3: grid || current.artwork?.t3 || current.capsuleImage || current.headerImage || null,
+            t4: hero || current.artwork?.t4 || current.background || current.headerImage || null,
+            version: Number(current.artwork?.version || 1) + 1,
+          },
+        });
+      } catch {
+        // Keep item unchanged when sgdb lookup fails.
+      }
+    }
+  });
+
+  await Promise.all(workers);
+  if (!patches.size) return items;
+
+  return items.map((item) => {
+    const appId = String(item.appId || "").trim();
+    const patch = appId ? patches.get(appId) : undefined;
+    return patch ? { ...item, ...patch } : item;
+  });
+}
+
 export default function SteamCatalogPage() {
   const navigate = useNavigate();
   const { t } = useLocale();
+  const { token } = useAuth();
   const [items, setItems] = useState<SteamCatalogItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -104,16 +205,115 @@ export default function SteamCatalogPage() {
   const searchCacheRef = useRef(
     new Map<string, { items: SteamCatalogItem[]; total: number }>()
   );
+  const itemsPageRef = useRef(0);
   const forceRefreshSeenRef = useRef(new Set<string>());
   const forceRefreshInflightRef = useRef(new Set<string>());
   const forceRefreshTimerRef = useRef<number | null>(null);
+  const searchEventQueueRef = useRef<Array<{
+    query: string;
+    action: string;
+    appId?: string | null;
+    dwellMs?: number;
+    payload?: Record<string, unknown>;
+  }>>([]);
+  const searchEventTimerRef = useRef<number | null>(null);
+  const searchResultsShownAtRef = useRef<number | null>(null);
+  const viewedResultKeysRef = useRef(new Set<string>());
+  const viewedQueryRef = useRef("");
   const { suggestions, recordSearch } = useSteamSearchMemory();
+
+  const flushSearchEvents = useCallback((reschedule: boolean = true) => {
+    if (searchEventTimerRef.current != null) {
+      window.clearTimeout(searchEventTimerRef.current);
+      searchEventTimerRef.current = null;
+    }
+    if (!searchEventQueueRef.current.length) return;
+    const batch = searchEventQueueRef.current.splice(0, SEARCH_EVENT_BATCH_SIZE);
+    void sendAiSearchEvents(
+      batch.map((event) => ({
+        query: event.query,
+        action: event.action,
+        appId: event.appId ?? undefined,
+        dwellMs: Math.max(0, Number(event.dwellMs ?? 0)),
+        payload: event.payload ?? {},
+      })),
+      token || undefined
+    )
+      .catch(() => undefined)
+      .finally(() => {
+        if (reschedule && searchEventQueueRef.current.length) {
+          searchEventTimerRef.current = window.setTimeout(
+            flushSearchEvents,
+            SEARCH_EVENT_FLUSH_MS
+          );
+        }
+      });
+  }, [token]);
+
+  const emitSearchEvent = useCallback(
+    (event: {
+      query: string;
+      action: string;
+      appId?: string | null;
+      dwellMs?: number;
+      payload?: Record<string, unknown>;
+    }) => {
+      const normalizedQuery = String(event.query || "").trim();
+      if (!normalizedQuery) return;
+      searchEventQueueRef.current.push({
+        query: normalizedQuery,
+        action: String(event.action || "submit").trim().toLowerCase() || "submit",
+        appId: event.appId ?? undefined,
+        dwellMs: Math.max(0, Number(event.dwellMs ?? 0)),
+        payload: event.payload ?? {},
+      });
+      if (searchEventQueueRef.current.length >= SEARCH_EVENT_BATCH_SIZE) {
+        flushSearchEvents();
+        return;
+      }
+      if (searchEventTimerRef.current == null) {
+        searchEventTimerRef.current = window.setTimeout(
+          flushSearchEvents,
+          SEARCH_EVENT_FLUSH_MS
+        );
+      }
+    },
+    [flushSearchEvents]
+  );
+
+  const resolveSearchDwellMs = useCallback(() => {
+    const shownAt = searchResultsShownAtRef.current;
+    if (!shownAt) return 0;
+    const elapsed = Date.now() - shownAt;
+    if (!Number.isFinite(elapsed) || elapsed <= 0) return 0;
+    return Math.min(600_000, Math.round(elapsed));
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (searchEventTimerRef.current != null) {
+        window.clearTimeout(searchEventTimerRef.current);
+        searchEventTimerRef.current = null;
+      }
+      flushSearchEvents(false);
+    },
+    [flushSearchEvents]
+  );
 
   const load = useCallback(
     async (pageIndex: number, searchValue: string) => {
-      const cacheKey = `${normalizeSearch(searchValue)}::${pageIndex}`;
-      const cached = searchCacheRef.current.get(cacheKey);
+      const cacheKey = resolveSearchCacheEntryKey(searchValue, pageIndex);
+      const inMemoryCached = searchCacheRef.current.get(cacheKey);
+      const persistedCached = readPersistentCacheValue<{
+        items: SteamCatalogItem[];
+        total: number;
+      }>(SEARCH_RESULTS_CACHE_KEY, cacheKey);
+      const cached = inMemoryCached || persistedCached;
       if (cached) {
+        if (!inMemoryCached) {
+          searchCacheRef.current.set(cacheKey, cached);
+        }
+        itemsPageRef.current = pageIndex;
         setItems(cached.items);
         setTotal(cached.total);
         setPage(pageIndex);
@@ -124,17 +324,79 @@ export default function SteamCatalogPage() {
       try {
         const nextOffset = pageIndex * PAGE_SIZE;
         let data: { total: number; offset: number; limit: number; items: SteamCatalogItem[] };
-        try {
-          if (searchValue) {
-            data = await searchSteamIndexCatalog({
+        if (searchValue) {
+          const includeDlcForRanking = isDlcQuery(searchValue);
+          try {
+            const indexData = await searchSteamIndexCatalog({
               q: searchValue,
               limit: PAGE_SIZE,
               offset: nextOffset,
               source: "global",
-              includeDlc: false,
-              mustHaveArtwork: true,
+              includeDlc: true,
+              mustHaveArtwork: false,
+              rankingMode: "priority",
             });
-          } else {
+            const rankedIndex = rankSteamSearchItems(indexData.items, searchValue, {
+              includeDlc: includeDlcForRanking,
+            });
+
+            if (shouldUseSteamSearchFallback(rankedIndex, searchValue, PAGE_SIZE)) {
+              try {
+                const fallbackData = await fetchSteamCatalog({
+                  limit: PAGE_SIZE,
+                  offset: nextOffset,
+                  search: searchValue || undefined,
+                  searchMode: "hybrid",
+                  artMode: "tiered",
+                  thumbW: 460
+                });
+                const mergedItems = mergeAndRankSteamSearchResults(
+                  rankedIndex,
+                  fallbackData.items,
+                  searchValue,
+                  PAGE_SIZE,
+                  { includeDlc: includeDlcForRanking }
+                );
+                data = {
+                  total: Math.max(
+                    Number(indexData.total ?? 0),
+                    Number(fallbackData.total ?? 0),
+                    nextOffset + mergedItems.length
+                  ),
+                  offset: nextOffset,
+                  limit: PAGE_SIZE,
+                  items: mergedItems,
+                };
+              } catch {
+                data = {
+                  ...indexData,
+                  items: rankedIndex,
+                };
+              }
+            } else {
+              data = {
+                ...indexData,
+                items: rankedIndex,
+              };
+            }
+          } catch {
+            const fallbackData = await fetchSteamCatalog({
+              limit: PAGE_SIZE,
+              offset: nextOffset,
+              search: searchValue || undefined,
+              searchMode: "hybrid",
+              artMode: "tiered",
+              thumbW: 460
+            });
+            data = {
+              ...fallbackData,
+              items: rankSteamSearchItems(fallbackData.items, searchValue, {
+                includeDlc: includeDlcForRanking,
+              }),
+            };
+          }
+        } else {
+          try {
             data = await fetchSteamIndexCatalog({
               limit: PAGE_SIZE,
               offset: nextOffset,
@@ -143,24 +405,27 @@ export default function SteamCatalogPage() {
               includeDlc: false,
               mustHaveArtwork: true,
             });
+          } catch {
+            data = await fetchSteamCatalog({
+              limit: PAGE_SIZE,
+              offset: nextOffset,
+              search: searchValue || undefined,
+              artMode: "tiered",
+              thumbW: 460
+            });
           }
-        } catch {
-          data = await fetchSteamCatalog({
-            limit: PAGE_SIZE,
-            offset: nextOffset,
-            search: searchValue || undefined,
-            artMode: "tiered",
-            thumbW: 460
-          });
         }
         const totalCount = data.total ?? 0;
         setTotal(totalCount);
         setPage(pageIndex);
-        let enrichedItems = data.items;
-        if (enrichedItems.length) {
+        const baseItems = data.items;
+        itemsPageRef.current = pageIndex;
+        setItems(baseItems);
+        let enrichedItems = baseItems;
+        if (baseItems.length) {
           try {
             const batchResult = await fetchSteamIndexAssetsBatch({
-              appIds: enrichedItems.map((item) => item.appId),
+              appIds: baseItems.map((item) => item.appId),
             });
             const assetsMap: Record<string, IndexAssetEntry | null> = {};
             for (const [appId, info] of Object.entries(batchResult)) {
@@ -169,16 +434,39 @@ export default function SteamCatalogPage() {
                 assets: info?.assets ?? null,
               };
             }
-            enrichedItems = mergeSteamGridAssets(enrichedItems, assetsMap);
+            enrichedItems = mergeSteamGridAssets(baseItems, assetsMap);
           } catch {
             // keep base Steam catalog assets on batch failure
           }
         }
-        setItems(enrichedItems);
+        enrichedItems = await enrichCatalogItemsWithDetail(
+          enrichedItems,
+          fetchSteamIndexGameDetail,
+          {
+            limit: DETAIL_ENRICH_LIMIT,
+            concurrency: DETAIL_ENRICH_CONCURRENCY,
+          }
+        );
+        enrichedItems = await enrichMissingArtworkViaGrid(enrichedItems);
+        if (enrichedItems !== baseItems) {
+          setItems(enrichedItems);
+        }
         searchCacheRef.current.set(cacheKey, {
           items: enrichedItems,
           total: totalCount
         });
+        writePersistentCacheValue(
+          SEARCH_RESULTS_CACHE_KEY,
+          cacheKey,
+          {
+            items: enrichedItems,
+            total: totalCount,
+          },
+          {
+            ttlMs: SEARCH_RESULTS_CACHE_TTL_MS,
+            maxEntries: SEARCH_RESULTS_CACHE_MAX_ENTRIES,
+          }
+        );
       } catch (err: any) {
         setError(err.message || "Failed to load Steam catalog");
       } finally {
@@ -205,8 +493,13 @@ export default function SteamCatalogPage() {
       lastSubmittedRef.current = nextQuery;
       setActiveQuery(nextQuery);
       const pageIndex = 0;
-      const cacheKey = `${normalizeSearch(nextQuery)}::${pageIndex}`;
-      const cached = searchCacheRef.current.get(cacheKey);
+      const cacheKey = resolveSearchCacheEntryKey(nextQuery, pageIndex);
+      const inMemoryCached = searchCacheRef.current.get(cacheKey);
+      const persistedCached = readPersistentCacheValue<{
+        items: SteamCatalogItem[];
+        total: number;
+      }>(SEARCH_RESULTS_CACHE_KEY, cacheKey);
+      const cached = inMemoryCached || persistedCached;
       if (record) {
         if (nextQuery) {
           localStorage.setItem(SEARCH_STORAGE_KEY, nextQuery);
@@ -216,6 +509,9 @@ export default function SteamCatalogPage() {
         }
       }
       if (cached) {
+        if (!inMemoryCached) {
+          searchCacheRef.current.set(cacheKey, cached);
+        }
         setError(null);
         setItems(cached.items);
         setTotal(cached.total);
@@ -232,17 +528,58 @@ export default function SteamCatalogPage() {
     (value?: string) => {
       const nextQuery = (value ?? query).trim();
       setQuery(nextQuery);
+      if (nextQuery) {
+        emitSearchEvent({
+          query: nextQuery,
+          action: "submit",
+          payload: { source: "steam_catalog_search" },
+        });
+      }
       runSearch(nextQuery, true);
     },
-    [query, runSearch]
+    [emitSearchEvent, query, runSearch]
   );
+
+  useEffect(() => {
+    const normalizedQuery = String(activeQuery || "").trim();
+    if (!normalizedQuery || !items.length) {
+      searchResultsShownAtRef.current = null;
+      return;
+    }
+    if (itemsPageRef.current !== page) {
+      return;
+    }
+    if (viewedQueryRef.current !== normalizedQuery) {
+      viewedResultKeysRef.current.clear();
+      viewedQueryRef.current = normalizedQuery;
+    }
+    searchResultsShownAtRef.current = Date.now();
+    const visibleItems = items.slice(0, SEARCH_VIEW_EVENT_LIMIT);
+    visibleItems.forEach((item, index) => {
+      const appId = String(item.appId || "").trim();
+      if (!appId) return;
+      const key = `${normalizedQuery}::${page}::${appId}`;
+      if (viewedResultKeysRef.current.has(key)) return;
+      viewedResultKeysRef.current.add(key);
+      emitSearchEvent({
+        query: normalizedQuery,
+        action: "view",
+        appId,
+        payload: {
+          source: "steam_catalog_grid",
+          page,
+          rank: index,
+        },
+      });
+    });
+  }, [activeQuery, emitSearchEvent, items, page]);
 
   useEffect(() => {
     const trimmed = query.trim();
     if (trimmed === lastSubmittedRef.current) return;
     const timer = window.setTimeout(() => {
       runSearch(trimmed, false);
-    }, 350);
+    }, 160);
     return () => window.clearTimeout(timer);
   }, [query, runSearch]);
 
@@ -256,8 +593,18 @@ export default function SteamCatalogPage() {
       value: item.name,
       kind: "result" as const,
       image: pickSuggestionImage(item),
+      imageCandidates: [
+        item.artwork?.t3 ?? null,
+        item.artwork?.t2 ?? null,
+        item.artwork?.t1 ?? null,
+        item.headerImage ?? null,
+        item.capsuleImage ?? null,
+        item.background ?? null,
+        item.artwork?.t0 ?? null,
+      ].filter((value): value is string => typeof value === "string" && value.trim().length > 0),
       meta: `#${item.appId}`,
-      isDlc: Boolean(item.isDlc),
+      isDlc: Boolean(item.isDlc || item.itemType === "dlc" || isLikelyDlcName(item.name)),
+      kindTag: ((item.isDlc || item.itemType === "dlc" || isLikelyDlcName(item.name)) ? "DLC" : "BASE") as "DLC" | "BASE",
       appId: item.appId
     }));
   }, [activeQuery, items, query]);
@@ -320,7 +667,9 @@ export default function SteamCatalogPage() {
               selectedSource: (info as any)?.selectedSource ?? null,
               assets: (info as any)?.assets ?? null,
             };
-            if (shouldPreferSteamGridAssets(entry)) {
+            const hasAny = [entry.assets?.grid, entry.assets?.hero, entry.assets?.logo, entry.assets?.icon]
+              .some((value) => hasRenderableAsset(value));
+            if (hasAny) {
               assetsMap[String(appId)] = entry;
               refreshedIds.add(String(appId));
             }
@@ -386,11 +735,19 @@ export default function SteamCatalogPage() {
         activeTab="steam"
         placeholder={t("store.search_placeholder")}
         searchValue={query}
+        searchLoading={loading}
         onSearchChange={setQuery}
         onSearchSubmit={() => handleSearchSubmit()}
         suggestions={combinedSuggestions}
         onSuggestionSelect={(item) => {
           if (item.kind === "result" && item.appId) {
+            emitSearchEvent({
+              query: item.value || activeQuery || query,
+              action: "detail",
+              appId: item.appId,
+              dwellMs: resolveSearchDwellMs(),
+              payload: { source: "steam_catalog_suggestion", page },
+            });
             navigate(`/steam/${item.appId}`);
             return;
           }
@@ -415,7 +772,12 @@ export default function SteamCatalogPage() {
           <p className="text-xs uppercase tracking-[0.35em] text-text-muted">
             {total} titles
           </p>
-          {loading && <span className="text-xs text-text-muted">Loading...</span>}
+          {loading && (
+            <span className="inline-flex items-center gap-2 text-xs text-text-muted">
+              <span className="spinner-force-motion h-3.5 w-3.5 rounded-full border-2 border-primary/30 border-t-primary" />
+              {t("store.searching")}
+            </span>
+          )}
         </div>
         {items.length === 0 && !loading ? (
           <div className="glass-panel p-6 text-sm text-text-secondary">
@@ -427,7 +789,16 @@ export default function SteamCatalogPage() {
               <SteamCard
                 key={item.appId}
                 item={item}
-                onOpen={() => navigate(`/steam/${item.appId}`)}
+                onOpen={() => {
+                  emitSearchEvent({
+                    query: activeQuery || query,
+                    action: "detail",
+                    appId: item.appId,
+                    dwellMs: resolveSearchDwellMs(),
+                    payload: { source: "steam_catalog_grid", page, rank: index },
+                  });
+                  navigate(`/steam/${item.appId}`);
+                }}
                 prefetchItems={items.slice(index + 1, index + 11)}
               />
             ))}

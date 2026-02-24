@@ -65,6 +65,17 @@ function AppContent() {
     !location.pathname.startsWith("/overlay") &&
     !location.pathname.startsWith("/big-picture");
 
+  useEffect(() => {
+    if (typeof window === "undefined" || !("scrollRestoration" in window.history)) {
+      return;
+    }
+    const previous = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
+    return () => {
+      window.history.scrollRestoration = previous;
+    };
+  }, []);
+
   // Initialize media protection to prevent IDM and download managers
   useEffect(() => {
     initMediaProtection();

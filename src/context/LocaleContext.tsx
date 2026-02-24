@@ -150,6 +150,7 @@ const messages: Record<string, Record<Locale, string>> = {
   "pagination.go": { en: "Go", vi: "Di" },
   "common.free": { en: "Free", vi: "Miễn phí" },
   "common.price": { en: "Price", vi: "Giá" },
+  "common.price_unavailable": { en: "TBA", vi: "Sap co gia" },
   "common.discord": { en: "Discord", vi: "Discord" },
 
   // Lua games missing
@@ -281,6 +282,7 @@ const messages: Record<string, Record<Locale, string>> = {
   "store.explore_free": { en: "Explore free-to-play hits and weekly drops.", vi: "Khám phá game miễn phí và phát hành hàng tuần." },
   "store.creative_tools": { en: "Creative tools and companion experiences.", vi: "Công cụ sáng tạo và trải nghiệm đồng hành." },
   "store.search_placeholder": { en: "Search name or appid", vi: "Tìm tên hoặc mã game" },
+  "store.searching": { en: "Searching...", vi: "Đang tìm..." },
 
   // Search
   "search.results": { en: "Results", vi: "Kết quả" },

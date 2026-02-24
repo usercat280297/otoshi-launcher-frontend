@@ -3,6 +3,7 @@ import { artworkGet, artworkPrefetch } from "../../services/api";
 import { SteamCatalogItem, SteamPrice } from "../../types";
 import { getMediaProtectionProps } from "../../utils/mediaProtection";
 import { useLocale } from "../../context/LocaleContext";
+import { isLikelyDlcName } from "../../utils/steamSearch";
 import Badge from "../common/Badge";
 
 type SteamCardProps = {
@@ -11,15 +12,22 @@ type SteamCardProps = {
   prefetchItems?: SteamCatalogItem[];
 };
 
-function formatPrice(price?: SteamPrice | null) {
-  if (!price) return "Free";
-  if (price.finalFormatted) return price.finalFormatted;
-  if (price.formatted) return price.formatted;
-  if (price.final != null) {
-    const value = (price.final / 100).toFixed(2);
+function formatPrice(
+  price: SteamPrice | null | undefined,
+  labels: { free: string; unknown: string }
+) {
+  if (!price) return labels.unknown;
+  const finalFormatted = typeof price.finalFormatted === "string" ? price.finalFormatted.trim() : "";
+  if (finalFormatted) return finalFormatted;
+  const formatted = typeof price.formatted === "string" ? price.formatted.trim() : "";
+  if (formatted) return formatted;
+  const cents = typeof price.final === "number" ? price.final : price.initial;
+  if (typeof cents === "number" && Number.isFinite(cents)) {
+    if (cents <= 0) return labels.free;
+    const value = (cents / 100).toFixed(2);
     return price.currency ? `${value} ${price.currency}` : `$${value}`;
   }
-  return "Free";
+  return labels.unknown;
 }
 
 const prefetchedAhead = new Set<string>();
@@ -46,6 +54,14 @@ function scorePosterCandidate(value: string): number {
   if (/library_600x900|\/grids\/|\/grid\//.test(source)) score += 20;
   if (/\/logo\.png|\/icon\.jpg/.test(source)) score -= 20;
   if (/header|capsule_616x353|library_hero|hero/.test(source)) score -= 8;
+  if (
+    /cdn\.cloudflare\.steamstatic\.com\/steam\/apps\/\d+\/(?:header\.jpg|capsule_616x353\.jpg|library_hero\.jpg|library_600x900\.jpg)(?:[?#].*)?$/.test(
+      source
+    )
+  ) {
+    score -= 28;
+  }
+  if (source.includes("shared.akamai.steamstatic.com")) score += 6;
   if (source.includes("steamgriddb.com")) score += 4;
   return score;
 }
@@ -92,7 +108,10 @@ function mapArtworkSources(item: SteamCatalogItem, fallback: string) {
 export default function SteamCard({ item, onOpen, prefetchItems = [] }: SteamCardProps) {
   const { t } = useLocale();
   const discounted = (item.price?.discountPercent ?? 0) > 0;
-  const displayPrice = formatPrice(item.price);
+  const displayPrice = formatPrice(item.price, {
+    free: t("common.free"),
+    unknown: t("common.price_unavailable")
+  });
   const [activeImage, setActiveImage] = useState<string | null>(null);
   const [incomingImage, setIncomingImage] = useState<string | null>(null);
   const [incomingReady, setIncomingReady] = useState(false);
@@ -100,19 +119,27 @@ export default function SteamCard({ item, onOpen, prefetchItems = [] }: SteamCar
   const commitTimerRef = useRef<number | null>(null);
   const activeImageRef = useRef<string | null>(null);
   const incomingImageRef = useRef<string | null>(null);
-  const steamStaticBase = `https://cdn.cloudflare.steamstatic.com/steam/apps/${item.appId}`;
-  const fallbackGrid = `${steamStaticBase}/library_600x900.jpg`;
-  const fallbackHeader = `${steamStaticBase}/header.jpg`;
-  const fallbackCapsule = `${steamStaticBase}/capsule_616x353.jpg`;
   const steamFallback =
-    pickBestPoster([fallbackGrid, fallbackHeader, fallbackCapsule, item.capsuleImage, item.headerImage]) ||
-    fallbackHeader;
+    pickBestPoster([
+      item.capsuleImage,
+      item.headerImage,
+      item.background,
+      item.artwork?.t3,
+      item.artwork?.t2,
+      item.artwork?.t1,
+    ]) || POSTER_PLACEHOLDER;
   const artworkSources = useMemo(
     () => mapArtworkSources(item, steamFallback),
     [item, steamFallback]
   );
 
   const posterCandidates = useMemo(() => {
+    const decodedCapsule =
+      typeof item.capsuleImage === "string" ? decodeThumbnailSource(item.capsuleImage) : null;
+    const decodedHeader =
+      typeof item.headerImage === "string" ? decodeThumbnailSource(item.headerImage) : null;
+    const decodedBackground =
+      typeof item.background === "string" ? decodeThumbnailSource(item.background) : null;
     const candidates = [
       artworkSources.t3,
       artworkSources.t2,
@@ -120,12 +147,10 @@ export default function SteamCard({ item, onOpen, prefetchItems = [] }: SteamCar
       artworkSources.t0,
       item.capsuleImage,
       item.headerImage,
-      fallbackGrid,
-      fallbackHeader,
-      fallbackCapsule,
-      `${steamStaticBase}/capsule_231x87.jpg`,
-      `${steamStaticBase}/capsule_sm_120.jpg`,
-      `${steamStaticBase}/capsule_184x69.jpg`,
+      item.background,
+      decodedCapsule,
+      decodedHeader,
+      decodedBackground,
       POSTER_PLACEHOLDER,
     ];
     const out: string[] = [];
@@ -144,12 +169,8 @@ export default function SteamCard({ item, onOpen, prefetchItems = [] }: SteamCar
     artworkSources.t1,
     artworkSources.t2,
     artworkSources.t3,
-    fallbackCapsule,
-    fallbackGrid,
-    fallbackHeader,
     item.capsuleImage,
     item.headerImage,
-    steamStaticBase,
   ]);
 
   const getNextPosterCandidate = (current: string | null): string | null => {
@@ -199,7 +220,7 @@ export default function SteamCard({ item, onOpen, prefetchItems = [] }: SteamCar
   const cardRef = useRef<HTMLButtonElement | null>(null);
   const [artReady, setArtReady] = useState(false);
   const hasDenuvo = Boolean(item.denuvo);
-  const hasDlc = Boolean(item.isDlc || item.itemType === "dlc");
+  const hasDlc = Boolean(item.isDlc || item.itemType === "dlc" || isLikelyDlcName(item.name));
 
   useEffect(() => {
     const node = cardRef.current;
@@ -276,9 +297,7 @@ export default function SteamCard({ item, onOpen, prefetchItems = [] }: SteamCar
         gameId: entry.appId,
         sources: mapArtworkSources(
           entry,
-          entry.capsuleImage ||
-            entry.headerImage ||
-            `https://cdn.cloudflare.steamstatic.com/steam/apps/${entry.appId}/library_600x900.jpg`
+          entry.capsuleImage || entry.headerImage || entry.background || POSTER_PLACEHOLDER
         ),
       }));
 
@@ -349,16 +368,16 @@ export default function SteamCard({ item, onOpen, prefetchItems = [] }: SteamCar
             <Badge label="Denuvo" tone="danger" />
           </div>
         )}
-        {hasDlc && (
-          <div className="absolute left-3 bottom-3">
-            <Badge label={t("game.dlc")} tone="secondary" />
-          </div>
-        )}
       </div>
       <div className="mt-3 space-y-1">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-text-muted">
-          Steam Library
-        </p>
+        <div className="flex items-center gap-2">
+          <p className="text-[10px] uppercase tracking-[0.3em] text-text-muted">Steam Library</p>
+          {hasDlc && (
+            <span className="rounded-full border border-violet-400/55 bg-violet-500/25 px-2 py-[1px] text-[10px] font-semibold uppercase tracking-[0.08em] text-violet-100">
+              {t("game.dlc")}
+            </span>
+          )}
+        </div>
         <h4 className="text-sm font-semibold text-text-primary">{item.name}</h4>
         <div className="flex items-center gap-2 text-xs text-text-secondary">
           <span className="font-semibold text-text-primary">{displayPrice}</span>

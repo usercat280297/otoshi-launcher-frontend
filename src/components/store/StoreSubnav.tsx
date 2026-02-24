@@ -8,6 +8,7 @@ type StoreSubnavProps = {
   placeholder?: string;
   activeTab?: "discover" | "browse" | "steam" | "news";
   searchValue?: string;
+  searchLoading?: boolean;
   onSearchChange?: (value: string) => void;
   onSearchSubmit?: () => void;
   suggestions?: SearchSuggestion[];
@@ -70,6 +71,7 @@ export default function StoreSubnav({
   placeholder,
   activeTab,
   searchValue,
+  searchLoading = false,
   onSearchChange,
   onSearchSubmit,
   suggestions,
@@ -135,7 +137,7 @@ export default function StoreSubnav({
             size={16}
           />
           <input
-            className="w-full rounded-full border border-background-border bg-background-surface py-2 pl-10 pr-4 text-sm text-text-primary outline-none transition focus:border-primary"
+            className="w-full rounded-full border border-background-border bg-background-surface py-2 pl-10 pr-10 text-sm text-text-primary outline-none transition focus:border-primary"
             placeholder={searchPlaceholder}
             value={isControlled ? searchValue : undefined}
             onChange={(event) => onSearchChange?.(event.target.value)}
@@ -150,6 +152,14 @@ export default function StoreSubnav({
               window.setTimeout(() => setOpen(false), 120);
             }}
           />
+          {searchLoading && (
+            <span
+              className="pointer-events-none absolute inset-y-0 right-3 flex items-center"
+              aria-label={t("store.searching")}
+            >
+              <span className="spinner-force-motion h-3.5 w-3.5 rounded-full border-2 border-primary/35 border-t-primary" />
+            </span>
+          )}
           {open && hasSuggestions && (
             <div className="absolute z-30 mt-3 w-full overflow-hidden rounded-2xl border border-background-border bg-background-elevated shadow-xl">
               {resultItems.length > 0 && (
@@ -185,7 +195,7 @@ export default function StoreSubnav({
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-semibold">{item.label}</p>
                             {(item.kindTag || item.isDlc) && (
-                              <span className="rounded-full border border-primary/40 bg-primary/15 px-2 py-[1px] text-[10px] font-semibold uppercase tracking-[0.08em] text-primary">
+                              <span className="rounded-full border border-violet-400/55 bg-violet-500/25 px-2 py-[1px] text-[10px] font-semibold uppercase tracking-[0.08em] text-violet-100">
                                 {item.kindTag === "BASE" ? t("store.base_game") : t("game.dlc")}
                               </span>
                             )}
@@ -258,7 +268,7 @@ export default function StoreSubnav({
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-semibold">{item.label}</p>
                             {(item.kindTag || item.isDlc) && (
-                              <span className="rounded-full border border-primary/40 bg-primary/15 px-2 py-[1px] text-[10px] font-semibold uppercase tracking-[0.08em] text-primary">
+                              <span className="rounded-full border border-violet-400/55 bg-violet-500/25 px-2 py-[1px] text-[10px] font-semibold uppercase tracking-[0.08em] text-violet-100">
                                 {item.kindTag === "BASE" ? t("store.base_game") : t("game.dlc")}
                               </span>
                             )}

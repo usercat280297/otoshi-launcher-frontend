@@ -12,7 +12,7 @@
   "app": {
     "withGlobalTauri": true,
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https://otoshi-launcher-backend.onrender.com https://video.akamai.steamstatic.com https://*.akamaihd.net https://steamcdn-a.akamaihd.net https://cdn.cloudflare.steamstatic.com; img-src 'self' https: http://localhost:* http://127.0.0.1:* data: blob:; media-src 'self' https: blob: data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https://otoshi-launcher-backend.onrender.com https://api.otoshi-launcher.me https://video.akamai.steamstatic.com https://*.akamaihd.net https://steamcdn-a.akamaihd.net https://cdn.cloudflare.steamstatic.com; img-src 'self' https: http://localhost:* http://127.0.0.1:* data: blob:; media-src 'self' https: blob: data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "capabilities": [
         {
           "identifier": "main-window-controls",

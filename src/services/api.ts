@@ -54,6 +54,20 @@ import {
   RuntimeTuningApplyResult,
   RuntimeTuningProfile,
   RuntimeTuningRecommendation,
+  AiSearchEventIn,
+  AiSearchEventOut,
+  RecommendationImpressionIn,
+  RecommendationFeedbackIn,
+  RecommendationTrackingOut,
+  SupportSuggestIn,
+  SupportSuggestOut,
+  AntiCheatSignalIn,
+  AntiCheatSignalOut,
+  AntiCheatCase,
+  PrivacyConsentPayload,
+  PrivacyConsentRecord,
+  PrivacyExport,
+  PrivacyDeleteOut,
   TradeOffer,
   UserProfile,
   WishlistEntry,
@@ -99,9 +113,21 @@ const desktopDefaultBase = BACKEND_PORT
   : "http://127.0.0.1:8000";
 const desktopApiBase =
   import.meta.env.VITE_DESKTOP_API_URL || desktopDefaultBase;
+const desktopRemoteFallbackBase = normalizeApiBase(
+  String(import.meta.env.VITE_REMOTE_API_FALLBACK || "https://api.otoshi-launcher.me")
+);
 const webApiBase =
   import.meta.env.VITE_API_URL || (isDev ? resolveDevWebBase() : "");
 const API_URL = isDesktop ? desktopApiBase : webApiBase;
+
+const isLoopbackBase = (base: string): boolean => {
+  try {
+    const host = new URL(base).hostname.toLowerCase();
+    return host === "127.0.0.1" || host === "localhost";
+  } catch {
+    return false;
+  }
+};
 
 const toLocalFallbacks = (base: string): string[] => {
   const trimmed = normalizeApiBase(base);
@@ -131,13 +157,19 @@ const desktopFallbackBases = isDesktop
   ? Array.from(
       new Set([
         ...toLocalFallbacks(desktopApiBase),
+        ...toLocalFallbacks(desktopRemoteFallbackBase),
         ...envFallbackBases.flatMap(toLocalFallbacks)
       ])
     )
   : [];
+const webRemoteFallbackBases =
+  !isDesktop && isDev && isLoopbackBase(API_URL) && desktopRemoteFallbackBase
+    ? [desktopRemoteFallbackBase]
+    : [];
 const webFallbackBases = Array.from(
   new Set([
     ...toLocalFallbacks(API_URL),
+    ...webRemoteFallbackBases,
     ...envFallbackBases.flatMap(toLocalFallbacks)
   ])
 );
@@ -146,10 +178,42 @@ const API_BASES = Array.from(new Set(API_FALLBACKS.filter(Boolean)));
 if (!API_BASES.length && !isDev) {
   console.warn("[API] VITE_API_URL is not set; API calls will fail in production.");
 }
+
+const isAuthPath = (path: string): boolean => path.startsWith("/auth/");
+const isSteamPath = (path: string): boolean => path.startsWith("/steam/");
+const getAuthRequestBases = (): string[] => {
+  // In web dev, auth must stay on local backend to keep OAuth redirect_uri valid
+  // and avoid mixing local tokens with remote API sessions.
+  if (!isDesktop && isDev) {
+    const localAuthBases = toLocalFallbacks(API_URL);
+    if (localAuthBases.length) {
+      return localAuthBases;
+    }
+  }
+  return API_BASES;
+};
+
+const getSteamRequestBases = (): string[] => {
+  // In web dev, prefer local Steam backend data (extended DLC/achievements/news)
+  // and only fall back to remote when local is unavailable.
+  if (!isDesktop && isDev) {
+    const localBases = toLocalFallbacks(API_URL);
+    if (!localBases.length) return API_BASES;
+    return [
+      ...localBases,
+      ...API_BASES.filter((base) => !localBases.includes(base))
+    ];
+  }
+  return API_BASES;
+};
 // Tauri v2 does not guarantee `window.__TAURI__`.
 // Use the official runtime check.
 
-let resolvedApiBase: string | null = null;
+const initialWebResolvedBase =
+  !isDesktop && isDev && isLoopbackBase(API_URL) && desktopRemoteFallbackBase
+    ? desktopRemoteFallbackBase
+    : null;
+let resolvedApiBase: string | null = initialWebResolvedBase;
 let runtimeBaseResolved = false;
 const MIN_COMPATIBLE_CDN_CHUNK_LIMIT_BYTES = 100 * 1024 * 1024;
 const API_HEALTH_TIMEOUT_MS = 1500;
@@ -377,6 +441,9 @@ async function ensureDesktopRuntimeReady() {
 export const getPreferredApiBase = () =>
   resolvedApiBase || API_BASES[0] || (isDev ? normalizeApiBase(webApiBase || desktopDefaultBase) : "");
 
+export const getPreferredAuthApiBase = () =>
+  getAuthRequestBases()[0] || getPreferredApiBase();
+
 export function getApiDebugInfo() {
   return {
     preferredBase: getPreferredApiBase(),
@@ -389,6 +456,10 @@ export function getApiDebugInfo() {
 
 const RETRY_PATHS = ["/steam", "/steamgriddb"];
 const shouldRetry = (path: string, status?: number) => {
+  // Older local bridge builds may not expose /steam/index yet; allow fallback to remote API.
+  if (path.startsWith("/steam/index/") && status === 404) {
+    return true;
+  }
   if (!RETRY_PATHS.some((prefix) => path.startsWith(prefix))) {
     return false;
   }
@@ -655,7 +726,14 @@ async function requestJson<T>(
     await ensureDesktopRuntimeReady();
   }
   const method = (options.method || "GET").toUpperCase();
-  const canFallback = method === "GET" || method === "HEAD";
+  const authPath = isAuthPath(path);
+  const steamPath = isSteamPath(path);
+  const canFallbackMethod = method === "GET" || method === "HEAD";
+  // For web dev we can safely fail over non-idempotent requests only on transport errors
+  // (for example local backend is down but remote API is healthy).
+  const allowWriteNetworkFailover =
+    !isDesktop && !canFallbackMethod && API_BASES.length > 1;
+  const canFallback = canFallbackMethod || allowWriteNetworkFailover;
   const headers = new Headers(options.headers || {});
   if (options.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -664,12 +742,19 @@ async function requestJson<T>(
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const bases =
-    resolvedApiBase
-      ? (canFallback
-          ? [resolvedApiBase, ...(isDesktop ? [] : API_BASES.filter((base) => base !== resolvedApiBase))]
-          : [resolvedApiBase])
+  const requestBases = authPath
+    ? getAuthRequestBases()
+    : steamPath
+      ? getSteamRequestBases()
       : API_BASES;
+  const bases =
+    authPath || steamPath
+      ? requestBases
+      : resolvedApiBase
+        ? (canFallback
+            ? [resolvedApiBase, ...(isDesktop ? [] : requestBases.filter((base) => base !== resolvedApiBase))]
+            : [resolvedApiBase])
+        : requestBases;
   let lastError: Error | null = null;
 
   debugLog(`[API] Requesting: ${path}`, { bases, method: options.method || 'GET' });
@@ -690,7 +775,7 @@ async function requestJson<T>(
         const rawMessage = await response.text();
         const parsedError = parseApiError(rawMessage);
 
-        const retryableStatus = canFallback && shouldRetry(path, response.status);
+        const retryableStatus = canFallbackMethod && shouldRetry(path, response.status);
         if (retryableStatus) {
           debugLog(`[API] Retryable HTTP error from ${base}:`, {
             path,
@@ -724,10 +809,12 @@ async function requestJson<T>(
       return data;
     } catch (err: any) {
       if (canFallback) {
+        const networkLike = isNetworkLikeError(err);
         const retryable =
+          networkLike ||
           Boolean(err?.retryable) ||
-          shouldRetry(path, typeof err?.status === "number" ? err.status : undefined) ||
-          isNetworkLikeError(err);
+          (canFallbackMethod &&
+            shouldRetry(path, typeof err?.status === "number" ? err.status : undefined));
         if (retryable) {
           debugLog(`[API] Retryable exception from ${base}:`, { path, error: err });
           lastError = err instanceof Error ? err : new Error("Request failed");
@@ -923,6 +1010,8 @@ export async function fetchSteamCatalog(params: {
   offset?: number;
   search?: string;
   sort?: string;
+  searchMode?: "lexical" | "hybrid" | "semantic";
+  explain?: boolean;
   artMode?: "none" | "basic" | "tiered";
   thumbW?: number;
 }): Promise<{ total: number; offset: number; limit: number; items: SteamCatalogItem[] }> {
@@ -931,6 +1020,8 @@ export async function fetchSteamCatalog(params: {
   if (params.offset) query.set("offset", String(params.offset));
   if (params.search) query.set("search", params.search);
   if (params.sort) query.set("sort", params.sort);
+  if (params.searchMode) query.set("search_mode", params.searchMode);
+  if (typeof params.explain === "boolean") query.set("explain", params.explain ? "true" : "false");
   if (params.artMode) query.set("art_mode", params.artMode);
   if (params.thumbW) query.set("thumb_w", String(params.thumbW));
   const data = await requestJson<any>(`/steam/catalog?${query.toString()}`);
@@ -1930,11 +2021,12 @@ export async function updateLocaleSettings(locale: string): Promise<{
 
 export async function fetchFixCatalog(
   kind: "online-fix" | "bypass",
-  params: { limit?: number; offset?: number } = {}
+  params: { limit?: number; offset?: number; search?: string } = {}
 ): Promise<FixCatalog> {
   const query = new URLSearchParams();
   if (params.limit) query.set("limit", String(params.limit));
   if (params.offset) query.set("offset", String(params.offset));
+  if (params.search) query.set("q", params.search);
   const suffix = query.toString();
   const data = await requestJson<any>(`/fixes/${kind}${suffix ? `?${suffix}` : ""}`);
   return {
@@ -1993,11 +2085,12 @@ export async function fetchBypassCategories(): Promise<BypassCategory[]> {
 
 export async function fetchBypassByCategory(
   categoryId: string,
-  params: { limit?: number; offset?: number } = {}
+  params: { limit?: number; offset?: number; search?: string } = {}
 ): Promise<BypassCategoryResult> {
   const query = new URLSearchParams();
   if (params.limit) query.set("limit", String(params.limit));
   if (params.offset) query.set("offset", String(params.offset));
+  if (params.search) query.set("q", params.search);
   const suffix = query.toString();
   const data = await requestJson<any>(
     `/fixes/bypass/category/${categoryId}${suffix ? `?${suffix}` : ""}`
@@ -2021,6 +2114,8 @@ export async function fetchFixEntryDetail(
 
 function mapGame(game: any, index = 0): Game {
   const toThumb = (url?: string | null, width = 360) => toBackendThumbnail(url, width) ?? "";
+  const parsedPrice = Number(game.price);
+  const priceKnown = Number.isFinite(parsedPrice);
 
   const fallbackScreenshots = [
     game.hero_image,
@@ -2044,7 +2139,8 @@ function mapGame(game: any, index = 0): Game {
     studio: game.studio || "",
     releaseDate: game.release_date || "",
     genres: game.genres || [],
-    price: game.price || 0,
+    price: priceKnown ? parsedPrice : 0,
+    priceKnown,
     discountPercent: game.discount_percent || 0,
     rating: game.rating || 0,
     requiredAge: game.required_age ?? game.requiredAge ?? 18,
@@ -2081,17 +2177,75 @@ function mapSteamPrice(raw?: any): SteamPrice | null {
   };
 }
 
+function mapSteamCatalogItemToGame(item: SteamCatalogItem, index = 0): Game {
+  const finalCents = Number(item.price?.final);
+  const initialCents = Number(item.price?.initial);
+  const hasFinalPrice = Number.isFinite(finalCents);
+  const hasInitialPrice = Number.isFinite(initialCents);
+  const priceKnown = hasFinalPrice || hasInitialPrice;
+  const priceCents = hasFinalPrice ? finalCents : hasInitialPrice ? initialCents : 0;
+  const price = priceKnown ? priceCents / 100 : 0;
+  const finalFormatted =
+    typeof item.price?.finalFormatted === "string" ? item.price.finalFormatted.trim() : "";
+  const initialFormatted =
+    typeof item.price?.formatted === "string" ? item.price.formatted.trim() : "";
+  const priceLabel = finalFormatted || initialFormatted || null;
+  const discountPercent = Number(item.price?.discountPercent ?? 0);
+  const headerImage = item.artwork?.t3 || item.headerImage || item.capsuleImage || "";
+  const heroImage = item.artwork?.t4 || item.background || headerImage;
+
+  return {
+    id: `steam-${item.appId}`,
+    slug: `steam-${item.appId}`,
+    steamAppId: item.appId,
+    title: item.name,
+    tagline: item.shortDescription || "",
+    shortDescription: item.shortDescription || "",
+    description: item.shortDescription || "",
+    studio: "Steam",
+    releaseDate: item.releaseDate || "",
+    genres: item.genres || [],
+    price,
+    priceKnown,
+    priceLabel,
+    discountPercent,
+    rating: 0,
+    requiredAge: item.requiredAge ?? 0,
+    denuvo: Boolean(item.denuvo),
+    isDlc: Boolean(item.isDlc),
+    dlcCount: Number(item.dlcCount ?? 0),
+    headerImage,
+    heroImage,
+    backgroundImage: item.background || heroImage,
+    screenshots: item.background ? [item.background] : [],
+    videos: [],
+    systemRequirements: defaultRequirements,
+    spotlightColor: spotlightPalette[index % spotlightPalette.length],
+    installed: false,
+    playtimeHours: 0,
+  };
+}
+
 function inferSteamAppId(raw: any): string {
-  const direct = raw?.app_id ?? raw?.appId ?? raw?.id;
-  if (direct !== undefined && direct !== null) {
-    const normalized = String(direct).trim();
+  const normalize = (value: unknown, numericOnly = false): string | null => {
+    if (value === undefined || value === null) return null;
+    const normalized = String(value).trim();
     if (
-      normalized &&
-      normalized.toLowerCase() !== "null" &&
-      normalized.toLowerCase() !== "none"
+      !normalized ||
+      normalized.toLowerCase() === "null" ||
+      normalized.toLowerCase() === "none"
     ) {
-      return normalized;
+      return null;
     }
+    if (numericOnly && !/^\d+$/.test(normalized)) {
+      return null;
+    }
+    return normalized;
+  };
+
+  for (const source of [raw?.app_id, raw?.appId, raw?.steam_app_id, raw?.steamAppId, raw?.id]) {
+    const value = normalize(source, true);
+    if (value) return value;
   }
 
   const candidates = [
@@ -2115,6 +2269,12 @@ function inferSteamAppId(raw: any): string {
       return fromUrl[1];
     }
   }
+
+  for (const source of [raw?.app_id, raw?.appId, raw?.steam_app_id, raw?.steamAppId, raw?.id]) {
+    const value = normalize(source, false);
+    if (value) return value;
+  }
+
   return "";
 }
 
@@ -2153,6 +2313,37 @@ function resolveSteamCatalogName(raw: any, appId: string): string {
     return candidates[0];
   }
   return appId ? `Steam App ${appId}` : "";
+}
+
+function parseBoolishFlag(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return null;
+    if (["1", "true", "yes", "y", "on"].includes(normalized)) return true;
+    if (["0", "false", "no", "n", "off"].includes(normalized)) return false;
+  }
+  return null;
+}
+
+function normalizeSteamItemType(rawType: unknown): string | null {
+  if (typeof rawType !== "string") return null;
+  const normalized = rawType.trim().toLowerCase();
+  if (!normalized) return null;
+  const canonical = normalized.replace(/[^a-z0-9]+/g, "");
+  if (
+    canonical === "dlc" ||
+    canonical === "downloadablecontent" ||
+    canonical === "addon" ||
+    canonical === "expansion" ||
+    canonical === "seasonpass"
+  ) {
+    return "dlc";
+  }
+  if (canonical === "playtest") return "playtest";
+  if (canonical === "demo") return "demo";
+  return normalized;
 }
 
 function mapSteamCatalogItem(raw: any): SteamCatalogItem {
@@ -2214,12 +2405,11 @@ function mapSteamCatalogItem(raw: any): SteamCatalogItem {
     (Array.isArray(raw.dlc) ? raw.dlc.length : null);
   const dlcCount = Number.isFinite(Number(dlcCountRaw)) ? Number(dlcCountRaw) : 0;
   const itemTypeRaw = raw.item_type ?? raw.itemType ?? raw.type;
-  const itemType =
-    typeof itemTypeRaw === "string" && itemTypeRaw.trim()
-      ? itemTypeRaw.trim().toLowerCase()
-      : null;
-  const isDlc = Boolean(raw.is_dlc ?? raw.isDlc ?? itemType === "dlc");
-  const isBaseGame = Boolean(raw.is_base_game ?? raw.isBaseGame ?? !isDlc);
+  const itemType = normalizeSteamItemType(itemTypeRaw);
+  const explicitIsDlc = parseBoolishFlag(raw.is_dlc ?? raw.isDlc);
+  const explicitIsBase = parseBoolishFlag(raw.is_base_game ?? raw.isBaseGame);
+  const isDlc = explicitIsDlc ?? itemType === "dlc";
+  const isBaseGame = explicitIsBase ?? !isDlc;
   const classificationRaw = Number(raw.classification_confidence ?? raw.classificationConfidence);
   const classificationConfidence = Number.isFinite(classificationRaw)
     ? classificationRaw
@@ -2232,6 +2422,15 @@ function mapSteamCatalogItem(raw: any): SteamCatalogItem {
     artworkCoverageRaw === "mixed"
       ? artworkCoverageRaw
       : undefined;
+  const reasonCodesRaw = raw.reason_codes ?? raw.reasonCodes;
+  const reasonCodes = Array.isArray(reasonCodesRaw)
+    ? reasonCodesRaw.map((entry: any) => String(entry)).filter((entry: string) => entry.length > 0)
+    : undefined;
+  const scoreBreakdownRaw = raw.score_breakdown ?? raw.scoreBreakdown;
+  const scoreBreakdown =
+    scoreBreakdownRaw && typeof scoreBreakdownRaw === "object" ? scoreBreakdownRaw : undefined;
+  const searchScoreRaw = Number(raw.search_score ?? raw.searchScore);
+  const searchScore = Number.isFinite(searchScoreRaw) ? searchScoreRaw : undefined;
   return {
     appId,
     name: resolvedName,
@@ -2268,8 +2467,166 @@ function mapSteamCatalogItem(raw: any): SteamCatalogItem {
     isBaseGame,
     classificationConfidence,
     artworkCoverage,
-    dlcCount
+    dlcCount,
+    reasonCodes,
+    scoreBreakdown,
+    searchScore
   };
+}
+
+function normalizeSteamStringArray(rawValue: unknown): string[] {
+  if (!Array.isArray(rawValue)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const value of rawValue) {
+    const candidate =
+      typeof value === "string"
+        ? value
+        : typeof value === "object" && value
+          ? (value as any).description ??
+            (value as any).name ??
+            (value as any).label ??
+            null
+          : null;
+    if (typeof candidate !== "string") continue;
+    const trimmed = candidate.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    out.push(trimmed);
+  }
+  return out;
+}
+
+function normalizeSteamScreenshots(rawValue: unknown): string[] {
+  if (!Array.isArray(rawValue)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const value of rawValue) {
+    const candidate =
+      typeof value === "string"
+        ? value
+        : typeof value === "object" && value
+          ? (value as any).path_full ??
+            (value as any).pathFull ??
+            (value as any).url ??
+            (value as any).src ??
+            (value as any).path_thumbnail ??
+            (value as any).pathThumbnail ??
+            null
+          : null;
+    if (typeof candidate !== "string") continue;
+    const trimmed = candidate.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    out.push(trimmed);
+  }
+  return out;
+}
+
+function normalizeSteamMovies(
+  rawValue: unknown
+): Array<{ url: string; thumbnail?: string | null; hls?: string | null; dash?: string | null }> {
+  if (!Array.isArray(rawValue)) return [];
+  const out: Array<{ url: string; thumbnail?: string | null; hls?: string | null; dash?: string | null }> = [];
+  const seen = new Set<string>();
+
+  const pickString = (...values: Array<unknown>): string | null => {
+    for (const value of values) {
+      if (typeof value !== "string") continue;
+      const trimmed = value.trim();
+      if (trimmed) return trimmed;
+    }
+    return null;
+  };
+
+  const pickVariantUrl = (container: unknown): string | null => {
+    if (!container || typeof container !== "object") return null;
+    const object = container as Record<string, unknown>;
+    const preferredOrder = [
+      "max",
+      "ultra",
+      "high",
+      "1080",
+      "720",
+      "600",
+      "480",
+      "360",
+      "240",
+    ];
+    for (const key of preferredOrder) {
+      const value = object[key];
+      if (typeof value !== "string") continue;
+      const trimmed = value.trim();
+      if (trimmed) return trimmed;
+    }
+    for (const value of Object.values(object)) {
+      if (typeof value !== "string") continue;
+      const trimmed = value.trim();
+      if (trimmed) return trimmed;
+    }
+    return null;
+  };
+
+  for (const value of rawValue) {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) continue;
+      if (seen.has(trimmed)) continue;
+      seen.add(trimmed);
+      out.push({ url: trimmed, thumbnail: null, hls: null, dash: null });
+      continue;
+    }
+    if (!value || typeof value !== "object") continue;
+    const movie = value as any;
+    const hls = pickString(
+      movie.hls,
+      movie.hls_h264,
+      movie.hls_av1,
+      movie.streaming?.hls,
+      movie.streaming?.hls_h264,
+      movie.streaming?.hls_av1
+    );
+    const dash = pickString(
+      movie.dash,
+      movie.dash_h264,
+      movie.dash_av1,
+      movie.streaming?.dash,
+      movie.streaming?.dash_h264,
+      movie.streaming?.dash_av1
+    );
+    const direct = pickString(
+      movie.url,
+      pickVariantUrl(movie.mp4),
+      pickVariantUrl(movie.webm),
+      movie.mp4?.max,
+      movie.mp4?.high,
+      movie.mp4?.["480"],
+      movie.webm?.max,
+      movie.webm?.high,
+      movie.webm?.["480"]
+    );
+    const thumbnail = pickString(
+      movie.thumbnail,
+      movie.poster,
+      movie.preview,
+      movie.preview_url,
+      movie.path_thumbnail,
+      movie.pathThumbnail
+    );
+    const url = direct || hls || dash;
+    if (!url) continue;
+    const dedupeKey = `${url}|${hls || ""}|${dash || ""}|${thumbnail || ""}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    out.push({
+      url,
+      thumbnail: thumbnail ?? null,
+      hls: hls ?? null,
+      dash: dash ?? null,
+    });
+  }
+
+  return out;
 }
 
 function mapSteamGameDetail(raw: any): SteamGameDetail {
@@ -2284,18 +2641,11 @@ function mapSteamGameDetail(raw: any): SteamGameDetail {
     detailedDescription: raw.detailed_description ?? raw.detailedDescription ?? null,
     detailedDescriptionHtml:
       raw.detailed_description_html ?? raw.detailedDescriptionHtml ?? null,
-    developers: raw.developers ?? [],
-    publishers: raw.publishers ?? [],
-    categories: raw.categories ?? [],
-    screenshots: raw.screenshots ?? [],
-    movies: Array.isArray(raw.movies)
-      ? raw.movies.map((movie: any) => ({
-          url: movie.url ?? "",
-          thumbnail: movie.thumbnail ?? null,
-          hls: movie.hls ?? null,
-          dash: movie.dash ?? null
-        }))
-      : [],
+    developers: normalizeSteamStringArray(raw.developers),
+    publishers: normalizeSteamStringArray(raw.publishers),
+    categories: normalizeSteamStringArray(raw.categories),
+    screenshots: normalizeSteamScreenshots(raw.screenshots),
+    movies: normalizeSteamMovies(raw.movies),
     pcRequirements: raw.pc_requirements ?? raw.pcRequirements ?? null,
     metacritic: raw.metacritic ?? null,
     recommendations: raw.recommendations ?? null,
@@ -2861,13 +3211,304 @@ export async function unsubscribeWorkshopItem(itemId: string, token: string) {
 }
 
 export async function fetchDiscoveryQueue(token: string): Promise<Game[]> {
-  const data = await requestJson<any[]>("/discovery/queue", {}, token);
-  return data.map((raw, index) => mapGame(raw, index));
+  try {
+    return await fetchDiscoveryRecommendationsV2(token, { limit: 12, offset: 0 });
+  } catch {
+    const data = await requestJson<any[]>("/discovery/queue", {}, token);
+    return data.map((raw, index) => mapGame(raw, index));
+  }
 }
 
 export async function refreshDiscoveryQueue(token: string): Promise<Game[]> {
-  const data = await requestJson<any[]>("/discovery/queue/refresh", { method: "POST" }, token);
-  return data.map((raw, index) => mapGame(raw, index));
+  try {
+    return await fetchDiscoveryRecommendationsV2(token, { limit: 12, offset: 0 });
+  } catch {
+    const data = await requestJson<any[]>("/discovery/queue/refresh", { method: "POST" }, token);
+    return data.map((raw, index) => mapGame(raw, index));
+  }
+}
+
+export async function fetchDiscoveryRecommendationsV2(
+  token: string,
+  params?: { limit?: number; offset?: number }
+): Promise<Game[]> {
+  const query = new URLSearchParams();
+  if (params?.limit) query.set("limit", String(params.limit));
+  if (params?.offset) query.set("offset", String(params.offset));
+  const suffix = query.toString();
+  const data = await requestJson<any>(
+    `/discovery/recommendations/v2${suffix ? `?${suffix}` : ""}`,
+    {},
+    token
+  );
+  const items = Array.isArray(data?.items) ? data.items.map(mapSteamCatalogItem) : [];
+  return items.map((item, index) => mapSteamCatalogItemToGame(item, index));
+}
+
+export async function sendAiSearchEvents(
+  events: AiSearchEventIn[],
+  token?: string
+): Promise<AiSearchEventOut> {
+  const payload = (events || []).map((event) => ({
+    query: event.query,
+    action: event.action ?? "submit",
+    app_id: event.appId ?? null,
+    dwell_ms: Math.max(0, Number(event.dwellMs ?? 0)),
+    payload: event.payload ?? {},
+  }));
+  const data = await requestJson<any>(
+    "/ai/search/events",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    token
+  );
+  return {
+    stored: Number(data?.stored ?? 0),
+    skipped: Number(data?.skipped ?? 0),
+    consentRequired: Boolean(data?.consent_required ?? false),
+  };
+}
+
+export async function trackRecommendationImpression(
+  payload: RecommendationImpressionIn,
+  token?: string
+): Promise<RecommendationTrackingOut> {
+  const data = await requestJson<any>(
+    "/ai/recommendations/impression",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        game_id: payload.gameId ?? null,
+        app_id: payload.appId ?? null,
+        recommendation_id: payload.recommendationId ?? null,
+        rank_position: Math.max(0, Number(payload.rankPosition ?? 0)),
+        algorithm_version: payload.algorithmVersion ?? "v2",
+        context: payload.context ?? "discovery",
+        payload: payload.payload ?? {},
+      }),
+    },
+    token
+  );
+  return {
+    id: String(data?.id ?? ""),
+    createdAt: String(data?.created_at ?? ""),
+  };
+}
+
+export async function trackRecommendationFeedback(
+  payload: RecommendationFeedbackIn,
+  token?: string
+): Promise<RecommendationTrackingOut> {
+  const data = await requestJson<any>(
+    "/ai/recommendations/feedback",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        impression_id: payload.impressionId ?? null,
+        game_id: payload.gameId ?? null,
+        app_id: payload.appId ?? null,
+        feedback_type: payload.feedbackType,
+        value: Number(payload.value ?? 1),
+        payload: payload.payload ?? {},
+      }),
+    },
+    token
+  );
+  return {
+    id: String(data?.id ?? ""),
+    createdAt: String(data?.created_at ?? ""),
+  };
+}
+
+export async function requestSupportSuggestion(
+  payload: SupportSuggestIn,
+  token?: string
+): Promise<SupportSuggestOut> {
+  const data = await requestJson<any>(
+    "/ai/support/suggest",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        session_id: payload.sessionId ?? null,
+        topic: payload.topic ?? null,
+        message: payload.message,
+        context: payload.context ?? {},
+        preferred_provider: payload.preferredProvider ?? null,
+        preferred_model: payload.preferredModel ?? null,
+      }),
+    },
+    token
+  );
+  return {
+    sessionId: String(data?.session_id ?? ""),
+    suggestionId: String(data?.suggestion_id ?? ""),
+    provider: String(data?.provider ?? "none"),
+    model: String(data?.model ?? "none"),
+    cached: Boolean(data?.cached ?? false),
+    confidence: Number(data?.confidence ?? 0),
+    suggestion: String(data?.suggestion ?? ""),
+    reasonCodes: Array.isArray(data?.reason_codes) ? data.reason_codes.map((item: any) => String(item)) : [],
+  };
+}
+
+export async function submitAntiCheatSignal(
+  payload: AntiCheatSignalIn,
+  token?: string
+): Promise<AntiCheatSignalOut> {
+  const data = await requestJson<any>(
+    "/ai/anti-cheat/signals",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        device_id: payload.deviceId,
+        signal_type: payload.signalType,
+        severity: Math.max(1, Math.min(10, Number(payload.severity ?? 1))),
+        observed_at: payload.observedAt ?? null,
+        payload: payload.payload ?? {},
+      }),
+    },
+    token
+  );
+  return {
+    signalId: String(data?.signal_id ?? ""),
+    caseId: String(data?.case_id ?? ""),
+    riskScore: Number(data?.risk_score ?? 0),
+    riskLevel: String(data?.risk_level ?? "low"),
+    recommendedAction: String(data?.recommended_action ?? "monitor"),
+    reasonCodes: Array.isArray(data?.reason_codes) ? data.reason_codes.map((item: any) => String(item)) : [],
+  };
+}
+
+export async function fetchAntiCheatCases(
+  token: string,
+  params?: {
+    limit?: number;
+    offset?: number;
+    status?: string;
+    userId?: string;
+    deviceId?: string;
+    adminApiKey?: string;
+  }
+): Promise<AntiCheatCase[]> {
+  const query = new URLSearchParams();
+  if (params?.limit) query.set("limit", String(params.limit));
+  if (params?.offset) query.set("offset", String(params.offset));
+  if (params?.status) query.set("status", params.status);
+  if (params?.userId) query.set("user_id", params.userId);
+  if (params?.deviceId) query.set("device_id", params.deviceId);
+  const suffix = query.toString();
+  const headers: Record<string, string> = {};
+  if (params?.adminApiKey) {
+    headers["x-api-key"] = params.adminApiKey;
+  }
+  const data = await requestJson<any[]>(
+    `/ai/anti-cheat/cases${suffix ? `?${suffix}` : ""}`,
+    Object.keys(headers).length ? { headers } : {},
+    token
+  );
+  return Array.isArray(data)
+    ? data.map((row) => ({
+        id: String(row?.id ?? ""),
+        userId: row?.user_id ?? null,
+        deviceId: String(row?.device_id ?? ""),
+        status: String(row?.status ?? ""),
+        riskScore: Number(row?.risk_score ?? 0),
+        riskLevel: String(row?.risk_level ?? "low"),
+        reasonCodes: Array.isArray(row?.reason_codes) ? row.reason_codes.map((item: any) => String(item)) : [],
+        recommendedAction: String(row?.recommended_action ?? "monitor"),
+        latestSignalAt: row?.latest_signal_at ?? null,
+        payload: row?.payload ?? {},
+        createdAt: row?.created_at ?? null,
+        updatedAt: row?.updated_at ?? null,
+      }))
+    : [];
+}
+
+export async function setPrivacyConsent(
+  payload: PrivacyConsentPayload,
+  token: string
+): Promise<PrivacyConsentRecord[]> {
+  const data = await requestJson<any[]>(
+    "/privacy/consent",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        category: payload.category ?? null,
+        categories: payload.categories ?? [],
+        granted: payload.granted,
+        source: payload.source ?? "settings",
+        payload: payload.payload ?? {},
+      }),
+    },
+    token
+  );
+  return Array.isArray(data)
+    ? data.map((row) => ({
+        category: String(row?.category ?? ""),
+        granted: Boolean(row?.granted ?? false),
+        source: String(row?.source ?? "settings"),
+        updatedAt: row?.updated_at ?? null,
+      }))
+    : [];
+}
+
+export async function fetchPrivacyConsent(token: string): Promise<PrivacyConsentRecord[]> {
+  const data = await requestJson<any[]>("/privacy/consent", {}, token);
+  return Array.isArray(data)
+    ? data.map((row) => ({
+        category: String(row?.category ?? ""),
+        granted: Boolean(row?.granted ?? false),
+        source: String(row?.source ?? "settings"),
+        updatedAt: row?.updated_at ?? null,
+      }))
+    : [];
+}
+
+export async function exportPrivacyData(token: string): Promise<PrivacyExport> {
+  const data = await requestJson<any>("/privacy/export", {}, token);
+  return {
+    userId: String(data?.user_id ?? ""),
+    consents: Array.isArray(data?.consents)
+      ? data.consents.map((row: any) => ({
+          category: String(row?.category ?? ""),
+          granted: Boolean(row?.granted ?? false),
+          source: String(row?.source ?? "settings"),
+          updatedAt: row?.updated_at ?? null,
+        }))
+      : [],
+    telemetryEvents: Array.isArray(data?.telemetry_events) ? data.telemetry_events : [],
+    behaviorEvents: Array.isArray(data?.behavior_events) ? data.behavior_events : [],
+    searchInteractions: Array.isArray(data?.search_interactions) ? data.search_interactions : [],
+    recommendationImpressions: Array.isArray(data?.recommendation_impressions) ? data.recommendation_impressions : [],
+    recommendationFeedback: Array.isArray(data?.recommendation_feedback) ? data.recommendation_feedback : [],
+    antiCheatSignals: Array.isArray(data?.anti_cheat_signals) ? data.anti_cheat_signals : [],
+    antiCheatCases: Array.isArray(data?.anti_cheat_cases) ? data.anti_cheat_cases : [],
+    supportSessions: Array.isArray(data?.support_sessions) ? data.support_sessions : [],
+    supportSuggestions: Array.isArray(data?.support_suggestions) ? data.support_suggestions : [],
+  };
+}
+
+export async function deletePrivacyData(
+  token: string,
+  scope: string[] = []
+): Promise<PrivacyDeleteOut> {
+  const data = await requestJson<any>(
+    "/privacy/data",
+    {
+      method: "DELETE",
+      body: JSON.stringify({ scope }),
+    },
+    token
+  );
+  return {
+    requestId: String(data?.request_id ?? ""),
+    status: String(data?.status ?? "unknown"),
+    deletedCounts: (data?.deleted_counts && typeof data.deleted_counts === "object")
+      ? data.deleted_counts
+      : {},
+  };
 }
 
 export async function fetchAnimeHome(params?: {
@@ -3869,7 +4510,7 @@ export async function clearSteamGameBackendCache(appId: string): Promise<void> {
 }
 
 export async function buildOAuthStartUrl(provider: string, next: string = "/"): Promise<{url: string; requestId?: string}> {
-  const baseUrl = getPreferredApiBase();
+  const baseUrl = getPreferredAuthApiBase();
 
   if (isTauri()) {
     const requestId =
@@ -3887,7 +4528,7 @@ export async function buildOAuthStartUrl(provider: string, next: string = "/"): 
 }
 
 export async function pollOAuthStatus(requestId: string): Promise<{ code: string } | null> {
-  const baseUrl = getPreferredApiBase();
+  const baseUrl = getPreferredAuthApiBase();
   try {
     const resp = await fetch(`${baseUrl}/auth/oauth/poll/${requestId}`);
     if (resp.ok) {

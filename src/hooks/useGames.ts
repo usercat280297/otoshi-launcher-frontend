@@ -130,7 +130,10 @@ const STARTUP_RETRY_BASE_MS = 700;
 const STARTUP_RETRY_MAX_MS = 4000;
 const FORCE_REFRESH_VISIBLE_LIMIT = 120;
 const GLOBAL_INDEX_REQUEST_TIMEOUT_MS = 12000;
+const GAMES_SESSION_CACHE_TTL_MS = 5 * 60 * 1000;
 const isDev = Boolean(import.meta.env.DEV);
+
+let gamesSessionCache: { games: Game[]; cachedAt: number } | null = null;
 
 const debugLog = (...args: unknown[]) => {
   if (isDev) {
@@ -166,8 +169,18 @@ const getRetryDelayMs = (attempt: number) =>
   Math.min(STARTUP_RETRY_MAX_MS, STARTUP_RETRY_BASE_MS * 2 ** Math.max(0, attempt - 1));
 
 const mapSteamItemToGame = (item: SteamCatalogItem, index: number): Game => {
-  const priceCents = item.price?.final ?? item.price?.initial ?? 0;
-  const price = priceCents ? priceCents / 100 : 0;
+  const finalCents = Number(item.price?.final);
+  const initialCents = Number(item.price?.initial);
+  const hasFinalPrice = Number.isFinite(finalCents);
+  const hasInitialPrice = Number.isFinite(initialCents);
+  const priceKnown = hasFinalPrice || hasInitialPrice;
+  const priceCents = hasFinalPrice ? finalCents : hasInitialPrice ? initialCents : 0;
+  const price = priceKnown ? priceCents / 100 : 0;
+  const finalFormatted =
+    typeof item.price?.finalFormatted === "string" ? item.price.finalFormatted.trim() : "";
+  const initialFormatted =
+    typeof item.price?.formatted === "string" ? item.price.formatted.trim() : "";
+  const priceLabel = finalFormatted || initialFormatted || null;
   const discountPercent = item.price?.discountPercent ?? 0;
   const headerImage = item.artwork?.t3 || item.headerImage || item.capsuleImage || "";
   const heroImage = item.artwork?.t4 || item.background || headerImage;
@@ -191,10 +204,14 @@ const mapSteamItemToGame = (item: SteamCatalogItem, index: number): Game => {
     releaseDate: item.releaseDate || "",
     genres: item.genres || [],
     price,
+    priceKnown,
+    priceLabel,
     discountPercent,
     rating: 0,
     requiredAge: item.requiredAge ?? 0,
     denuvo: Boolean(item.denuvo),
+    isDlc: Boolean(item.isDlc),
+    dlcCount: Number(item.dlcCount ?? 0),
     headerImage,
     heroImage,
     backgroundImage: item.background || heroImage,
@@ -295,6 +312,12 @@ export function useGames() {
           changed = true;
           return { ...game, ...patch };
         });
+        if (changed) {
+          gamesSessionCache = {
+            games: next,
+            cachedAt: Date.now(),
+          };
+        }
         return changed ? next : prev;
       });
     };
@@ -471,6 +494,10 @@ export function useGames() {
 
           if (mounted && data.length > 0) {
             setGames(data);
+            gamesSessionCache = {
+              games: data,
+              cachedAt: Date.now(),
+            };
             setError(null);
             setErrorCode(null);
             notifyLuaLoaded();
@@ -584,6 +611,27 @@ export function useGames() {
         }
       }
     };
+
+    const cached =
+      gamesSessionCache &&
+      Date.now() - gamesSessionCache.cachedAt < GAMES_SESSION_CACHE_TTL_MS
+        ? gamesSessionCache.games
+        : null;
+
+    if (cached && cached.length) {
+      setGames(cached);
+      setLoading(false);
+      setError(null);
+      setErrorCode(null);
+      notifyLuaLoaded();
+      return () => {
+        mounted = false;
+        if (flushTimerRef.current != null) {
+          window.clearTimeout(flushTimerRef.current);
+        }
+        artPatchQueueRef.current.clear();
+      };
+    }
 
     void load();
 

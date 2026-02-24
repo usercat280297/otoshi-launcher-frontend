@@ -7,40 +7,73 @@ import Hero from "../components/store/Hero";
 import FeaturedRow from "../components/store/FeaturedRow";
 import SteamCard from "../components/store/SteamCard";
 import StoreSubnav from "../components/store/StoreSubnav";
+import FixesDonateBar from "../components/fixes/FixesDonateBar";
 import GuidedTour from "../components/common/GuidedTour";
 import { useGames } from "../hooks/useGames";
 import { useSteamSearchMemory } from "../hooks/useSteamSearchMemory";
 import {
+  fetchDiscoveryQueue,
+  sendAiSearchEvents,
   fetchSteamCatalog,
+  fetchSteamGridAssets,
   fetchSteamIndexCatalog,
+  fetchSteamIndexGameDetail,
   fetchSteamIndexAssetsBatch,
   fetchSteamPopular,
   prefetchSteamIndexAssets,
   searchSteamIndexCatalog,
+  trackRecommendationFeedback,
+  trackRecommendationImpression,
   getApiDebugInfo,
   runLauncherFirstRunDiagnostics,
 } from "../services/api";
 import { Game, SteamCatalogItem } from "../types";
 import { useLocale } from "../context/LocaleContext";
+import { useAuth } from "../context/AuthContext";
+import {
+  isDlcQuery,
+  enrichCatalogItemsWithDetail,
+  hasBrokenSteamFallbackArt,
+  hasCatalogArtwork,
+  isLikelyDlcName,
+  isPlaceholderCatalogTitle,
+  mergeAndRankSteamSearchResults,
+  rankSteamSearchItems,
+  shouldEnrichSteamCatalogItemFromDetail,
+  shouldUseSteamSearchFallback,
+} from "../utils/steamSearch";
+import {
+  readPersistentCacheValue,
+  writePersistentCacheValue,
+} from "../utils/persistentCache";
 
 const ALL_GAMES_PAGE_SIZE = 48;
 const SEARCH_STORAGE_KEY = "otoshi.search.steam";
 const SEARCH_PREVIEW_LIMIT = 6;
-const CATALOG_CACHE_KEY = "otoshi.catalog.page3";
+const SEARCH_PREVIEW_CACHE_KEY = "otoshi.cache.store.search_preview.v1";
+const SEARCH_PREVIEW_CACHE_TTL_MS = 1000 * 60 * 20;
+const SEARCH_PREVIEW_CACHE_MAX_ENTRIES = 80;
+const CATALOG_CACHE_KEY = "otoshi.catalog.page5";
 const CATALOG_CACHE_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours
 const CATALOG_FETCH_MAX_ATTEMPTS = 5;
 const CATALOG_FETCH_RETRY_BASE_MS = 500;
 const CATALOG_FETCH_RETRY_MAX_MS = 2500;
 const CATALOG_PRIMARY_REQUEST_TIMEOUT_MS = 12000;
 const FIRST_RUN_DIAGNOSTIC_KEY = "otoshi.first_run.diagnostics.v1";
+const COOKIE_CONSENT_STORAGE_KEY = "otoshi.cookie_consent";
+const COOKIE_CONSENT_SESSION_KEY = "otoshi.cookie_consent.session";
 const IMAGE_PLACEHOLDER = "/icons/game-placeholder.svg";
 const VISIBLE_FORCE_REFRESH_DEBOUNCE_MS = 450;
 const VISIBLE_FORCE_REFRESH_MAX_IDS = 160;
+const TITLE_ENRICH_LIMIT = 18;
+const TITLE_ENRICH_CONCURRENCY = 3;
+const GRID_ENRICH_LIMIT = 14;
+const GRID_ENRICH_CONCURRENCY = 3;
 const INTRO_LOADING_FAILSAFE_MS = 10000;
-const STEAM_PLACEHOLDER_NAME_PATTERN = /^steam app\s+\d+$/i;
+const SEARCH_EVENT_BATCH_SIZE = 20;
+const SEARCH_EVENT_FLUSH_MS = 1200;
 const normalizeSearch = (value: string) => value.trim().toLowerCase();
-const DLC_QUERY_HINT = /\b(dlc|season pass|expansion|soundtrack|costume|pack|set|bonus|mission|pachislot)\b/i;
-const isDlcSearchQuery = (value: string) => DLC_QUERY_HINT.test(value.trim());
+const resolveSearchPreviewCacheEntryKey = (value: string) => normalizeSearch(value);
 const wait = (ms: number) =>
   new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
@@ -64,6 +97,13 @@ const withTimeout = <T,>(
         reject(error);
       });
   });
+
+const hasCookieConsentDecision = () => {
+  if (typeof window === "undefined") return true;
+  const storedConsent = window.localStorage.getItem(COOKIE_CONSENT_STORAGE_KEY);
+  const sessionConsent = window.sessionStorage.getItem(COOKIE_CONSENT_SESSION_KEY) === "1";
+  return Boolean(storedConsent) || sessionConsent;
+};
 const getCatalogRetryDelayMs = (attempt: number) =>
   Math.min(
     CATALOG_FETCH_RETRY_MAX_MS,
@@ -78,13 +118,29 @@ type IndexAssetEntry = {
 const isSteamGridUrl = (value?: string | null) =>
   typeof value === "string" && value.toLowerCase().includes("steamgriddb.com");
 
-const shouldPreferSteamGridAssets = (entry?: IndexAssetEntry | null) => {
+const hasRenderableAsset = (value?: string | null) =>
+  typeof value === "string" && value.trim().length > 0;
+
+const shouldApplyIndexAssets = (entry: IndexAssetEntry | null | undefined, item: SteamCatalogItem) => {
   if (!entry?.assets) return false;
-  if (String(entry.selectedSource || "").toLowerCase() === "steamgriddb") {
+  const source = String(entry.selectedSource || "").toLowerCase();
+  const { grid, hero, logo, icon } = entry.assets;
+  const hasAnyAsset = [grid, hero, logo, icon].some((value) => hasRenderableAsset(value));
+  if (!hasAnyAsset) return false;
+  const hasSteamGridHostedAsset = [grid, hero, logo, icon].some((value) => isSteamGridUrl(value));
+  if (source === "epic" || source === "mixed") {
     return true;
   }
-  const { grid, hero, logo, icon } = entry.assets;
-  return [grid, hero, logo, icon].some((value) => isSteamGridUrl(value));
+  if (source === "steamgriddb") {
+    if (hasSteamGridHostedAsset) {
+      return true;
+    }
+    return !hasCatalogArtwork(item);
+  }
+  if (hasSteamGridHostedAsset) {
+    return true;
+  }
+  return !hasCatalogArtwork(item);
 };
 
 function mergeSteamGridAssets(
@@ -94,7 +150,7 @@ function mergeSteamGridAssets(
   return items.map((item) => {
     const key = String(item.appId || "").trim();
     const entry = key ? assetsByAppId[key] : null;
-    if (!entry || !shouldPreferSteamGridAssets(entry)) {
+    if (!shouldApplyIndexAssets(entry, item)) {
       return item;
     }
     const assets = entry.assets;
@@ -122,48 +178,34 @@ function mergeSteamGridAssets(
   });
 }
 
-function isPlaceholderCatalogTitle(name?: string | null, appId?: string | null): boolean {
-  const text = String(name || "").trim();
-  if (!text) return true;
-  if (/^\d+$/.test(text)) return true;
-  if (STEAM_PLACEHOLDER_NAME_PATTERN.test(text)) return true;
-  const normalizedAppId = String(appId || "").trim();
-  if (!normalizedAppId) return false;
-  const lowered = text.toLowerCase();
-  return lowered === normalizedAppId.toLowerCase() || lowered === `steam app ${normalizedAppId}`.toLowerCase();
-}
-
-function hasCatalogArtwork(item: SteamCatalogItem): boolean {
-  return Boolean(
-    item.artwork?.t3 ||
-      item.artwork?.t2 ||
-      item.artwork?.t1 ||
-      item.headerImage ||
-      item.capsuleImage ||
-      item.background
-  );
-}
-
 function evaluateCatalogQuality(items: SteamCatalogItem[]) {
   const total = items.length;
   if (!total) {
-    return { total: 0, placeholderRatio: 1, artworkRatio: 0 };
+    return { total: 0, placeholderRatio: 1, artworkRatio: 0, repairNeededRatio: 1 };
   }
   const placeholderCount = items.filter((item) =>
     isPlaceholderCatalogTitle(item.name, item.appId)
   ).length;
   const artworkCount = items.filter((item) => hasCatalogArtwork(item)).length;
+  const repairNeededCount = items.filter((item) =>
+    shouldEnrichSteamCatalogItemFromDetail(item)
+  ).length;
   return {
     total,
     placeholderRatio: placeholderCount / total,
     artworkRatio: artworkCount / total,
+    repairNeededRatio: repairNeededCount / total,
   };
 }
 
 function isLowQualityCatalog(items: SteamCatalogItem[]): boolean {
   const quality = evaluateCatalogQuality(items);
   if (!quality.total) return true;
-  return quality.placeholderRatio >= 0.28 || quality.artworkRatio < 0.35;
+  return (
+    quality.placeholderRatio >= 0.28 ||
+    quality.artworkRatio < 0.35 ||
+    quality.repairNeededRatio >= 0.22
+  );
 }
 
 function chooseBetterCatalog(
@@ -190,6 +232,73 @@ function chooseBetterCatalog(
   return candidateQuality.total >= primaryQuality.total ? candidate : primary;
 }
 
+async function enrichPlaceholderTitles(
+  items: SteamCatalogItem[]
+): Promise<SteamCatalogItem[]> {
+  return enrichCatalogItemsWithDetail(items, fetchSteamIndexGameDetail, {
+    limit: TITLE_ENRICH_LIMIT,
+    concurrency: TITLE_ENRICH_CONCURRENCY,
+  });
+}
+
+async function enrichMissingArtworkViaGrid(
+  items: SteamCatalogItem[]
+): Promise<SteamCatalogItem[]> {
+  const targets = items
+    .filter(
+      (item) =>
+        !hasCatalogArtwork(item) ||
+        hasBrokenSteamFallbackArt(item)
+    )
+    .slice(0, GRID_ENRICH_LIMIT);
+
+  if (!targets.length) return items;
+
+  const patches = new Map<string, Partial<SteamCatalogItem>>();
+  let cursor = 0;
+
+  const workers = Array.from({ length: GRID_ENRICH_CONCURRENCY }, async () => {
+    while (cursor < targets.length) {
+      const current = targets[cursor];
+      cursor += 1;
+      const appId = String(current.appId || "").trim();
+      if (!appId) continue;
+      try {
+        const asset = await fetchSteamGridAssets(current.name, appId);
+        const grid = asset?.grid || null;
+        const hero = asset?.hero || null;
+        const icon = asset?.icon || null;
+        if (!grid && !hero && !icon) continue;
+        patches.set(appId, {
+          headerImage: grid || current.headerImage || null,
+          capsuleImage: grid || current.capsuleImage || current.headerImage || null,
+          background: hero || current.background || grid || current.headerImage || null,
+          artwork: {
+            ...(current.artwork || {}),
+            t0: icon || current.artwork?.t0 || current.capsuleImage || null,
+            t1: grid || current.artwork?.t1 || current.capsuleImage || null,
+            t2: grid || current.artwork?.t2 || current.headerImage || null,
+            t3: grid || current.artwork?.t3 || current.capsuleImage || current.headerImage || null,
+            t4: hero || current.artwork?.t4 || current.background || current.headerImage || null,
+            version: Number(current.artwork?.version || 1) + 1,
+          },
+        });
+      } catch {
+        // Keep current item when sgdb lookup fails.
+      }
+    }
+  });
+
+  await Promise.all(workers);
+  if (!patches.size) return items;
+
+  return items.map((item) => {
+    const appId = String(item.appId || "").trim();
+    const patch = appId ? patches.get(appId) : undefined;
+    return patch ? { ...item, ...patch } : item;
+  });
+}
+
 function pickSuggestionImage(item: SteamCatalogItem): string | null {
   const candidates = [
     item.artwork?.t3,
@@ -210,6 +319,7 @@ function pickSuggestionImage(item: SteamCatalogItem): string | null {
 
 export default function StorePage() {
   const navigate = useNavigate();
+  const { token } = useAuth();
   const { games, loading, error, errorCode } = useGames();
   const { t } = useLocale();
   const [denuvoRail, setDenuvoRail] = useState<Game[]>([]);
@@ -222,6 +332,7 @@ export default function StorePage() {
   const [allPage, setAllPage] = useState(0);
   const [allPendingPage, setAllPendingPage] = useState<number | null>(null);
   const [allJumpInput, setAllJumpInput] = useState("1");
+  const [discoveryRow, setDiscoveryRow] = useState<Game[]>([]);
   const [tourOpen, setTourOpen] = useState(false);
   const [tourIndex, setTourIndex] = useState(0);
   const [introLoading, setIntroLoading] = useState(true);
@@ -230,7 +341,10 @@ export default function StorePage() {
   const [firstRunResult, setFirstRunResult] = useState<any | null>(null);
   const [firstRunError, setFirstRunError] = useState<string | null>(null);
   const [firstRunDismissed, setFirstRunDismissed] = useState(false);
+  const [cookieConsentResolved, setCookieConsentResolved] = useState(hasCookieConsentDecision);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchSubmitting, setSearchSubmitting] = useState(false);
+  const [searchPreviewLoading, setSearchPreviewLoading] = useState(false);
   const [searchPreviewItems, setSearchPreviewItems] = useState<SteamCatalogItem[]>([]);
   const searchPreviewCacheRef = useRef(new Map<string, SteamCatalogItem[]>());
   const searchPreviewRequestRef = useRef(0);
@@ -239,6 +353,16 @@ export default function StorePage() {
   const forceRefreshSeenRef = useRef(new Set<string>());
   const forceRefreshInflightRef = useRef(new Set<string>());
   const forceRefreshTimerRef = useRef<number | null>(null);
+  const queuedManualTourStartRef = useRef(false);
+  const recommendationImpressionsRef = useRef(new Set<string>());
+  const recommendationImpressionIdsRef = useRef(new Map<string, string>());
+  const searchEventQueueRef = useRef<Array<{
+    query: string;
+    action: string;
+    appId?: string | null;
+    payload?: Record<string, unknown>;
+  }>>([]);
+  const searchEventTimerRef = useRef<number | null>(null);
   const { suggestions, recordSearch } = useSteamSearchMemory();
 
   const rotateDenuvoRail = useCallback(() => {
@@ -247,6 +371,76 @@ export default function StorePage() {
     const shuffled = [...source].sort(() => Math.random() - 0.5);
     setDenuvoRail(shuffled.slice(0, 5));
   }, []);
+
+  const flushSearchEvents = useCallback(
+    (reschedule: boolean = true) => {
+      if (searchEventTimerRef.current != null) {
+        window.clearTimeout(searchEventTimerRef.current);
+        searchEventTimerRef.current = null;
+      }
+      if (!searchEventQueueRef.current.length) return;
+      const batch = searchEventQueueRef.current.splice(0, SEARCH_EVENT_BATCH_SIZE);
+      void sendAiSearchEvents(
+        batch.map((event) => ({
+          query: event.query,
+          action: event.action,
+          appId: event.appId ?? undefined,
+          payload: event.payload ?? {},
+        })),
+        token || undefined
+      )
+        .catch(() => undefined)
+        .finally(() => {
+          if (reschedule && searchEventQueueRef.current.length) {
+            searchEventTimerRef.current = window.setTimeout(
+              flushSearchEvents,
+              SEARCH_EVENT_FLUSH_MS
+            );
+          }
+        });
+    },
+    [token]
+  );
+
+  const emitSearchEvent = useCallback(
+    (event: {
+      query: string;
+      action: string;
+      appId?: string | null;
+      payload?: Record<string, unknown>;
+    }) => {
+      const normalizedQuery = String(event.query || "").trim();
+      if (!normalizedQuery) return;
+      searchEventQueueRef.current.push({
+        query: normalizedQuery,
+        action: String(event.action || "submit").trim().toLowerCase() || "submit",
+        appId: event.appId ?? undefined,
+        payload: event.payload ?? {},
+      });
+      if (searchEventQueueRef.current.length >= SEARCH_EVENT_BATCH_SIZE) {
+        flushSearchEvents();
+        return;
+      }
+      if (searchEventTimerRef.current == null) {
+        searchEventTimerRef.current = window.setTimeout(
+          flushSearchEvents,
+          SEARCH_EVENT_FLUSH_MS
+        );
+      }
+    },
+    [flushSearchEvents]
+  );
+
+  useEffect(
+    () => () => {
+      if (searchEventTimerRef.current != null) {
+        window.clearTimeout(searchEventTimerRef.current);
+        searchEventTimerRef.current = null;
+      }
+      flushSearchEvents(false);
+    },
+    [flushSearchEvents]
+  );
 
   const handleOpen = (game: Game) => {
     if (game.steamAppId) {
@@ -258,6 +452,27 @@ export default function StorePage() {
 
   const handleOpenSteam = (item: SteamCatalogItem) => {
     navigate(`/steam/${item.appId}`);
+  };
+
+  const handleOpenDiscover = (game: Game) => {
+    const appId = String(game.steamAppId || "").trim();
+    if (token && appId) {
+      const impressionId = recommendationImpressionIdsRef.current.get(appId) || undefined;
+      void trackRecommendationFeedback(
+        {
+          impressionId,
+          appId,
+          feedbackType: "click",
+          value: 1,
+          payload: {
+            context: "store_discover_row",
+            source: "store_page",
+          },
+        },
+        token
+      ).catch(() => undefined);
+    }
+    handleOpen(game);
   };
 
   const loadCachedCatalog = () => {
@@ -352,7 +567,12 @@ export default function StorePage() {
               const popular = await fetchSteamPopular(ALL_GAMES_PAGE_SIZE, offset);
               let fallbackItems = Array.isArray(popular.items) ? popular.items : [];
               fallbackItems = fallbackItems.filter(
-                (item) => !(item.isDlc || item.itemType === "dlc")
+                (item) =>
+                  !(
+                    item.isDlc ||
+                    item.itemType === "dlc" ||
+                    isLikelyDlcName(item.name)
+                  )
               );
               fallbackItems = await enrichWithBatchAssets(fallbackItems);
               const chosen = chooseBetterCatalog(enrichedItems, fallbackItems);
@@ -364,6 +584,9 @@ export default function StorePage() {
               // keep original catalog if popular fallback fails
             }
           }
+
+          enrichedItems = await enrichPlaceholderTitles(enrichedItems);
+          enrichedItems = await enrichMissingArtworkViaGrid(enrichedItems);
 
           const payload = { items: enrichedItems, total: totalCount };
           allPageCacheRef.current.set(pageIndex, payload);
@@ -455,6 +678,32 @@ export default function StorePage() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    if (!token) {
+      setDiscoveryRow([]);
+      recommendationImpressionsRef.current.clear();
+      recommendationImpressionIdsRef.current.clear();
+      return () => {
+        active = false;
+      };
+    }
+
+    fetchDiscoveryQueue(token)
+      .then((items) => {
+        if (!active) return;
+        setDiscoveryRow(Array.isArray(items) ? items.slice(0, 6) : []);
+      })
+      .catch(() => {
+        if (!active) return;
+        setDiscoveryRow([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [token]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     if (window.localStorage.getItem(FIRST_RUN_DIAGNOSTIC_KEY) === "1") {
       setFirstRunDismissed(true);
@@ -503,6 +752,20 @@ export default function StorePage() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const syncCookieConsent = () => {
+      setCookieConsentResolved(hasCookieConsentDecision());
+    };
+    syncCookieConsent();
+    window.addEventListener("otoshi:cookie-consent", syncCookieConsent as EventListener);
+    window.addEventListener("storage", syncCookieConsent);
+    return () => {
+      window.removeEventListener("otoshi:cookie-consent", syncCookieConsent as EventListener);
+      window.removeEventListener("storage", syncCookieConsent);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!games.length) {
       setDenuvoRail([]);
       return;
@@ -529,6 +792,47 @@ export default function StorePage() {
   }, [games, rotateDenuvoRail]);
 
   useEffect(() => {
+    if (!token || !discoveryRow.length) return;
+    const toTrack = discoveryRow
+      .map((game, index) => ({ game, index }))
+      .filter(({ game }) => {
+        const appId = String(game.steamAppId || "").trim();
+        if (!appId) return false;
+        const key = `store_discover:${appId}`;
+        if (recommendationImpressionsRef.current.has(key)) return false;
+        recommendationImpressionsRef.current.add(key);
+        return true;
+      });
+    if (!toTrack.length) return;
+
+    toTrack.forEach(({ game, index }) => {
+      const appId = String(game.steamAppId || "").trim();
+      const key = `store_discover:${appId}`;
+      void trackRecommendationImpression(
+        {
+          appId,
+          rankPosition: index,
+          algorithmVersion: "v2",
+          context: "store_discover_row",
+          payload: {
+            source: "store_page",
+          },
+        },
+        token
+      )
+        .then((result) => {
+          if (result?.id) {
+            recommendationImpressionIdsRef.current.set(appId, result.id);
+          }
+        })
+        .catch(() => {
+          recommendationImpressionsRef.current.delete(key);
+          recommendationImpressionIdsRef.current.delete(appId);
+        });
+    });
+  }, [discoveryRow, token]);
+
+  useEffect(() => {
     const timer = window.setInterval(rotateDenuvoRail, 5 * 60 * 1000);
     return () => window.clearInterval(timer);
   }, [rotateDenuvoRail]);
@@ -538,57 +842,141 @@ export default function StorePage() {
       const nextQuery = (value ?? searchQuery).trim();
       setSearchQuery(nextQuery);
       if (!nextQuery) {
+        setSearchSubmitting(false);
         localStorage.removeItem(SEARCH_STORAGE_KEY);
         setSearchPreviewItems([]);
         return;
       }
+      setSearchSubmitting(true);
       localStorage.setItem(SEARCH_STORAGE_KEY, nextQuery);
       recordSearch(nextQuery);
+      emitSearchEvent({
+        query: nextQuery,
+        action: "submit",
+        payload: { source: "store_search" },
+      });
       navigate("/steam");
     },
-    [navigate, recordSearch, searchQuery]
+    [emitSearchEvent, navigate, recordSearch, searchQuery]
   );
 
   useEffect(() => {
     const trimmed = searchQuery.trim();
     if (!trimmed) {
+      setSearchPreviewLoading(false);
       setSearchPreviewItems([]);
       return;
     }
-    const cacheKey = normalizeSearch(trimmed);
-    const cached = searchPreviewCacheRef.current.get(cacheKey);
+    const cacheKey = resolveSearchPreviewCacheEntryKey(trimmed);
+    const inMemoryCached = searchPreviewCacheRef.current.get(cacheKey);
+    const persistedCached = readPersistentCacheValue<SteamCatalogItem[]>(
+      SEARCH_PREVIEW_CACHE_KEY,
+      cacheKey
+    );
+    const cached = inMemoryCached || persistedCached;
     if (cached) {
+      if (!inMemoryCached) {
+        searchPreviewCacheRef.current.set(cacheKey, cached);
+      }
+      setSearchPreviewLoading(false);
       setSearchPreviewItems(cached);
       return;
     }
     const requestId = (searchPreviewRequestRef.current += 1);
+    setSearchPreviewItems([]);
+    setSearchPreviewLoading(true);
     const timer = window.setTimeout(() => {
       (async () => {
+        const includeDlc = isDlcQuery(trimmed);
+        let indexItems: SteamCatalogItem[] = [];
         try {
           const indexData = await searchSteamIndexCatalog({
             q: trimmed,
             limit: SEARCH_PREVIEW_LIMIT,
             offset: 0,
             source: "global",
-            includeDlc: isDlcSearchQuery(trimmed),
+            includeDlc,
             rankingMode: "priority",
             mustHaveArtwork: false,
           });
-          return indexData;
+          indexItems = rankSteamSearchItems(indexData.items, trimmed, { includeDlc });
         } catch {
-          return fetchSteamCatalog({
+          indexItems = [];
+        }
+
+        if (searchPreviewRequestRef.current !== requestId) {
+          return [];
+        }
+
+        const fastItems = indexItems.slice(0, SEARCH_PREVIEW_LIMIT);
+        const fastPreview = fastItems.length
+          ? await enrichCatalogItemsWithDetail(
+              fastItems,
+              fetchSteamIndexGameDetail,
+              {
+                limit: SEARCH_PREVIEW_LIMIT,
+                concurrency: 2,
+              }
+            )
+          : fastItems;
+        const fastPreviewWithGrid = fastPreview.length
+          ? await enrichMissingArtworkViaGrid(fastPreview).catch(() => fastPreview)
+          : fastPreview;
+        if (fastItems.length) {
+          setSearchPreviewItems(fastPreviewWithGrid);
+        }
+
+        if (!shouldUseSteamSearchFallback(indexItems, trimmed, SEARCH_PREVIEW_LIMIT)) {
+          return fastPreviewWithGrid;
+        }
+
+        try {
+          const fallbackData = await fetchSteamCatalog({
             limit: SEARCH_PREVIEW_LIMIT,
             offset: 0,
             search: trimmed,
+            searchMode: "hybrid",
             artMode: "basic",
             thumbW: 360
           });
+          return mergeAndRankSteamSearchResults(
+            indexItems,
+            fallbackData.items,
+            trimmed,
+            SEARCH_PREVIEW_LIMIT,
+            { includeDlc }
+          );
+        } catch {
+          return fastPreviewWithGrid;
         }
       })()
-        .then((data) => {
+        .then(async (items) => {
           if (searchPreviewRequestRef.current !== requestId) return;
-          setSearchPreviewItems(data.items);
-          searchPreviewCacheRef.current.set(cacheKey, data.items);
+          const repairedItems = items.length
+            ? await enrichCatalogItemsWithDetail(
+                items,
+                fetchSteamIndexGameDetail,
+                {
+                  limit: SEARCH_PREVIEW_LIMIT,
+                  concurrency: 2,
+                }
+              ).catch(() => items)
+            : items;
+          const repairedWithGrid = repairedItems.length
+            ? await enrichMissingArtworkViaGrid(repairedItems).catch(() => repairedItems)
+            : repairedItems;
+          if (searchPreviewRequestRef.current !== requestId) return;
+          setSearchPreviewItems(repairedWithGrid);
+          searchPreviewCacheRef.current.set(cacheKey, repairedWithGrid);
+          writePersistentCacheValue(
+            SEARCH_PREVIEW_CACHE_KEY,
+            cacheKey,
+            repairedWithGrid,
+            {
+              ttlMs: SEARCH_PREVIEW_CACHE_TTL_MS,
+              maxEntries: SEARCH_PREVIEW_CACHE_MAX_ENTRIES,
+            }
+          );
         })
         .catch(() => {
           if (searchPreviewRequestRef.current !== requestId) return;
@@ -596,9 +984,15 @@ export default function StorePage() {
         })
         .finally(() => {
           if (searchPreviewRequestRef.current !== requestId) return;
+          setSearchPreviewLoading(false);
         });
-    }, 300);
-    return () => window.clearTimeout(timer);
+    }, 120);
+    return () => {
+      window.clearTimeout(timer);
+      if (searchPreviewRequestRef.current === requestId) {
+        setSearchPreviewLoading(false);
+      }
+    };
   }, [searchQuery]);
 
   const resultSuggestions = useMemo(() => {
@@ -620,8 +1014,8 @@ export default function StorePage() {
         item.artwork?.t0 ?? null,
       ].filter((value): value is string => typeof value === "string" && value.trim().length > 0),
       meta: `#${item.appId}`,
-      isDlc: Boolean(item.isDlc),
-      kindTag: (item.isDlc ? "DLC" : "BASE") as "DLC" | "BASE",
+      isDlc: Boolean(item.isDlc || item.itemType === "dlc" || isLikelyDlcName(item.name)),
+      kindTag: ((item.isDlc || item.itemType === "dlc" || isLikelyDlcName(item.name)) ? "DLC" : "BASE") as "DLC" | "BASE",
       artSource: item.artworkCoverage ?? undefined,
       appId: item.appId
     }));
@@ -636,7 +1030,10 @@ export default function StorePage() {
   const heroGame = heroSlides[0];
   const heroImageSrc = heroGame?.heroImage ?? "";
   const railGames = heroSlides.slice(1);
-  const discoverRow = games.slice(0, 6);
+  const discoverRow = useMemo(
+    () => (discoveryRow.length ? discoveryRow : games.slice(0, 6)),
+    [discoveryRow, games]
+  );
   const spotlightRow = useMemo(() => {
     const discounted = games.filter((game) => game.discountPercent > 0);
     if (discounted.length >= 6) {
@@ -710,7 +1107,9 @@ export default function StorePage() {
               selectedSource: (info as any)?.selectedSource ?? null,
               assets: (info as any)?.assets ?? null,
             };
-            if (shouldPreferSteamGridAssets(entry)) {
+            const hasAny = [entry.assets?.grid, entry.assets?.hero, entry.assets?.logo, entry.assets?.icon]
+              .some((value) => hasRenderableAsset(value));
+            if (hasAny) {
               assetsMap[String(appId)] = entry;
               refreshedIds.add(String(appId));
             }
@@ -772,6 +1171,7 @@ export default function StorePage() {
   ], [games, t]);
 
   const formatPrice = (game: Game) => {
+    if (game.priceKnown === false) return game.priceLabel || t("common.price_unavailable");
     if (game.price <= 0) return t("common.free");
     const discountedPrice = (game.price * (1 - game.discountPercent / 100)).toFixed(2);
     return `$${discountedPrice}`;
@@ -837,7 +1237,11 @@ export default function StorePage() {
             <div className="flex-1 space-y-1">
               <p className="text-sm font-semibold">{game.title}</p>
               <p className="text-xs text-text-muted">
-                {game.price <= 0 ? t("common.free") : t("store.base_game")}
+                {game.priceKnown === false
+                  ? game.priceLabel || t("common.price_unavailable")
+                  : game.price <= 0
+                    ? t("common.free")
+                    : t("store.base_game")}
               </p>
             </div>
             <div className="text-right text-xs text-text-secondary">
@@ -974,26 +1378,46 @@ export default function StorePage() {
     []
   );
 
+  const showFirstRunWizard =
+    !firstRunDismissed && !firstRunPending && (Boolean(firstRunResult) || Boolean(firstRunError));
+  const canStartStoreTour =
+    !introLoading &&
+    !firstRunPending &&
+    !showFirstRunWizard &&
+    cookieConsentResolved &&
+    games.length > 0;
+
   useEffect(() => {
-    if (introLoading) return;
-    if (firstRunPending) return;
-    if (!games.length) return;
+    if (!canStartStoreTour) return;
+    if (typeof window === "undefined") return;
+    if (!queuedManualTourStartRef.current) return;
+    queuedManualTourStartRef.current = false;
+    setTourIndex(0);
+    setTourOpen(true);
+  }, [canStartStoreTour]);
+
+  useEffect(() => {
+    if (!canStartStoreTour) return;
     if (typeof window === "undefined") return;
     const seen = window.localStorage.getItem("otoshi.tour.store.seen");
     if (seen !== "1") {
       setTourIndex(0);
       setTourOpen(true);
     }
-  }, [introLoading, firstRunPending, games.length]);
+  }, [canStartStoreTour]);
 
   useEffect(() => {
     const handleStart = () => {
+      if (!canStartStoreTour) {
+        queuedManualTourStartRef.current = true;
+        return;
+      }
       setTourIndex(0);
       setTourOpen(true);
     };
     window.addEventListener("otoshi:tour:store", handleStart);
     return () => window.removeEventListener("otoshi:tour:store", handleStart);
-  }, []);
+  }, [canStartStoreTour]);
 
   const totalPages = useMemo(() => {
     const total = allTotal || allGames.length;
@@ -1157,8 +1581,6 @@ export default function StorePage() {
   );
 
   const showIntroLoading = introLoading;
-  const showFirstRunWizard =
-    !firstRunDismissed && !firstRunPending && (Boolean(firstRunResult) || Boolean(firstRunError));
 
   const firstRunSections = useMemo(() => {
     if (!firstRunResult) return [];
@@ -1210,7 +1632,7 @@ export default function StorePage() {
           )
         : null}
       <GuidedTour
-        open={tourOpen}
+        open={tourOpen && canStartStoreTour}
         steps={tourSteps}
         index={tourIndex}
         onClose={() => {
@@ -1298,19 +1720,32 @@ export default function StorePage() {
       <div data-tour="store-search">
         <StoreSubnav
           activeTab="browse"
-        placeholder={t("store.search_placeholder")}
-        searchValue={searchQuery}
-        onSearchChange={setSearchQuery}
-        onSearchSubmit={() => handleSearchSubmit()}
-        suggestions={combinedSuggestions}
-        onSuggestionSelect={(item) => {
-          if ((item.kind === "result" || item.kind === "popular") && item.appId) {
-            navigate(`/steam/${item.appId}`);
-            return;
-          }
-          handleSearchSubmit(item.value);
-        }}
+          placeholder={t("store.search_placeholder")}
+          searchValue={searchQuery}
+          searchLoading={searchSubmitting || searchPreviewLoading}
+          onSearchChange={(value) => {
+            setSearchSubmitting(false);
+            setSearchQuery(value);
+          }}
+          onSearchSubmit={() => handleSearchSubmit()}
+          suggestions={combinedSuggestions}
+          onSuggestionSelect={(item) => {
+            if ((item.kind === "result" || item.kind === "popular") && item.appId) {
+              emitSearchEvent({
+                query: item.value || searchQuery,
+                action: "click",
+                appId: item.appId,
+                payload: { source: "store_search_suggestion" },
+              });
+              navigate(`/steam/${item.appId}`);
+              return;
+            }
+            handleSearchSubmit(item.value);
+          }}
         />
+        <div className="mt-3 flex justify-end">
+          <FixesDonateBar />
+        </div>
       </div>
         {error && errorCode !== "no_lua_games" && (
           <div className="glass-panel p-4 text-sm text-text-secondary">
@@ -1363,7 +1798,7 @@ export default function StorePage() {
             <FeaturedRow
               title={t("store.discover_new")}
               games={discoverRow}
-              onOpen={(game) => handleOpen(game)}
+              onOpen={handleOpenDiscover}
             />
           </div>
           <div data-tour="store-savings">
