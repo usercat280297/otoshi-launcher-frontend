@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, Play } from "lucide-react";
 import Hls from "hls.js";
@@ -119,6 +119,106 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
   const shouldLoadVideo = isInView && Boolean(currentVideo);
   const canUseHls = Boolean(shouldLoadVideo && currentVideoHls && Hls.isSupported());
 
+  const syncVideoSource = useCallback(
+    (video: HTMLVideoElement | null) => {
+      if (!video) {
+        if (!shouldLoadVideo || !currentVideo) {
+          clearWaitingTimer();
+          setVideoLoading(false);
+          if (hlsRef.current) {
+            hlsRef.current.destroy();
+            hlsRef.current = null;
+          }
+        }
+        return;
+      }
+      if (!shouldLoadVideo || !currentVideo) {
+        clearWaitingTimer();
+        setVideoLoading(false);
+        if (hlsRef.current) {
+          hlsRef.current.destroy();
+          hlsRef.current = null;
+        }
+        return;
+      }
+      if (!currentVideoKey) {
+        return;
+      }
+      if (video.dataset.mediaKey === currentVideoKey) {
+        return;
+      }
+      video.dataset.mediaKey = currentVideoKey;
+      if (canUseHls && currentVideoHls) {
+        if (hlsRef.current) {
+          hlsRef.current.destroy();
+        }
+        const hls = new Hls({ enableWorker: true });
+        hlsRef.current = hls;
+        // Steam store API increasingly returns trailers as HLS-only (no mp4/webm).
+        // Always prefer the explicit HLS field, but accept url-as-hls too.
+        hls.loadSource(currentVideoHls);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          if (hls.levels.length > 0) {
+            const highest = hls.levels.length - 1;
+            hls.currentLevel = highest;
+            hls.nextLevel = highest;
+            hls.loadLevel = highest;
+          }
+        });
+        hls.on(Hls.Events.ERROR, (_event, data) => {
+          if (!data.fatal) {
+            return;
+          }
+          hls.destroy();
+          hlsRef.current = null;
+          // Fall back to direct media URL if we have one (mp4/webm).
+          if (currentVideoDirectUrl) {
+            video.src = currentVideoDirectUrl;
+            video.load();
+          }
+        });
+        return;
+      }
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+      if (currentVideoHls && video.canPlayType("application/vnd.apple.mpegurl")) {
+        video.src = currentVideoHls;
+        video.load();
+        return;
+      }
+      // We don't currently ship a DASH player; keep the poster and avoid looping errors.
+      if (currentVideoDash && !currentVideoDirectUrl) {
+        clearWaitingTimer();
+        setVideoLoading(false);
+        return;
+      }
+      if (currentVideoDirectUrl) {
+        video.src = currentVideoDirectUrl;
+        video.load();
+      }
+    },
+    [
+      canUseHls,
+      currentVideo,
+      currentVideoHls,
+      currentVideoDash,
+      currentVideoDirectUrl,
+      currentVideoKey,
+      shouldLoadVideo
+    ]
+  );
+
+  const setVideoElement = useCallback(
+    (node: HTMLVideoElement | null) => {
+      videoRef.current = node;
+      syncVideoSource(node);
+    },
+    [syncVideoSource]
+  );
+
   useEffect(() => {
     if (!current) return;
     if (current.type === "video") {
@@ -136,94 +236,17 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
   }, [current?.type, current?.url, currentVideoAlreadyLoaded, shouldLoadVideo]);
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) {
-      return;
-    }
-    if (!shouldLoadVideo || !currentVideo) {
-      clearWaitingTimer();
-      setVideoLoading(false);
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-        hlsRef.current = null;
-      }
-      return;
-    }
-    if (!currentVideoKey) {
-      return;
-    }
-    if (video.dataset.mediaKey === currentVideoKey) {
-      return;
-    }
-    video.dataset.mediaKey = currentVideoKey;
-    if (canUseHls && currentVideoHls) {
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-      }
-      const hls = new Hls({ enableWorker: true });
-      hlsRef.current = hls;
-      // Steam store API increasingly returns trailers as HLS-only (no mp4/webm).
-      // Always prefer the explicit HLS field, but accept url-as-hls too.
-      hls.loadSource(currentVideoHls);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        if (hls.levels.length > 0) {
-          const highest = hls.levels.length - 1;
-          hls.currentLevel = highest;
-          hls.nextLevel = highest;
-          hls.loadLevel = highest;
-        }
-      });
-      hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (!data.fatal) {
-          return;
-        }
-        hls.destroy();
-        hlsRef.current = null;
-        // Fall back to direct media URL if we have one (mp4/webm).
-        if (currentVideoDirectUrl) {
-          video.src = currentVideoDirectUrl;
-          video.load();
-        }
-      });
-      return () => {
-        clearWaitingTimer();
-        hls.destroy();
-        hlsRef.current = null;
-      };
-    }
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-      hlsRef.current = null;
-    }
-    if (currentVideoHls && video.canPlayType("application/vnd.apple.mpegurl")) {
-      video.src = currentVideoHls;
-      video.load();
-      return;
-    }
-    // We don't currently ship a DASH player; keep the poster and avoid looping errors.
-    if (currentVideoDash && !currentVideoDirectUrl) {
-      clearWaitingTimer();
-      setVideoLoading(false);
-      return;
-    }
-    if (currentVideoDirectUrl) {
-      video.src = currentVideoDirectUrl;
-      video.load();
-    }
-  }, [
-    canUseHls,
-    currentVideoHls,
-    currentVideoDash,
-    currentVideoDirectUrl,
-    currentVideoKey,
-    shouldLoadVideo
-  ]);
+    syncVideoSource(videoRef.current);
+  }, [syncVideoSource]);
 
   useEffect(
     () => () => {
       clearWaitingTimer();
       clearImageTimer();
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
     },
     []
   );
@@ -267,7 +290,7 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
           >
             {current.type === "video" ? (
               <video
-                ref={videoRef}
+                ref={setVideoElement}
                 poster={current.thumbnail}
                 controls
                 preload={shouldLoadVideo ? "auto" : "metadata"}
