@@ -476,15 +476,15 @@ export function useGames() {
           try {
           let data: Game[] = [];
           try {
-            data = await loadFromGlobalIndexCatalog();
-            debugLog("[useGames] Global index catalog response:", data.length);
-          } catch (indexErr) {
-            debugLog("[useGames] Global index failed, fallback to lua catalog.", indexErr);
+            data = await loadFromLuaCatalog();
+            debugLog("[useGames] Lua catalog response:", data.length);
+          } catch (luaErr) {
+            debugLog("[useGames] Lua catalog failed, fallback to global index.", luaErr);
           }
 
           if (!data.length) {
-            data = await loadFromLuaCatalog();
-            debugLog("[useGames] Lua catalog response:", data.length);
+            data = await loadFromGlobalIndexCatalog();
+            debugLog("[useGames] Global index catalog response:", data.length);
           }
 
           if (!data.length && allowDbFallback) {

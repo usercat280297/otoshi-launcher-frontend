@@ -55,7 +55,7 @@ const SEARCH_PREVIEW_LIMIT = 6;
 const SEARCH_PREVIEW_CACHE_KEY = "otoshi.cache.store.search_preview.v1";
 const SEARCH_PREVIEW_CACHE_TTL_MS = 1000 * 60 * 20;
 const SEARCH_PREVIEW_CACHE_MAX_ENTRIES = 80;
-const CATALOG_CACHE_KEY = "otoshi.catalog.page5";
+const CATALOG_CACHE_KEY = "otoshi.catalog.page6";
 const CATALOG_CACHE_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours
 const CATALOG_FETCH_MAX_ATTEMPTS = 5;
 const CATALOG_FETCH_RETRY_BASE_MS = 500;
@@ -497,6 +497,13 @@ export default function StorePage() {
           const offset = pageIndex * ALL_GAMES_PAGE_SIZE;
           let data: { total: number; offset: number; limit: number; items: SteamCatalogItem[] };
           try {
+            data = await fetchSteamCatalog({
+              limit: ALL_GAMES_PAGE_SIZE,
+              offset,
+              artMode: "tiered",
+              thumbW: 460
+            });
+          } catch {
             data = await fetchSteamIndexCatalog({
               limit: ALL_GAMES_PAGE_SIZE,
               offset,
@@ -504,13 +511,6 @@ export default function StorePage() {
               scope: "all",
               includeDlc: false,
               mustHaveArtwork: true,
-            });
-          } catch {
-            data = await fetchSteamCatalog({
-              limit: ALL_GAMES_PAGE_SIZE,
-              offset,
-              artMode: "tiered",
-              thumbW: 460
             });
           }
           let enrichedItems = data.items;
