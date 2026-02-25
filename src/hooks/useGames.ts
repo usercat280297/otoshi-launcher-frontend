@@ -128,6 +128,7 @@ const ART_BATCH_FLUSH_MS = 120;
 const STARTUP_MAX_ATTEMPTS = 8;
 const STARTUP_RETRY_BASE_MS = 700;
 const STARTUP_RETRY_MAX_MS = 4000;
+const STARTUP_TOTAL_TIMEOUT_MS = 45_000;
 const FORCE_REFRESH_VISIBLE_LIMIT = 120;
 const GLOBAL_INDEX_REQUEST_TIMEOUT_MS = 12000;
 const GAMES_SESSION_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -143,6 +144,23 @@ const debugLog = (...args: unknown[]) => {
 
 const wait = (ms: number) =>
   new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+
+const isLikelyNetworkError = (error: unknown) => {
+  const message =
+    error instanceof Error ? error.message : String(error || "");
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("failed to fetch") ||
+    normalized.includes("networkerror") ||
+    normalized.includes("err_network_changed") ||
+    normalized.includes("network changed") ||
+    normalized.includes("connection refused") ||
+    normalized.includes("load failed") ||
+    normalized.includes("timed out") ||
+    normalized.includes("timeout") ||
+    normalized.includes("aborted")
+  );
+};
 
 const withTimeout = <T,>(
   promise: Promise<T>,
@@ -357,6 +375,15 @@ export function useGames() {
     const load = async () => {
       debugLog("[useGames] Starting to load games...");
       let lastError: Error | null = null;
+      const startupStartedAt = Date.now();
+
+      const canRetry = (attempt: number, error?: Error | null) => {
+        if (attempt >= STARTUP_MAX_ATTEMPTS) return false;
+        if (Date.now() - startupStartedAt >= STARTUP_TOTAL_TIMEOUT_MS) return false;
+        // Fail faster on unstable local network loops in packaged desktop runtime.
+        if (error && isLikelyNetworkError(error) && attempt >= 3) return false;
+        return true;
+      };
 
       if (mounted) {
         setLoading(true);
@@ -366,12 +393,16 @@ export function useGames() {
 
       const loadFromLuaCatalog = async () => {
         debugLog("[useGames] Loading lua catalog from /steam/catalog...");
-        const steamCatalog = await fetchSteamCatalog({
-          limit: 80,
-          offset: 0,
-          artMode: "tiered",
-          thumbW: 460,
-        });
+        const steamCatalog = await withTimeout(
+          fetchSteamCatalog({
+            limit: 80,
+            offset: 0,
+            artMode: "tiered",
+            thumbW: 460,
+          }),
+          GLOBAL_INDEX_REQUEST_TIMEOUT_MS,
+          "Lua catalog request timed out"
+        );
         const withAppId = steamCatalog.items.filter(
           (item) => Boolean(String(item.appId || "").trim())
         );
@@ -572,7 +603,7 @@ export function useGames() {
             return;
           }
 
-          if (attempt < STARTUP_MAX_ATTEMPTS) {
+          if (canRetry(attempt)) {
             await wait(getRetryDelayMs(attempt));
             continue;
           }
@@ -594,7 +625,7 @@ export function useGames() {
               `[useGames] Error loading games (attempt ${attempt}/${STARTUP_MAX_ATTEMPTS}):`,
               normalizedError
             );
-            if (attempt < STARTUP_MAX_ATTEMPTS) {
+            if (canRetry(attempt, normalizedError)) {
               await wait(getRetryDelayMs(attempt));
               continue;
             }

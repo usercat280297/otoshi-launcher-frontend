@@ -600,6 +600,8 @@ const isNetworkLikeError = (err: unknown) => {
   return (
     lower.includes("failed to fetch") ||
     lower.includes("networkerror") ||
+    lower.includes("err_network_changed") ||
+    lower.includes("network changed") ||
     lower.includes("connection refused") ||
     lower.includes("load failed") ||
     lower.includes("aborted")

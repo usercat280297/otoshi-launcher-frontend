@@ -532,12 +532,16 @@ export default function StorePage() {
               "Global index catalog request timed out"
             );
           } catch {
-            data = await fetchSteamCatalog({
-              limit: ALL_GAMES_PAGE_SIZE,
-              offset,
-              artMode: "tiered",
-              thumbW: 460
-            });
+            data = await withTimeout(
+              fetchSteamCatalog({
+                limit: ALL_GAMES_PAGE_SIZE,
+                offset,
+                artMode: "tiered",
+                thumbW: 460
+              }),
+              CATALOG_PRIMARY_REQUEST_TIMEOUT_MS,
+              "Steam fallback catalog request timed out"
+            );
           }
           let enrichedItems = data.items;
           const enrichWithBatchAssets = async (items: SteamCatalogItem[]) => {
