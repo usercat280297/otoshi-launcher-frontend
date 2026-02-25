@@ -183,13 +183,17 @@ const API_BASES = Array.from(new Set(API_FALLBACKS.filter(Boolean)));
 if (!API_BASES.length && !isDev) {
   console.warn("[API] VITE_API_URL is not set; API calls will fail in production.");
 }
-const API_STEAM_LOCAL_REQUEST_TIMEOUT_MS = 2_500;
-const API_STEAM_REMOTE_REQUEST_TIMEOUT_MS = 8_000;
+const API_STEAM_LOCAL_REQUEST_TIMEOUT_MS = 5_000;
+const API_STEAM_REMOTE_REQUEST_TIMEOUT_MS = 15_000;
+const API_STEAM_CATALOG_LOCAL_REQUEST_TIMEOUT_MS = 15_000;
+const API_STEAM_CATALOG_REMOTE_REQUEST_TIMEOUT_MS = 30_000;
 const API_STEAM_BASE_COOLDOWN_MS = 30_000;
 const steamBaseCooldownUntil = new Map<string, number>();
 
 const isAuthPath = (path: string): boolean => path.startsWith("/auth/");
 const isSteamPath = (path: string): boolean => path.startsWith("/steam/");
+const isSteamCatalogPath = (path: string): boolean =>
+  path.startsWith("/steam/catalog") || path.startsWith("/steam/index/catalog");
 const getAuthRequestBases = (): string[] => {
   // In web dev, auth must stay on local backend to keep OAuth redirect_uri valid
   // and avoid mixing local tokens with remote API sessions.
@@ -324,12 +328,21 @@ async function fetchWithRequestTimeout(
     }
   }
 
-  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  let timedOut = false;
+  const timeoutId = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
   try {
     return await fetch(url, {
       ...init,
       signal: controller.signal,
     });
+  } catch (err) {
+    if (timedOut && err instanceof Error && err.name === "AbortError") {
+      throw new Error(`Request timed out after ${timeoutMs}ms`);
+    }
+    throw err;
   } finally {
     window.clearTimeout(timeoutId);
     if (sourceSignal) {
@@ -637,8 +650,7 @@ const isNetworkLikeError = (err: unknown) => {
     lower.includes("err_network_changed") ||
     lower.includes("network changed") ||
     lower.includes("connection refused") ||
-    lower.includes("load failed") ||
-    lower.includes("aborted")
+    lower.includes("load failed")
   );
 };
 
@@ -859,6 +871,11 @@ async function requestJson<T>(
   const resolveRequestTimeoutMs = (base: string) => {
     if (authPath) return API_AUTH_REQUEST_TIMEOUT_MS;
     if (steamPath) {
+      if (isSteamCatalogPath(path)) {
+        return isLoopbackBase(base)
+          ? API_STEAM_CATALOG_LOCAL_REQUEST_TIMEOUT_MS
+          : API_STEAM_CATALOG_REMOTE_REQUEST_TIMEOUT_MS;
+      }
       return isLoopbackBase(base)
         ? API_STEAM_LOCAL_REQUEST_TIMEOUT_MS
         : API_STEAM_REMOTE_REQUEST_TIMEOUT_MS;
@@ -928,6 +945,10 @@ async function requestJson<T>(
       debugLog(`[API] Success from ${base}`, { path, resolvedApiBase });
       return data;
     } catch (err: any) {
+      if (err?.name === "AbortError" && options.signal?.aborted) {
+        debugLog("[API] Request aborted by caller", { path, base });
+        throw err;
+      }
       if (
         authPath &&
         (err?.name === "AbortError" ||
