@@ -45,6 +45,7 @@ const OnlineFixPage = lazy(() => import("./pages/OnlineFixPage"));
 const BypassPage = lazy(() => import("./pages/BypassPage"));
 const FixDetailPage = lazy(() => import("./pages/FixDetailPage"));
 const OverlayPage = lazy(() => import("./pages/OverlayPage"));
+const StoreNewsWindowPage = lazy(() => import("./pages/StoreNewsWindowPage"));
 const PrivacyPolicyPage = lazy(() => import("./pages/PrivacyPolicyPage"));
 const TermsOfServicePage = lazy(() => import("./pages/TermsOfServicePage"));
 const IntroPage = lazy(() => import("./pages/IntroPage"));
@@ -360,6 +361,7 @@ function AppContent() {
         <Routes>
           <Route path="/" element={<IntroPage />} />
           <Route path="/overlay" element={<OverlayPage />} />
+          <Route path="/steam-news" element={<StoreNewsWindowPage />} />
           <Route
             path="/big-picture"
             element={

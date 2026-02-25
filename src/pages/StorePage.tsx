@@ -1725,7 +1725,7 @@ export default function StorePage() {
           </motion.div>
         )}
       </AnimatePresence>
-      <StoreNewsOverlay games={games} onOpenGame={handleOpen} />
+      <StoreNewsOverlay games={games} />
 
       <div data-tour="store-search">
         <StoreSubnav

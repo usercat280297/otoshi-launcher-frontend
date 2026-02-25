@@ -795,6 +795,7 @@ fn main() {
             commands::overlay::set_overlay_visible,
             commands::overlay::is_overlay_visible,
             commands::overlay::capture_overlay_screenshot,
+            commands::overlay::open_store_news_window,
             commands::streaming::create_streaming_session,
             commands::streaming::get_streaming_session,
             commands::streaming::set_streaming_offer,
