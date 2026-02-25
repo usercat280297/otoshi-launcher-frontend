@@ -16,6 +16,10 @@ import Modal from "./components/common/Modal";
 import Button from "./components/common/Button";
 import OverlayNotifications from "./components/common/OverlayNotifications";
 import { emitOverlayNotification } from "./utils/notify";
+import {
+  STORE_NEWS_AUTO_OPEN_SESSION_KEY,
+  STORE_NEWS_PAYLOAD_CACHE_KEY,
+} from "./utils/storeNews";
 
 type TrayActionPayload = {
   action?: string;
@@ -82,6 +86,26 @@ function AppContent() {
     return () => {
       window.removeEventListener("otoshi:cookie-consent", handleConsent as EventListener);
     };
+  }, []);
+
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    if (typeof window === "undefined") return;
+    const path = window.location.pathname || "/";
+    if (path.startsWith("/steam-news") || path.startsWith("/overlay")) return;
+
+    const opened = window.sessionStorage.getItem(STORE_NEWS_AUTO_OPEN_SESSION_KEY) === "1";
+    if (opened) return;
+    window.sessionStorage.setItem(STORE_NEWS_AUTO_OPEN_SESSION_KEY, "1");
+    const payload = window.localStorage.getItem(STORE_NEWS_PAYLOAD_CACHE_KEY);
+
+    const timer = window.setTimeout(() => {
+      void import("@tauri-apps/api/core")
+        .then(({ invoke }) => invoke("open_store_news_window", { payload }))
+        .catch(() => undefined);
+    }, 950);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {

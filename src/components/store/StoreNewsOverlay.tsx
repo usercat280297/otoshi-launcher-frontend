@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { BellDot } from "lucide-react";
 import { invoke, isTauri as isTauriRuntime } from "@tauri-apps/api/core";
 import { Game } from "../../types";
@@ -7,7 +7,10 @@ import { emitOverlayNotification } from "../../utils/notify";
 import {
   buildStoreNewsPayload,
   countStoreNewsAlerts,
-  StoreNewsPayload,
+  hasStoreNewsContent,
+  serializeStoreNewsPayload,
+  STORE_NEWS_AUTO_OPEN_SESSION_KEY,
+  STORE_NEWS_PAYLOAD_CACHE_KEY,
 } from "../../utils/storeNews";
 
 const POPUP_WIDTH = 920;
@@ -26,22 +29,19 @@ function resolvePopupPosition() {
   return { left, top };
 }
 
-function serializePayload(payload: StoreNewsPayload): string {
-  return encodeURIComponent(JSON.stringify(payload));
-}
-
 export default function StoreNewsOverlay({ games }: StoreNewsOverlayProps) {
   const { locale } = useLocale();
   const [opening, setOpening] = useState(false);
 
   const payload = useMemo(() => buildStoreNewsPayload(games), [games]);
+  const hasNewsContent = useMemo(() => hasStoreNewsContent(payload), [payload]);
   const alertCount = useMemo(() => countStoreNewsAlerts(payload), [payload]);
 
-  const openNewsWindow = async () => {
+  const openNewsWindow = useCallback(async () => {
     if (opening) return;
     setOpening(true);
 
-    const encodedPayload = serializePayload(payload);
+    const encodedPayload = serializeStoreNewsPayload(payload);
     const url = `/steam-news?payload=${encodedPayload}`;
 
     try {
@@ -76,13 +76,31 @@ export default function StoreNewsOverlay({ games }: StoreNewsOverlayProps) {
     } finally {
       setOpening(false);
     }
-  };
+  }, [locale, opening, payload]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !hasNewsContent) return;
+    const encodedPayload = serializeStoreNewsPayload(payload);
+    window.localStorage.setItem(STORE_NEWS_PAYLOAD_CACHE_KEY, encodedPayload);
+  }, [hasNewsContent, payload]);
+
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    if (typeof window === "undefined" || !hasNewsContent) return;
+    const seen = window.sessionStorage.getItem(STORE_NEWS_AUTO_OPEN_SESSION_KEY) === "1";
+    if (seen) return;
+    window.sessionStorage.setItem(STORE_NEWS_AUTO_OPEN_SESSION_KEY, "1");
+    const timer = window.setTimeout(() => {
+      void openNewsWindow();
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [hasNewsContent, openNewsWindow]);
 
   return (
     <button
       type="button"
       onClick={() => void openNewsWindow()}
-      className="group fixed right-4 top-1/2 z-[95] -translate-y-1/2 rounded-full border border-cyan-300/40 bg-background-elevated/95 p-3 text-cyan-200 shadow-[0_14px_34px_rgba(0,0,0,0.5)] backdrop-blur transition hover:border-cyan-200 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+      className="group fixed bottom-24 right-4 z-[95] rounded-full border border-cyan-300/40 bg-background-elevated/95 p-3 text-cyan-200 shadow-[0_14px_34px_rgba(0,0,0,0.5)] backdrop-blur transition hover:border-cyan-200 hover:text-white disabled:cursor-not-allowed disabled:opacity-60 md:bottom-28"
       aria-label={locale === "vi" ? "Mo cua so Steam News" : "Open Steam News window"}
       disabled={opening}
     >

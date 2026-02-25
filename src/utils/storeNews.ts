@@ -2,6 +2,8 @@ import { Game } from "../types";
 
 const NEWS_LIMIT = 8;
 const IMAGE_PLACEHOLDER = "/icons/game-placeholder.svg";
+export const STORE_NEWS_PAYLOAD_CACHE_KEY = "otoshi.store.news.payload.v1";
+export const STORE_NEWS_AUTO_OPEN_SESSION_KEY = "otoshi.store.news.auto_open.session.v1";
 
 type RankedGame = {
   game: Game;
@@ -26,6 +28,14 @@ export type StoreNewsPayload = {
   newReleases: StoreNewsEntry[];
   topDiscounts: StoreNewsEntry[];
 };
+
+export function hasStoreNewsContent(payload: StoreNewsPayload): boolean {
+  return payload.newReleases.length > 0 || payload.topDiscounts.length > 0;
+}
+
+export function serializeStoreNewsPayload(payload: StoreNewsPayload): string {
+  return encodeURIComponent(JSON.stringify(payload));
+}
 
 function toReleaseTimestamp(value?: string | null): number {
   if (typeof value !== "string" || !value.trim()) return 0;
