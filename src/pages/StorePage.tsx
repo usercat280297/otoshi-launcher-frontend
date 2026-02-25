@@ -17,7 +17,6 @@ import {
   sendAiSearchEvents,
   fetchSteamCatalog,
   fetchSteamGridAssets,
-  fetchSteamIndexCatalog,
   fetchSteamIndexGameDetail,
   fetchSteamIndexAssetsBatch,
   fetchSteamPopular,
@@ -495,24 +494,12 @@ export default function StorePage() {
       for (let attempt = 1; attempt <= CATALOG_FETCH_MAX_ATTEMPTS; attempt += 1) {
         try {
           const offset = pageIndex * ALL_GAMES_PAGE_SIZE;
-          let data: { total: number; offset: number; limit: number; items: SteamCatalogItem[] };
-          try {
-            data = await fetchSteamCatalog({
-              limit: ALL_GAMES_PAGE_SIZE,
-              offset,
-              artMode: "tiered",
-              thumbW: 460
-            });
-          } catch {
-            data = await fetchSteamIndexCatalog({
-              limit: ALL_GAMES_PAGE_SIZE,
-              offset,
-              sort: "priority",
-              scope: "all",
-              includeDlc: false,
-              mustHaveArtwork: true,
-            });
-          }
+          const data = await fetchSteamCatalog({
+            limit: ALL_GAMES_PAGE_SIZE,
+            offset,
+            artMode: "tiered",
+            thumbW: 460
+          });
           let enrichedItems = data.items;
           const enrichWithBatchAssets = async (items: SteamCatalogItem[]) => {
             if (!items.length) {
