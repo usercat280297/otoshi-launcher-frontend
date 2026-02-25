@@ -128,9 +128,8 @@ const ART_BATCH_FLUSH_MS = 120;
 const STARTUP_MAX_ATTEMPTS = 8;
 const STARTUP_RETRY_BASE_MS = 700;
 const STARTUP_RETRY_MAX_MS = 4000;
-const STARTUP_TOTAL_TIMEOUT_MS = 45_000;
+const STARTUP_TOTAL_TIMEOUT_MS = 30_000;
 const FORCE_REFRESH_VISIBLE_LIMIT = 120;
-const GLOBAL_INDEX_REQUEST_TIMEOUT_MS = 12000;
 const GAMES_SESSION_CACHE_TTL_MS = 5 * 60 * 1000;
 const isDev = Boolean(import.meta.env.DEV);
 
@@ -161,27 +160,6 @@ const isLikelyNetworkError = (error: unknown) => {
     normalized.includes("aborted")
   );
 };
-
-const withTimeout = <T,>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  timeoutMessage: string
-): Promise<T> =>
-  new Promise<T>((resolve, reject) => {
-    const timeoutId = window.setTimeout(
-      () => reject(new Error(timeoutMessage)),
-      timeoutMs
-    );
-    promise
-      .then((value) => {
-        window.clearTimeout(timeoutId);
-        resolve(value);
-      })
-      .catch((error) => {
-        window.clearTimeout(timeoutId);
-        reject(error);
-      });
-  });
 
 const getRetryDelayMs = (attempt: number) =>
   Math.min(STARTUP_RETRY_MAX_MS, STARTUP_RETRY_BASE_MS * 2 ** Math.max(0, attempt - 1));
@@ -393,16 +371,12 @@ export function useGames() {
 
       const loadFromLuaCatalog = async () => {
         debugLog("[useGames] Loading lua catalog from /steam/catalog...");
-        const steamCatalog = await withTimeout(
-          fetchSteamCatalog({
-            limit: 80,
-            offset: 0,
-            artMode: "tiered",
-            thumbW: 460,
-          }),
-          GLOBAL_INDEX_REQUEST_TIMEOUT_MS,
-          "Lua catalog request timed out"
-        );
+        const steamCatalog = await fetchSteamCatalog({
+          limit: 80,
+          offset: 0,
+          artMode: "tiered",
+          thumbW: 460,
+        });
         const withAppId = steamCatalog.items.filter(
           (item) => Boolean(String(item.appId || "").trim())
         );
@@ -422,18 +396,14 @@ export function useGames() {
 
       const loadFromGlobalIndexCatalog = async () => {
         debugLog("[useGames] Loading global index catalog from /steam/index/catalog...");
-        const steamCatalog = await withTimeout(
-          fetchSteamIndexCatalog({
-            limit: 80,
-            offset: 0,
-            sort: "priority",
-            scope: "all",
-            includeDlc: false,
-            mustHaveArtwork: true,
-          }),
-          GLOBAL_INDEX_REQUEST_TIMEOUT_MS,
-          "Global index catalog request timed out"
-        );
+        const steamCatalog = await fetchSteamIndexCatalog({
+          limit: 80,
+          offset: 0,
+          sort: "priority",
+          scope: "all",
+          includeDlc: false,
+          mustHaveArtwork: true,
+        });
         const withAppId = steamCatalog.items.filter(
           (item) => Boolean(String(item.appId || "").trim())
         );

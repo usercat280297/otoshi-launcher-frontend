@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronRight } from "lucide-react";
+import { AlertTriangle, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import Hero from "../components/store/Hero";
@@ -60,7 +60,6 @@ const CATALOG_CACHE_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours
 const CATALOG_FETCH_MAX_ATTEMPTS = 5;
 const CATALOG_FETCH_RETRY_BASE_MS = 500;
 const CATALOG_FETCH_RETRY_MAX_MS = 2500;
-const CATALOG_PRIMARY_REQUEST_TIMEOUT_MS = 12000;
 const FIRST_RUN_DIAGNOSTIC_KEY = "otoshi.first_run.diagnostics.v1";
 const COOKIE_CONSENT_STORAGE_KEY = "otoshi.cookie_consent";
 const COOKIE_CONSENT_SESSION_KEY = "otoshi.cookie_consent.session";
@@ -78,27 +77,6 @@ const normalizeSearch = (value: string) => value.trim().toLowerCase();
 const resolveSearchPreviewCacheEntryKey = (value: string) => normalizeSearch(value);
 const wait = (ms: number) =>
   new Promise<void>((resolve) => window.setTimeout(resolve, ms));
-
-const withTimeout = <T,>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  timeoutMessage: string
-): Promise<T> =>
-  new Promise<T>((resolve, reject) => {
-    const timeoutId = window.setTimeout(
-      () => reject(new Error(timeoutMessage)),
-      timeoutMs
-    );
-    promise
-      .then((value) => {
-        window.clearTimeout(timeoutId);
-        resolve(value);
-      })
-      .catch((error) => {
-        window.clearTimeout(timeoutId);
-        reject(error);
-      });
-  });
 
 const hasCookieConsentDecision = () => {
   if (typeof window === "undefined") return true;
@@ -519,29 +497,21 @@ export default function StorePage() {
           const offset = pageIndex * ALL_GAMES_PAGE_SIZE;
           let data: { total: number; offset: number; limit: number; items: SteamCatalogItem[] };
           try {
-            data = await withTimeout(
-              fetchSteamIndexCatalog({
-                limit: ALL_GAMES_PAGE_SIZE,
-                offset,
-                sort: "priority",
-                scope: "all",
-                includeDlc: false,
-                mustHaveArtwork: true,
-              }),
-              CATALOG_PRIMARY_REQUEST_TIMEOUT_MS,
-              "Global index catalog request timed out"
-            );
+            data = await fetchSteamIndexCatalog({
+              limit: ALL_GAMES_PAGE_SIZE,
+              offset,
+              sort: "priority",
+              scope: "all",
+              includeDlc: false,
+              mustHaveArtwork: true,
+            });
           } catch {
-            data = await withTimeout(
-              fetchSteamCatalog({
-                limit: ALL_GAMES_PAGE_SIZE,
-                offset,
-                artMode: "tiered",
-                thumbW: 460
-              }),
-              CATALOG_PRIMARY_REQUEST_TIMEOUT_MS,
-              "Steam fallback catalog request timed out"
-            );
+            data = await fetchSteamCatalog({
+              limit: ALL_GAMES_PAGE_SIZE,
+              offset,
+              artMode: "tiered",
+              thumbW: 460
+            });
           }
           let enrichedItems = data.items;
           const enrichWithBatchAssets = async (items: SteamCatalogItem[]) => {
@@ -1778,24 +1748,44 @@ export default function StorePage() {
       <div className="relative xl:pr-[348px] 2xl:pr-[364px]">
         <div className="space-y-10">
           {error && errorCode !== "no_lua_games" && (
-            <div className="glass-panel p-4 text-sm text-text-secondary">
-              {t("store.api_offline")}
-              <details className="mt-2 text-xs text-text-muted">
-                <summary className="cursor-pointer select-none">Details</summary>
-                <div className="mt-2 space-y-1 break-all">
-                  {(() => {
-                    const debug = getApiDebugInfo();
-                    return (
-                      <>
-                        <div>Preferred base: {debug.preferredBase || "(empty)"}</div>
-                        <div>Resolved base: {debug.resolvedBase || "(none yet)"}</div>
-                        <div>Bases: {debug.bases.length ? debug.bases.join(", ") : "(empty)"}</div>
-                        <div>Error: {error}</div>
-                      </>
-                    );
-                  })()}
+            <div className="relative overflow-hidden rounded-2xl border border-amber-300/35 bg-gradient-to-r from-amber-500/10 to-orange-400/10 p-4 shadow-[0_14px_34px_rgba(0,0,0,0.35)]">
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-200/35 bg-amber-400/20 text-amber-100">
+                  <AlertTriangle size={16} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-amber-100">{t("store.api_offline")}</p>
+                  <details className="mt-2 text-xs text-amber-100/85">
+                    <summary className="cursor-pointer select-none">Details</summary>
+                    <div className="mt-2 space-y-1 break-all rounded-xl border border-amber-200/25 bg-black/25 p-2.5 text-amber-50/90">
+                      {(() => {
+                        const debug = getApiDebugInfo();
+                        return (
+                          <>
+                            <div>Preferred base: {debug.preferredBase || "(empty)"}</div>
+                            <div>Resolved base: {debug.resolvedBase || "(none yet)"}</div>
+                            <div>Bases: {debug.bases.length ? debug.bases.join(", ") : "(empty)"}</div>
+                            {debug.steamCooldowns.length > 0 && (
+                                <div>
+                                  Loopback cooldowns:{" "}
+                                  {debug.steamCooldowns
+                                    .map(
+                                      (item) =>
+                                        `${item.base || "unknown"} (${Math.ceil(
+                                          Number(item.retryInMs || 0) / 1000
+                                        )}s)`
+                                    )
+                                    .join(", ")}
+                                </div>
+                              )}
+                            <div>Error: {error}</div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </details>
                 </div>
-              </details>
+              </div>
             </div>
           )}
           {!showIntroLoading && loading && (

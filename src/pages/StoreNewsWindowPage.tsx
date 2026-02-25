@@ -145,7 +145,7 @@ export default function StoreNewsWindowPage() {
           </button>
         </header>
 
-        <div className="grid flex-1 gap-4 overflow-auto p-5 md:grid-cols-2">
+        <div className="flex flex-1 flex-col gap-4 overflow-auto p-5">
           <section className="space-y-3 rounded-xl border border-white/10 bg-black/30 p-4">
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200/85">
               <Clock3 size={14} />

@@ -183,6 +183,10 @@ const API_BASES = Array.from(new Set(API_FALLBACKS.filter(Boolean)));
 if (!API_BASES.length && !isDev) {
   console.warn("[API] VITE_API_URL is not set; API calls will fail in production.");
 }
+const API_STEAM_LOCAL_REQUEST_TIMEOUT_MS = 2_500;
+const API_STEAM_REMOTE_REQUEST_TIMEOUT_MS = 8_000;
+const API_STEAM_BASE_COOLDOWN_MS = 30_000;
+const steamBaseCooldownUntil = new Map<string, number>();
 
 const isAuthPath = (path: string): boolean => path.startsWith("/auth/");
 const isSteamPath = (path: string): boolean => path.startsWith("/steam/");
@@ -198,18 +202,41 @@ const getAuthRequestBases = (): string[] => {
   return API_BASES;
 };
 
+const isSteamBaseCoolingDown = (base: string): boolean => {
+  const until = steamBaseCooldownUntil.get(normalizeApiBase(base));
+  return typeof until === "number" && until > Date.now();
+};
+
+const markSteamBaseCooldown = (base: string) => {
+  if (!isLoopbackBase(base)) return;
+  steamBaseCooldownUntil.set(
+    normalizeApiBase(base),
+    Date.now() + API_STEAM_BASE_COOLDOWN_MS
+  );
+};
+
+const clearSteamBaseCooldown = (base: string) => {
+  steamBaseCooldownUntil.delete(normalizeApiBase(base));
+};
+
 const getSteamRequestBases = (): string[] => {
-  // In web dev, prefer local Steam backend data (extended DLC/achievements/news)
-  // and only fall back to remote when local is unavailable.
-  if (!isDesktop && isDev) {
-    const localBases = toLocalFallbacks(API_URL);
-    if (!localBases.length) return API_BASES;
-    return [
-      ...localBases,
-      ...API_BASES.filter((base) => !localBases.includes(base))
-    ];
-  }
-  return API_BASES;
+  const baseOrder =
+    !isDesktop && isDev
+      ? (() => {
+          // In web dev, prefer local Steam backend data (extended DLC/achievements/news)
+          // and only fall back to remote when local is unavailable.
+          const localBases = toLocalFallbacks(API_URL);
+          if (!localBases.length) return API_BASES;
+          return [
+            ...localBases,
+            ...API_BASES.filter((base) => !localBases.includes(base))
+          ];
+        })()
+      : API_BASES;
+
+  const ready = baseOrder.filter((base) => !isSteamBaseCoolingDown(base));
+  const cooling = baseOrder.filter((base) => isSteamBaseCoolingDown(base));
+  return ready.length ? [...ready, ...cooling] : baseOrder;
 };
 // Tauri v2 does not guarantee `window.__TAURI__`.
 // Use the official runtime check.
@@ -487,11 +514,18 @@ export const getPreferredAuthApiBase = () =>
   getAuthRequestBases()[0] || getPreferredApiBase();
 
 export function getApiDebugInfo() {
+  const now = Date.now();
   return {
     preferredBase: getPreferredApiBase(),
     resolvedBase: resolvedApiBase,
     runtimeReadyCheckedAt,
     bases: API_BASES,
+    steamCooldowns: Array.from(steamBaseCooldownUntil.entries())
+      .filter(([, until]) => typeof until === "number" && until > now)
+      .map(([base, until]) => ({
+        base,
+        retryInMs: Math.max(0, until - now),
+      })),
     isDev
   };
 }
@@ -795,7 +829,6 @@ async function requestJson<T>(
   const method = (options.method || "GET").toUpperCase();
   const authPath = isAuthPath(path);
   const steamPath = isSteamPath(path);
-  const requestTimeoutMs = authPath ? API_AUTH_REQUEST_TIMEOUT_MS : 0;
   const canFallbackMethod = method === "GET" || method === "HEAD";
   // For web dev we can safely fail over non-idempotent requests only on transport errors
   // (for example local backend is down but remote API is healthy).
@@ -823,6 +856,15 @@ async function requestJson<T>(
             ? [resolvedApiBase, ...(isDesktop ? [] : requestBases.filter((base) => base !== resolvedApiBase))]
             : [resolvedApiBase])
         : requestBases;
+  const resolveRequestTimeoutMs = (base: string) => {
+    if (authPath) return API_AUTH_REQUEST_TIMEOUT_MS;
+    if (steamPath) {
+      return isLoopbackBase(base)
+        ? API_STEAM_LOCAL_REQUEST_TIMEOUT_MS
+        : API_STEAM_REMOTE_REQUEST_TIMEOUT_MS;
+    }
+    return 0;
+  };
   let lastError: Error | null = null;
 
   debugLog(`[API] Requesting: ${path}`, { bases, method: options.method || 'GET' });
@@ -838,7 +880,7 @@ async function requestJson<T>(
           ...options,
           headers,
         },
-        requestTimeoutMs
+        resolveRequestTimeoutMs(base)
       );
 
       debugLog(`[API] Response from ${base}: status=${response.status}`);
@@ -854,6 +896,9 @@ async function requestJson<T>(
             status: response.status,
             message: parsedError.message
           });
+          if (steamPath) {
+            markSteamBaseCooldown(base);
+          }
           lastError = new ApiHttpError(
             parsedError.message,
             response.status,
@@ -877,6 +922,9 @@ async function requestJson<T>(
 
       const data = await response.json();
       resolvedApiBase = base;
+      if (steamPath) {
+        clearSteamBaseCooldown(base);
+      }
       debugLog(`[API] Success from ${base}`, { path, resolvedApiBase });
       return data;
     } catch (err: any) {
@@ -895,6 +943,9 @@ async function requestJson<T>(
           (canFallbackMethod &&
             shouldRetry(path, typeof err?.status === "number" ? err.status : undefined));
         if (retryable) {
+          if (steamPath && (networkLike || Boolean(err?.retryable))) {
+            markSteamBaseCooldown(base);
+          }
           debugLog(`[API] Retryable exception from ${base}:`, { path, error: err });
           lastError = err instanceof Error ? err : new Error("Request failed");
           continue;
