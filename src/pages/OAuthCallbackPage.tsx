@@ -18,7 +18,7 @@ export default function OAuthCallbackPage() {
     let active = true;
     const params = new URLSearchParams(location.search);
     const code = params.get("code");
-    const next = params.get("next") || "/store";
+    const next = params.get("next") || "/steam";
     if (!code) {
       setError(t("auth.oauth_missing_code"));
       return;

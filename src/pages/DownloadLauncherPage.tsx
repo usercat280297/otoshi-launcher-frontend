@@ -773,12 +773,12 @@ export default function DownloadLauncherPage() {
       {/* Navigation */}
       <nav className="fixed left-0 right-0 top-0 z-50 border-b border-white/5 bg-background/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <Link to="/store" className="flex items-center gap-3">
+          <Link to="/steam" className="flex items-center gap-3">
             <img src="/OTOSHI_icon.png" alt="Otoshi" className="h-8 w-8" {...getMediaProtectionProps()} />
             <span className="text-lg font-bold text-text-primary">Otoshi Launcher</span>
           </Link>
           <div className="flex items-center gap-4">
-            <Link to="/store" className="text-sm text-text-secondary transition hover:text-text-primary">
+            <Link to="/steam" className="text-sm text-text-secondary transition hover:text-text-primary">
               {t("nav.store")}
             </Link>
             <button
@@ -914,7 +914,7 @@ export default function DownloadLauncherPage() {
               <p className="text-text-secondary">{t("launcher.games.subtitle")}</p>
             </div>
             <Link
-              to="/store"
+              to="/steam"
               className="inline-flex items-center gap-2 text-primary transition hover:gap-3"
             >
               {t("launcher.games.browse")}

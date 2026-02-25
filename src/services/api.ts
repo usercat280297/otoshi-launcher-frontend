@@ -506,6 +506,29 @@ function parseApiError(rawBody: string): ParsedApiError {
     if (typeof detail === "string") {
       return { message: detail };
     }
+    if (Array.isArray(detail)) {
+      const first = detail.find((item) => item && typeof item === "object") as
+        | { msg?: unknown; loc?: unknown[]; type?: unknown }
+        | undefined;
+      if (first) {
+        const msg = typeof first.msg === "string" && first.msg.trim().length > 0
+          ? first.msg
+          : fallback.message;
+        const loc = Array.isArray(first.loc)
+          ? first.loc
+              .map((part) => (typeof part === "string" ? part : ""))
+              .filter(Boolean)
+              .join(".")
+          : "";
+        if (loc.endsWith("username") && /alphanumeric/i.test(msg)) {
+          return { message: "Username must contain only letters and numbers." };
+        }
+        return {
+          message: msg,
+          code: typeof first.type === "string" ? first.type : undefined,
+        };
+      }
+    }
     if (detail && typeof detail === "object") {
       const detailObj = detail as { message?: unknown; code?: unknown };
       return {
@@ -1259,12 +1282,14 @@ export async function fetchSteamIndexTopRanking(params?: {
 export async function rebuildSteamIndex(params?: {
   maxItems?: number | null;
   enrichDetails?: boolean;
+  officialOnly?: boolean;
 }): Promise<SteamIndexIngestRebuildResult> {
   const data = await requestJson<any>("/steam/index/ingest/rebuild", {
     method: "POST",
     body: JSON.stringify({
       max_items: params?.maxItems ?? null,
       enrich_details: params?.enrichDetails ?? true,
+      official_only: params?.officialOnly ?? false,
     }),
   });
   return {

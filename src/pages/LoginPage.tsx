@@ -14,7 +14,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const from = (location.state as { from?: Location })?.from?.pathname || "/store";
+  const from = (location.state as { from?: Location })?.from?.pathname || "/steam";
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();

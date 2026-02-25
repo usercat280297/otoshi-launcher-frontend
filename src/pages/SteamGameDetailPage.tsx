@@ -497,7 +497,7 @@ export default function SteamGameDetailPage() {
             {error || "The requested Steam game could not be found. It may have been removed or the App ID is incorrect."}
           </p>
           <button
-            onClick={() => navigate("/store")}
+            onClick={() => navigate("/steam")}
             className="mt-4 px-4 py-2 bg-accent-primary text-white rounded-lg hover:bg-accent-primary/90 transition"
           >
             Browse Store

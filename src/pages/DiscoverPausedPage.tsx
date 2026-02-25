@@ -25,7 +25,7 @@ export default function DiscoverPausedPage() {
         </p>
         <div className="pt-2">
           <Link
-            to="/store"
+            to="/steam"
             className="epic-button inline-flex px-5 py-2.5 text-sm font-semibold"
           >
             {t("discover.paused.action_store")}

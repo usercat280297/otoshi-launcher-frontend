@@ -16,14 +16,27 @@ export default function RegisterPage() {
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const usernamePattern = /^[A-Za-z0-9]+$/;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
     setLoading(true);
+    const normalized = {
+      ...form,
+      email: form.email.trim(),
+      username: form.username.trim(),
+      display_name: form.display_name.trim(),
+      password: form.password
+    };
+    if (!usernamePattern.test(normalized.username)) {
+      setError("Username chi duoc chua chu va so (khong dung ky tu dac biet).");
+      setLoading(false);
+      return;
+    }
     try {
-      await register(form);
-      navigate("/store");
+      await register(normalized);
+      navigate("/steam");
     } catch (err: any) {
       setError(err.message || t("auth.error.unable_create_account"));
     } finally {
@@ -59,8 +72,13 @@ export default function RegisterPage() {
                   setForm((prev) => ({ ...prev, username: event.target.value }))
                 }
                 className="mt-2 w-full rounded-md border border-background-border bg-background-surface px-4 py-2 text-sm"
+                pattern="[A-Za-z0-9]+"
+                title="Only letters and numbers"
                 required
               />
+              <p className="mt-2 text-[11px] text-text-muted">
+                Chi dung chu va so, khong khoang trang/ky tu dac biet.
+              </p>
             </div>
             <div>
               <label htmlFor="displayname-input" className="text-xs uppercase tracking-[0.3em] text-text-muted">

@@ -8,6 +8,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauri } from "@tauri-apps/api/core";
 import { openExternal } from "../../utils/openExternal";
 import { useTheme } from "../../context/ThemeContext";
+import { emitOverlayNotification } from "../../utils/notify";
 
 export default function TopBar() {
   const { user, token, logout } = useAuth();
@@ -24,8 +25,42 @@ export default function TopBar() {
   const [tauriRuntime, setTauriRuntime] = useState(false);
   const supportLink = "https://discord.gg/6q7YRdWGZJ";
   const closeSupport = () => setSupportOpen(false);
-  const openSupport = () => setSupportOpen(true);
+  const openSupport = () => {
+    setSupportOpen(true);
+    emitOverlayNotification({
+      tone: "info",
+      title: "Support",
+      message: "Support panel opened",
+      source: "topbar",
+      durationMs: 2200,
+    });
+  };
   const handleLogoReload = () => window.location.reload();
+  const handleLocaleChange = (value: "en" | "vi") => {
+    setLocale(value);
+    setOpen(false);
+    emitOverlayNotification({
+      tone: "success",
+      title: "Language",
+      message: value === "vi" ? "Da chuyen sang Tieng Viet" : "Switched to English",
+      source: "topbar",
+      durationMs: 2200,
+    });
+  };
+  const handleThemeSwitch = () => {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    toggleTheme();
+    emitOverlayNotification({
+      tone: "info",
+      title: "Theme",
+      message: nextTheme === "dark" ? "Dark mode enabled" : "Light mode enabled",
+      source: "topbar",
+      durationMs: 2200,
+    });
+  };
+  const handleLogout = () => {
+    logout();
+  };
 
   const handleMinimize = async () => {
     if (!tauriRuntime) return;
@@ -70,8 +105,15 @@ export default function TopBar() {
   };
 
   const handleTourHelp = () => {
-    if (location.pathname !== "/store") {
-      navigate("/store");
+    emitOverlayNotification({
+      tone: "info",
+      title: "Guided tour",
+      message: "Store walkthrough started",
+      source: "topbar",
+      durationMs: 2200,
+    });
+    if (location.pathname !== "/steam") {
+      navigate("/steam");
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent("otoshi:tour:store"));
       }, 400);
@@ -121,7 +163,7 @@ export default function TopBar() {
                 className="h-9 w-9 object-contain"
               />
             </button>
-            <NavLink to="/store" className="text-sm font-semibold uppercase tracking-[0.2em] text-text-primary sm:tracking-[0.25em]">
+            <NavLink to="/steam" className="text-sm font-semibold uppercase tracking-[0.2em] text-text-primary sm:tracking-[0.25em]">
               {t("nav.store")}
             </NavLink>
           </div>
@@ -295,10 +337,7 @@ export default function TopBar() {
                     <button
                       key={option.value}
                       type="button"
-                      onClick={() => {
-                        setLocale(option.value);
-                        setOpen(false);
-                      }}
+                      onClick={() => handleLocaleChange(option.value as "en" | "vi")}
                       className={`flex w-full items-center justify-between rounded-lg px-2 py-2 text-xs transition ${
                         option.value === locale
                           ? "bg-background-muted text-text-primary"
@@ -323,7 +362,7 @@ export default function TopBar() {
               <div className="hidden text-left sm:block">
                 <p className="text-xs font-semibold">{user?.displayName || user?.username}</p>
                 <button
-                  onClick={logout}
+                  onClick={handleLogout}
                   className="text-[10px] uppercase tracking-[0.2em] text-text-muted hover:text-text-primary"
                 >
                   {t("action.sign_out")}
@@ -340,7 +379,7 @@ export default function TopBar() {
           )}
           <button
             type="button"
-            onClick={toggleTheme}
+            onClick={handleThemeSwitch}
             className="hidden h-9 w-9 items-center justify-center rounded-full border border-background-border bg-background-surface text-text-secondary transition hover:border-primary hover:text-text-primary sm:flex"
             aria-label={theme === "dark" ? t("topbar.theme.switch_light") : t("topbar.theme.switch_dark")}
             title={theme === "dark" ? t("topbar.theme.light") : t("topbar.theme.dark")}

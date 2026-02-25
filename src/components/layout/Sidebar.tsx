@@ -41,7 +41,7 @@ export default function Sidebar() {
 
   const discoverNav = useMemo(
     () => [
-      { to: "/store", labelKey: "nav.store", icon: Store },
+      { to: "/steam", labelKey: "nav.store", icon: Store },
       { to: "/discover", labelKey: "nav.discover", icon: Sparkles },
       { to: "/wishlist", labelKey: "nav.wishlist", icon: Heart },
       { to: "/community", labelKey: "nav.community", icon: Users },
@@ -150,7 +150,7 @@ export default function Sidebar() {
                   key={item.to}
                   to={item.to}
                   data-tour={
-                    item.to === "/store"
+                    item.to === "/steam"
                       ? "sidebar-store"
                       : item.to === "/discover"
                         ? "sidebar-discover"

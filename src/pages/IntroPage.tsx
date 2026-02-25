@@ -19,7 +19,7 @@ export default function IntroPage() {
   useEffect(() => {
     window.localStorage.setItem(LAST_LAUNCH_TS_KEY, String(Date.now()));
     const timer = window.setTimeout(() => {
-      navigate("/store", { replace: true });
+      navigate("/steam", { replace: true });
     }, introDurationMs);
 
     return () => window.clearTimeout(timer);
@@ -28,7 +28,7 @@ export default function IntroPage() {
   return (
     <button
       type="button"
-      onClick={() => navigate("/store", { replace: true })}
+      onClick={() => navigate("/steam", { replace: true })}
       className="relative block h-screen w-screen overflow-hidden bg-black text-left"
       aria-label={t("intro.skip")}
     >

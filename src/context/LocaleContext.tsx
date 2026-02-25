@@ -285,10 +285,14 @@ const messages: Record<string, Record<Locale, string>> = {
   "store.searching": { en: "Searching...", vi: "Đang tìm..." },
 
   // Search
+  "search.top_results": { en: "Top results", vi: "Kết quả hàng đầu" },
   "search.results": { en: "Results", vi: "Kết quả" },
   "search.recent": { en: "Recent searches", vi: "Tìm kiếm gần đây" },
   "search.popular": { en: "Popular now", vi: "Phổ biến hiện tại" },
   "search.no_results": { en: "No results found", vi: "Không tìm thấy kết quả" },
+  "search.view_all_results": { en: "View all results", vi: "Xem tất cả kết quả" },
+  "search.type.add_on": { en: "Add-On", vi: "Bổ sung" },
+  "search.type.edition": { en: "Edition", vi: "Phiên bản" },
 
   // Library / Intro / Discover
   "library.search_placeholder": { en: "Search your library", vi: "Tim trong thu vien" },

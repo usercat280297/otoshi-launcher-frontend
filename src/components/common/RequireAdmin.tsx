@@ -18,7 +18,7 @@ export default function RequireAdmin({ children }: { children: React.ReactNode }
   }
 
   if (user?.role !== "admin") {
-    return <Navigate to="/store" replace />;
+    return <Navigate to="/steam" replace />;
   }
 
   return <>{children}</>;

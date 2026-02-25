@@ -1,5 +1,5 @@
-import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { isTauri as isTauriRuntime } from "@tauri-apps/api/core";
 import MainLayout from "./components/layout/MainLayout";
 import AuthLayout from "./components/layout/AuthLayout";
@@ -15,20 +15,42 @@ import { openExternal } from "./utils/openExternal";
 import Modal from "./components/common/Modal";
 import Button from "./components/common/Button";
 import StartupAnnouncementModal from "./components/common/StartupAnnouncementModal";
-
-type DownloadToastPayload = {
-  type: "success" | "error";
-  title: string;
-  message: string;
-  iconUrl?: string | null;
-};
+import OverlayNotifications from "./components/common/OverlayNotifications";
+import { emitOverlayNotification } from "./utils/notify";
 
 type TrayActionPayload = {
   action?: string;
   locale?: string;
 };
 
-const StorePage = lazy(() => import("./pages/StorePage"));
+function describeRoute(pathname: string): string {
+  if (pathname.startsWith("/steam/")) return "Steam game detail";
+  if (pathname.startsWith("/games/")) return "Game detail";
+  const routeMap: Record<string, string> = {
+    "/": "Home",
+    "/store": "Store",
+    "/steam": "Steam vault",
+    "/discover": "Discover",
+    "/fixes/online": "Online fix",
+    "/fixes/bypass": "Bypass fix",
+    "/workshop": "Workshop",
+    "/community": "Community",
+    "/library": "Library",
+    "/downloads": "Downloads",
+    "/settings": "Settings",
+    "/wishlist": "Wishlist",
+    "/inventory": "Inventory",
+    "/profile": "Profile",
+    "/developer": "Developer",
+    "/login": "Sign in",
+    "/register": "Register",
+    "/download-launcher": "Download launcher",
+    "/privacy-policy": "Privacy policy",
+    "/terms-of-service": "Terms of service",
+  };
+  return routeMap[pathname] || pathname;
+}
+
 const LibraryPage = lazy(() => import("./pages/LibraryPage"));
 const GameDetailPage = lazy(() => import("./pages/GameDetailPage"));
 const DownloadsPage = lazy(() => import("./pages/DownloadsPage"));
@@ -59,8 +81,8 @@ function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
   const { setLocale, t } = useLocale();
-  const [downloadToast, setDownloadToast] = useState<DownloadToastPayload | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const routeNotifyReadyRef = useRef(false);
   const startupAnnouncementEnabled =
     !location.pathname.startsWith("/overlay") &&
     !location.pathname.startsWith("/big-picture");
@@ -131,11 +153,13 @@ function AppContent() {
     const onStarted = (event: Event) => {
       const detail = (event as CustomEvent<{ title?: string; iconUrl?: string }>).detail;
       const title = detail?.title?.trim() || t("common.game");
-      setDownloadToast({
-        type: "success",
+      emitOverlayNotification({
+        tone: "success",
         title: t("download.toast.started_title"),
         message: title,
-        iconUrl: detail?.iconUrl?.trim() || null,
+        imageUrl: detail?.iconUrl?.trim() || null,
+        source: "download",
+        durationMs: 3600,
       });
     };
 
@@ -143,11 +167,13 @@ function AppContent() {
       const detail = (event as CustomEvent<{ message?: string; messageKey?: string; iconUrl?: string }>).detail;
       const localizedByKey = detail?.messageKey ? t(detail.messageKey) : null;
       const message = localizedByKey || detail?.message?.trim() || t("download.toast.failed_default");
-      setDownloadToast({
-        type: "error",
+      emitOverlayNotification({
+        tone: "error",
         title: t("download.toast.failed_title"),
         message,
-        iconUrl: detail?.iconUrl || null,
+        imageUrl: detail?.iconUrl || null,
+        source: "download",
+        durationMs: 5200,
       });
     };
 
@@ -159,6 +185,51 @@ function AppContent() {
       window.removeEventListener("otoshi:download-error", onError as EventListener);
     };
   }, [t]);
+
+  useEffect(() => {
+    const onLuaMissing = () => {
+      emitOverlayNotification({
+        tone: "warning",
+        title: "Catalog warning",
+        message: t("lua.error.body"),
+        source: "catalog",
+        durationMs: 4800,
+      });
+    };
+
+    const onLuaLoaded = () => {
+      emitOverlayNotification({
+        tone: "success",
+        title: "Catalog synced",
+        message: "Lua catalog is online again.",
+        source: "catalog",
+      });
+    };
+
+    window.addEventListener("otoshi:lua-games-missing", onLuaMissing as EventListener);
+    window.addEventListener("otoshi:lua-games-loaded", onLuaLoaded as EventListener);
+    return () => {
+      window.removeEventListener("otoshi:lua-games-missing", onLuaMissing as EventListener);
+      window.removeEventListener("otoshi:lua-games-loaded", onLuaLoaded as EventListener);
+    };
+  }, [t]);
+
+  useEffect(() => {
+    if (!routeNotifyReadyRef.current) {
+      routeNotifyReadyRef.current = true;
+      return;
+    }
+    if (location.pathname.startsWith("/overlay") || location.pathname.startsWith("/big-picture")) {
+      return;
+    }
+    emitOverlayNotification({
+      tone: "info",
+      title: "Navigation",
+      message: describeRoute(location.pathname),
+      source: "route",
+      durationMs: 2600,
+    });
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     if (!isTauriRuntime()) {
@@ -225,21 +296,51 @@ function AppContent() {
       const action = (payload.action || "").trim();
       switch (action) {
         case "open_official_website":
+          emitOverlayNotification({
+            tone: "info",
+            title: "Tray action",
+            message: "Opening official website",
+            source: "tray",
+          });
           await openExternal("https://otoshi-launcher.me");
           break;
         case "check_updates":
+          emitOverlayNotification({
+            tone: "info",
+            title: "Tray action",
+            message: "Opening update center",
+            source: "tray",
+          });
           navigate("/download-launcher");
           break;
         case "set_language":
           if (payload.locale === "en" || payload.locale === "vi") {
             setLocale(payload.locale);
+            emitOverlayNotification({
+              tone: "success",
+              title: "Language updated",
+              message: payload.locale === "vi" ? "Tieng Viet" : "English",
+              source: "tray",
+            });
           }
           break;
         case "feedback":
+          emitOverlayNotification({
+            tone: "info",
+            title: "Tray action",
+            message: "Opening feedback channel",
+            source: "tray",
+          });
           await openExternal("https://discord.gg/6q7YRdWGZJ");
           break;
         case "about":
           setAboutOpen(true);
+          emitOverlayNotification({
+            tone: "info",
+            title: "Tray action",
+            message: "About dialog opened",
+            source: "tray",
+          });
           break;
         default:
           break;
@@ -272,20 +373,12 @@ function AppContent() {
     };
   }, [navigate, setLocale]);
 
-  useEffect(() => {
-    if (!downloadToast) return;
-    const timer = window.setTimeout(
-      () => setDownloadToast(null),
-      downloadToast.type === "error" ? 5200 : 3800
-    );
-    return () => window.clearTimeout(timer);
-  }, [downloadToast]);
-
   return (
     <>
       <GlobalRipple />
       <CookieConsentBanner />
       <StartupAnnouncementModal enabled={startupAnnouncementEnabled} />
+      <OverlayNotifications />
       <Modal isOpen={aboutOpen} onClose={() => setAboutOpen(false)} title={t("app.about.title")} size="sm">
         <div className="space-y-4">
           <p className="text-sm text-text-secondary">
@@ -308,48 +401,6 @@ function AppContent() {
           </div>
         </div>
       </Modal>
-      {downloadToast && (
-        <div
-          className={`fixed right-6 top-44 z-[70] w-[560px] max-w-[calc(100vw-1.5rem)] rounded-2xl px-5 py-4 backdrop-blur ${
-            downloadToast.type === "error"
-              ? "border border-accent-red/45 bg-background-elevated/95 shadow-[0_14px_48px_rgba(220,38,38,0.28)]"
-              : "border border-primary/45 bg-background-elevated/95 shadow-[0_14px_48px_rgba(56,189,248,0.28)]"
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            {downloadToast.iconUrl ? (
-              <img
-                src={downloadToast.iconUrl}
-                alt={downloadToast.message}
-                className="h-14 w-14 rounded-lg object-cover ring-1 ring-background-border"
-                loading="lazy"
-              />
-            ) : (
-              <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-accent-primary/15 text-lg font-semibold text-accent-primary">
-                {(downloadToast.message || "D").slice(0, 1).toUpperCase()}
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <p
-                className={`text-[13px] font-semibold uppercase tracking-[0.14em] ${
-                  downloadToast.type === "error" ? "text-accent-red" : "text-accent-primary"
-                }`}
-              >
-                {downloadToast.title}
-              </p>
-              <p className="truncate text-base font-semibold text-text-primary">
-                {downloadToast.message}
-              </p>
-            </div>
-            <span
-              className={`h-2.5 w-2.5 rounded-full ${
-                downloadToast.type === "error" ? "bg-accent-red" : "bg-accent-green"
-              }`}
-              aria-hidden="true"
-            />
-          </div>
-        </div>
-      )}
       <Suspense
         fallback={
           <div className="fixed inset-0 z-[90] flex items-center justify-center bg-background text-sm text-text-secondary">
@@ -372,7 +423,7 @@ function AppContent() {
           <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
           <Route path="/terms-of-service" element={<TermsOfServicePage />} />
           <Route element={<MainLayout />}>
-            <Route path="/store" element={<StorePage />} />
+            <Route path="/store" element={<Navigate to="/steam" replace />} />
             <Route path="/steam" element={<SteamCatalogPage />} />
             <Route path="/steam/:appId" element={<SteamGameDetailPage />} />
             <Route path="/discover" element={<DiscoverPausedPage />} />

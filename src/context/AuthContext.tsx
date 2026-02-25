@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { AuthUser } from "../types";
 import * as api from "../services/api";
+import { emitOverlayNotification } from "../utils/notify";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -235,6 +236,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       token: response.access_token,
       refresh_token: response.refresh_token
     });
+    emitOverlayNotification({
+      tone: "success",
+      title: "Session",
+      message: `Signed in as ${nextUser.displayName || nextUser.username}`,
+      source: "auth",
+      durationMs: 2600,
+    });
   };
 
   const exchangeOAuth = async (code: string) => {
@@ -248,6 +256,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       token: response.access_token,
       refresh_token: response.refresh_token
     });
+    emitOverlayNotification({
+      tone: "success",
+      title: "OAuth",
+      message: `Connected as ${nextUser.displayName || nextUser.username}`,
+      source: "auth",
+      durationMs: 2600,
+    });
   };
 
   const register = async (payload: {
@@ -257,6 +272,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     display_name?: string;
   }) => {
     await api.register(payload);
+    emitOverlayNotification({
+      tone: "success",
+      title: "Account created",
+      message: payload.username,
+      source: "auth",
+      durationMs: 2400,
+    });
     await login(payload.email, payload.password);
   };
 
@@ -268,6 +290,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(null);
     localStorage.removeItem(STORAGE_KEY);
     syncLogoutToDesktop().catch(() => undefined);
+    emitOverlayNotification({
+      tone: "warning",
+      title: "Session",
+      message: "Signed out",
+      source: "auth",
+      durationMs: 2200,
+    });
   };
 
   const updateLocalUser = (patch: Partial<AuthUser>) => {

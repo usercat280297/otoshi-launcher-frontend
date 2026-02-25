@@ -30,6 +30,7 @@ import {
   readPersistentCacheValue,
   writePersistentCacheValue,
 } from "../utils/persistentCache";
+import { emitOverlayNotification } from "../utils/notify";
 
 const PAGE_SIZE = 24;
 const SEARCH_STORAGE_KEY = "otoshi.search.steam";
@@ -534,6 +535,13 @@ export default function SteamCatalogPage() {
           action: "submit",
           payload: { source: "steam_catalog_search" },
         });
+        emitOverlayNotification({
+          tone: "info",
+          title: "Steam search",
+          message: `Searching "${nextQuery}"`,
+          source: "steam",
+          durationMs: 2600,
+        });
       }
       runSearch(nextQuery, true);
     },
@@ -738,6 +746,7 @@ export default function SteamCatalogPage() {
         searchLoading={loading}
         onSearchChange={setQuery}
         onSearchSubmit={() => handleSearchSubmit()}
+        onViewAllResults={() => handleSearchSubmit()}
         suggestions={combinedSuggestions}
         onSuggestionSelect={(item) => {
           if (item.kind === "result" && item.appId) {
@@ -747,6 +756,14 @@ export default function SteamCatalogPage() {
               appId: item.appId,
               dwellMs: resolveSearchDwellMs(),
               payload: { source: "steam_catalog_suggestion", page },
+            });
+            emitOverlayNotification({
+              tone: "success",
+              title: "Opening game",
+              message: item.label,
+              imageUrl: item.image || null,
+              source: "steam",
+              durationMs: 2800,
             });
             navigate(`/steam/${item.appId}`);
             return;

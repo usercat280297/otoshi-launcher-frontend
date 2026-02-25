@@ -3,7 +3,7 @@ import { Store, Library, Download, Sparkles, User } from "lucide-react";
 import { useLocale } from "../../context/LocaleContext";
 
 const navItems = [
-  { to: "/store", labelKey: "mobile_nav.game", icon: Store },
+  { to: "/steam", labelKey: "mobile_nav.game", icon: Store },
   { to: "/discover", labelKey: "mobile_nav.anime", icon: Sparkles },
   { to: "/library", labelKey: "mobile_nav.library", icon: Library },
   { to: "/downloads", labelKey: "mobile_nav.downloads", icon: Download },

@@ -4,7 +4,7 @@ export default function AuthLayout() {
   return (
     <div className="min-h-screen bg-background px-6 py-12">
       <div className="mx-auto mb-10 flex max-w-5xl items-center justify-between">
-        <Link to="/store" className="text-sm font-semibold text-text-secondary">
+        <Link to="/steam" className="text-sm font-semibold text-text-secondary">
           Back to store
         </Link>
         <div className="flex items-center gap-3">

@@ -106,7 +106,7 @@ export default function OAuthButtons({ nextPath = "/" }: OAuthButtonsProps) {
                 setLoadingProvider(null);
               }
               activeProviderRef.current = null;
-              navigate(nextPath || "/store", { replace: true });
+              navigate(nextPath || "/steam", { replace: true });
             } catch (pollErr: any) {
               finishWithError(pollErr?.message || t("auth.oauth_unable_complete_sign_in"));
             } finally {

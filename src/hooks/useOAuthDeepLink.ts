@@ -5,7 +5,7 @@ import { useAuth } from "../context/AuthContext";
 
 /**
  * Hook to listen for OAuth deep-link callbacks in Tauri app.
- * When a deep-link like otoshi://oauth/callback?code=xxx&next=/store is received,
+ * When a deep-link like otoshi://oauth/callback?code=xxx&next=/steam is received,
  * it will exchange the code for tokens and navigate to the next path.
  */
 export function useOAuthDeepLink() {
@@ -32,7 +32,7 @@ export function useOAuthDeepLink() {
       }
 
       const code = url.searchParams.get("code");
-      const next = url.searchParams.get("next") || "/store";
+      const next = url.searchParams.get("next") || "/steam";
       const provider = url.searchParams.get("provider");
 
       console.log("[OAuth Deep Link] Parsed:", { code: code?.slice(0, 10) + "...", next, provider });
