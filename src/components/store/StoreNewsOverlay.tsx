@@ -42,7 +42,6 @@ export default function StoreNewsOverlay({ games }: StoreNewsOverlayProps) {
     setOpening(true);
 
     const encodedPayload = serializeStoreNewsPayload(payload);
-    const url = `/steam-news?payload=${encodedPayload}`;
 
     try {
       if (isTauriRuntime()) {
@@ -50,6 +49,9 @@ export default function StoreNewsOverlay({ games }: StoreNewsOverlayProps) {
         return;
       }
 
+      // Web host currently serves deep-link paths as empty bodies in some deployments.
+      // Open from "/" and let the SPA route internally via query bootstrap.
+      const url = `/?open=steam-news&payload=${encodedPayload}`;
       const { left, top } = resolvePopupPosition();
       const popup = window.open(
         url,
