@@ -69,6 +69,8 @@ export type CommunityMember = {
   displayName?: string | null;
   avatarUrl?: string | null;
   membershipTier?: string | null;
+  membershipExpiresAt?: string | null;
+  membershipActive?: boolean;
   isOnline: boolean;
   lastSeenAt?: string | null;
 };
@@ -80,6 +82,8 @@ export type DonationLeaderboardEntry = {
   displayName?: string | null;
   avatarUrl?: string | null;
   membershipTier?: string | null;
+  membershipExpiresAt?: string | null;
+  membershipActive?: boolean;
   isOnline: boolean;
   lastSeenAt?: string | null;
   totalAmount: number;
@@ -89,6 +93,7 @@ export type DonationLeaderboardEntry = {
 export type SupportProfile = {
   tier?: string | null;
   expiresAt?: string | null;
+  isActive?: boolean;
   lifetimeTotal: number;
   periodTotal: number;
   rank?: number | null;

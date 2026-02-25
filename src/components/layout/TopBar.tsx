@@ -2,7 +2,7 @@ import { ChevronDown, Globe, Minus, Square, X, Upload, BookOpen, Rocket, Package
 import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useLocale } from "../../context/LocaleContext";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauri } from "@tauri-apps/api/core";
@@ -10,6 +10,7 @@ import { openExternal } from "../../utils/openExternal";
 import { useTheme } from "../../context/ThemeContext";
 import { emitOverlayNotification } from "../../utils/notify";
 import { createDonation, fetchDonationLeaderboard } from "../../services/api";
+import { membershipTierLabel, resolveEffectiveMembershipTier } from "../../utils/membership";
 import type { DonationLeaderboardEntry } from "../../types";
 
 export default function TopBar() {
@@ -27,21 +28,46 @@ export default function TopBar() {
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [leaderboard, setLeaderboard] = useState<DonationLeaderboardEntry[]>([]);
   const [distributeOpen, setDistributeOpen] = useState(false);
+  const headerRef = useRef<HTMLElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const distributeMenuRef = useRef<HTMLDivElement | null>(null);
   const [tauriRuntime, setTauriRuntime] = useState(false);
   const supportLink = "https://discord.gg/6q7YRdWGZJ";
-  const normalizedTier = String(user?.membershipTier || "").trim().toLowerCase();
-  const effectiveTier = normalizedTier || (user?.role === "vip" || user?.role === "admin" ? "vip" : "");
-  const isVip = effectiveTier === "vip" || user?.role === "admin";
-  const tierLabel =
-    effectiveTier === "vip"
-      ? "VIP"
-      : effectiveTier === "supporter_plus"
-        ? "Supporter+"
-        : effectiveTier === "supporter"
-          ? "Supporter"
-          : "";
+  const topbarSupportActions = [
+    {
+      id: "kofi",
+      label: "Support Ko-fi",
+      href: "https://ko-fi.com/0xolemon",
+      enabled: true,
+      className:
+        "border-cyan-300/30 bg-gradient-to-r from-[#7be3df] via-[#6d8eff] to-[#a855f7] text-white hover:shadow-[0_10px_28px_rgba(103,134,255,0.35)]",
+      icon: (
+        <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-white/90 text-[11px] font-black text-[#f97316]">
+          K
+        </span>
+      ),
+    },
+    {
+      id: "revolut",
+      label: "Support Revolut",
+      href: "https://revolut.me/lightningfast",
+      enabled: false,
+      className:
+        "border-background-border bg-gradient-to-r from-[#121729] via-[#111827] to-[#2d3355] text-white",
+      icon: (
+        <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-white text-[11px] font-black text-black">
+          R
+        </span>
+      ),
+    },
+  ] as const;
+  const effectiveTier = resolveEffectiveMembershipTier({
+    membershipTier: user?.membershipTier,
+    membershipExpiresAt: user?.membershipExpiresAt,
+    role: user?.role,
+  });
+  const isVip = effectiveTier === "vip";
+  const tierLabel = effectiveTier ? membershipTierLabel(effectiveTier) : "";
   const tierBadgeClass = isVip
     ? "border-amber-400/40 bg-amber-500/15 text-amber-200"
     : "border-cyan-400/30 bg-cyan-500/10 text-cyan-200";
@@ -57,7 +83,7 @@ export default function TopBar() {
     }
   };
   const closeSupport = () => setSupportOpen(false);
-  const loadSupportLeaderboard = async () => {
+  const loadSupportLeaderboard = useCallback(async () => {
     setLeaderboardLoading(true);
     try {
       const data = await fetchDonationLeaderboard("week", 6);
@@ -67,7 +93,7 @@ export default function TopBar() {
     } finally {
       setLeaderboardLoading(false);
     }
-  };
+  }, []);
   const openSupport = () => {
     setSupportOpen(true);
     setSupportMessage(null);
@@ -235,8 +261,46 @@ export default function TopBar() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  useEffect(() => {
+    if (!supportOpen) {
+      return;
+    }
+    const intervalId = window.setInterval(() => {
+      void loadSupportLeaderboard();
+    }, 45_000);
+    return () => window.clearInterval(intervalId);
+  }, [supportOpen, loadSupportLeaderboard]);
+
+  useLayoutEffect(() => {
+    const updateTopbarHeightVar = () => {
+      const height = headerRef.current?.offsetHeight;
+      if (!height || typeof document === "undefined") return;
+      document.documentElement.style.setProperty(
+        "--otoshi-topbar-height",
+        `${Math.round(height)}px`
+      );
+    };
+
+    updateTopbarHeightVar();
+    window.addEventListener("resize", updateTopbarHeightVar);
+
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined" && headerRef.current) {
+      observer = new ResizeObserver(() => updateTopbarHeightVar());
+      observer.observe(headerRef.current);
+    }
+
+    return () => {
+      window.removeEventListener("resize", updateTopbarHeightVar);
+      observer?.disconnect();
+    };
+  }, []);
+
   return (
-    <header className="sticky top-0 z-30 border-b border-background-border bg-background/95 px-3 py-2 backdrop-blur sm:px-4 md:px-10 md:py-3">
+    <header
+      ref={headerRef}
+      className="fixed left-0 right-0 top-0 z-50 shrink-0 border-b border-background-border bg-background/95 px-3 py-2 backdrop-blur sm:px-4 md:px-10 md:py-3 lg:left-64"
+    >
       <div className="flex items-center gap-2 sm:gap-4">
         <div className="flex flex-wrap items-center gap-2 sm:gap-6">
           <div className="flex items-center gap-3">
@@ -443,6 +507,28 @@ export default function TopBar() {
                 </div>
               </div>
             )}
+          </div>
+          <div className="hidden items-center gap-2 xl:flex">
+            {topbarSupportActions.map((action) => (
+              <button
+                key={action.id}
+                type="button"
+                disabled={!action.enabled}
+                aria-disabled={!action.enabled}
+                onClick={() => {
+                  if (!action.enabled) return;
+                  void openExternal(action.href);
+                }}
+                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] transition ${
+                  action.enabled
+                    ? "hover:-translate-y-[1px]"
+                    : "cursor-not-allowed opacity-55 saturate-0"
+                } ${action.className}`}
+              >
+                {action.icon}
+                <span>{action.label}</span>
+              </button>
+            ))}
           </div>
           {token ? (
             <div className="flex items-center gap-2 rounded-md border border-background-border bg-background-surface px-2 py-1.5 text-xs sm:gap-3 sm:px-3 sm:py-2">

@@ -3091,6 +3091,8 @@ function mapCommunityMember(raw: any): CommunityMember {
     displayName: raw.display_name ?? null,
     avatarUrl: raw.avatar_url ?? null,
     membershipTier: raw.membership_tier ?? null,
+    membershipExpiresAt: raw.membership_expires_at ?? null,
+    membershipActive: Boolean(raw.membership_active),
     isOnline: Boolean(raw.is_online),
     lastSeenAt: raw.last_seen_at ?? null,
   };
@@ -3104,6 +3106,8 @@ function mapDonationLeaderboardEntry(raw: any): DonationLeaderboardEntry {
     displayName: raw.display_name ?? null,
     avatarUrl: raw.avatar_url ?? null,
     membershipTier: raw.membership_tier ?? null,
+    membershipExpiresAt: raw.membership_expires_at ?? null,
+    membershipActive: Boolean(raw.membership_active),
     isOnline: Boolean(raw.is_online),
     lastSeenAt: raw.last_seen_at ?? null,
     totalAmount: Number(raw.total_amount ?? 0),
@@ -3115,6 +3119,7 @@ function mapSupportProfile(raw: any): SupportProfile {
   return {
     tier: raw.tier ?? null,
     expiresAt: raw.expires_at ?? null,
+    isActive: Boolean(raw.is_active),
     lifetimeTotal: Number(raw.lifetime_total ?? 0),
     periodTotal: Number(raw.period_total ?? 0),
     rank: raw.rank ?? null,
@@ -3889,13 +3894,16 @@ export async function fetchCommunityComments(
 }
 
 export async function fetchCommunityMembers(
-  params: { limit?: number } = {}
+  params: { limit?: number } = {},
+  token?: string
 ): Promise<CommunityMember[]> {
   const query = new URLSearchParams();
   if (params.limit) query.set("limit", String(params.limit));
   const suffix = query.toString();
   const data = await requestJson<any[]>(
-    `/community/members${suffix ? `?${suffix}` : ""}`
+    `/community/members${suffix ? `?${suffix}` : ""}`,
+    {},
+    token
   );
   return data.map(mapCommunityMember);
 }

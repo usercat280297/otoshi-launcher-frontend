@@ -49,6 +49,19 @@ export default function MainLayout() {
     };
   }, [location.key, location.pathname, location.search]);
 
+  const isWideStoreRoute =
+    location.pathname === "/steam" ||
+    location.pathname === "/steam-vault" ||
+    location.pathname.startsWith("/steam/") ||
+    location.pathname === "/fixes/online" ||
+    location.pathname.startsWith("/fixes/online/") ||
+    location.pathname === "/fixes/bypass" ||
+    location.pathname.startsWith("/fixes/bypass/");
+
+  const contentContainerClass = isWideStoreRoute
+    ? "mx-auto w-full max-w-[1720px] px-4 pb-24 pt-4 sm:px-6 md:px-10 md:pb-12 md:pt-6"
+    : "mx-auto w-full max-w-[1400px] px-4 pb-24 pt-4 sm:px-6 md:px-10 md:pb-12 md:pt-6";
+
   return (
     <div
       className={
@@ -75,7 +88,7 @@ export default function MainLayout() {
                 : "flex-1 overflow-x-hidden"
             }
           >
-            <div className="mx-auto w-full max-w-[1400px] px-4 pb-24 pt-4 sm:px-6 md:px-10 md:pb-12 md:pt-6">
+            <div className={contentContainerClass}>
               <Outlet />
             </div>
           </main>

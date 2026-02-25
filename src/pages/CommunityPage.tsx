@@ -17,6 +17,7 @@ import type {
   Review,
 } from "../types";
 import CommunityCommentsSection from "../components/game-detail/CommunityCommentsSection";
+import { membershipTierLabel } from "../utils/membership";
 
 type LeaderboardPeriod = "week" | "month" | "year";
 
@@ -88,49 +89,63 @@ export default function CommunityPage() {
 
   useEffect(() => {
     let mounted = true;
-    setMembersLoading(true);
-    fetchCommunityMembers({ limit: 220 })
-      .then((data) => {
+    const loadMembers = async (showSpinner: boolean) => {
+      if (showSpinner && mounted) {
+        setMembersLoading(true);
+      }
+      try {
+        const data = await fetchCommunityMembers({ limit: 220 });
         if (mounted) {
           setMembers(data);
         }
-      })
-      .catch(() => {
-        if (mounted) {
+      } catch {
+        if (mounted && showSpinner) {
           setMembers([]);
         }
-      })
-      .finally(() => {
-        if (mounted) {
+      } finally {
+        if (mounted && showSpinner) {
           setMembersLoading(false);
         }
-      });
+      }
+    };
+    void loadMembers(true);
+    const intervalId = window.setInterval(() => {
+      void loadMembers(false);
+    }, 30_000);
     return () => {
       mounted = false;
+      window.clearInterval(intervalId);
     };
   }, []);
 
   useEffect(() => {
     let mounted = true;
-    setLeaderboardLoading(true);
-    fetchDonationLeaderboard(leaderboardPeriod, 20)
-      .then((data) => {
+    const loadLeaderboard = async (showSpinner: boolean) => {
+      if (showSpinner && mounted) {
+        setLeaderboardLoading(true);
+      }
+      try {
+        const data = await fetchDonationLeaderboard(leaderboardPeriod, 20);
         if (mounted) {
           setLeaderboard(data);
         }
-      })
-      .catch(() => {
-        if (mounted) {
+      } catch {
+        if (mounted && showSpinner) {
           setLeaderboard([]);
         }
-      })
-      .finally(() => {
-        if (mounted) {
+      } finally {
+        if (mounted && showSpinner) {
           setLeaderboardLoading(false);
         }
-      });
+      }
+    };
+    void loadLeaderboard(true);
+    const intervalId = window.setInterval(() => {
+      void loadLeaderboard(false);
+    }, 45_000);
     return () => {
       mounted = false;
+      window.clearInterval(intervalId);
     };
   }, [leaderboardPeriod]);
 
@@ -319,9 +334,9 @@ export default function CommunityPage() {
                         </p>
                       </div>
                     </div>
-                    {member.membershipTier ? (
+                    {member.membershipTier && (member.membershipActive ?? true) ? (
                       <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-cyan-200">
-                        {member.membershipTier}
+                        {membershipTierLabel(member.membershipTier)}
                       </span>
                     ) : null}
                   </div>
@@ -371,6 +386,11 @@ export default function CommunityPage() {
                       <p className="text-[11px] text-text-muted">
                         {entry.isOnline ? "Online" : "Offline"}
                       </p>
+                      {entry.membershipTier && (entry.membershipActive ?? true) ? (
+                        <p className="text-[11px] uppercase tracking-[0.14em] text-cyan-200">
+                          {membershipTierLabel(entry.membershipTier)}
+                        </p>
+                      ) : null}
                     </div>
                     <p className="text-sm font-semibold text-text-primary">
                       {formatDonationAmount(entry.totalAmount, entry.currency)}

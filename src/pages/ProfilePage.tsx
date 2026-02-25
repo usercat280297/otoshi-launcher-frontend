@@ -15,6 +15,7 @@ import {
 import type { ActivityEvent, RemoteDownload, SupportProfile } from "../types";
 import Input from "../components/common/Input";
 import Button from "../components/common/Button";
+import { membershipTierLabel, resolveEffectiveMembershipTier } from "../utils/membership";
 
 type ProfileForm = {
   nickname: string;
@@ -230,15 +231,28 @@ export default function ProfilePage() {
   };
 
   const activitySummary = useMemo(() => activity.slice(0, 8), [activity]);
-  const tierLabel = useMemo(() => {
-    const tier = String(
-      supportProfile?.tier || user?.membershipTier || user?.role || ""
-    ).toLowerCase();
-    if (tier === "vip" || tier === "admin") return "VIP";
-    if (tier === "supporter_plus") return "Supporter+";
-    if (tier === "supporter") return "Supporter";
+  const effectiveUserTier = useMemo(
+    () =>
+      resolveEffectiveMembershipTier({
+        membershipTier: user?.membershipTier,
+        membershipExpiresAt: user?.membershipExpiresAt,
+        role: user?.role,
+      }),
+    [user?.membershipTier, user?.membershipExpiresAt, user?.role]
+  );
+  const tierLabel = useMemo(
+    () => membershipTierLabel(supportProfile?.tier ?? effectiveUserTier),
+    [supportProfile?.tier, effectiveUserTier]
+  );
+  const membershipStateLabel = useMemo(() => {
+    if (supportProfile?.isActive || supportProfile?.tier) {
+      return "Active";
+    }
+    if (user?.membershipTier && !effectiveUserTier) {
+      return "Expired";
+    }
     return "Free";
-  }, [supportProfile?.tier, user?.membershipTier, user?.role]);
+  }, [supportProfile?.isActive, supportProfile?.tier, user?.membershipTier, effectiveUserTier]);
   const formatMoney = (amount: number, currency: string) => {
     try {
       return new Intl.NumberFormat(undefined, {
@@ -487,6 +501,10 @@ export default function ProfilePage() {
                 <div className="flex items-center justify-between">
                   <span>Tier</span>
                   <span className="text-text-primary">{tierLabel}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Status</span>
+                  <span className="text-text-primary">{membershipStateLabel}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Expires</span>

@@ -31,6 +31,7 @@ import NewsSection from "../components/game-detail/NewsSection";
 import ReviewsSummary from "../components/game-detail/ReviewsSummary";
 import PropertiesSection from "../components/game-detail/PropertiesSection";
 import CommunityCommentsSection from "../components/game-detail/CommunityCommentsSection";
+import StoreMembersSidebar from "../components/store/StoreMembersSidebar";
 import { isAgeGateAllowed, resolveRequiredAge, storeAgeGate } from "../utils/ageGate";
 import { getMediaProtectionProps } from "../utils/mediaProtection";
 import { isLikelyDlcName } from "../utils/steamSearch";
@@ -521,7 +522,8 @@ export default function SteamGameDetailPage() {
   );
 
   return (
-    <div className="space-y-8">
+    <div className="relative xl:pr-[348px] 2xl:pr-[364px]">
+      <div className="space-y-8">
       <AgeGateModal
         open={ageGateOpen && !ageGateAllowed}
         title={game.name}
@@ -597,9 +599,10 @@ export default function SteamGameDetailPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.2 }}
-            className="fixed left-0 right-0 top-16 z-20 hidden md:block lg:left-64"
+            className="fixed left-0 right-0 z-20 hidden md:block lg:left-64"
+            style={{ top: "var(--otoshi-topbar-height, 64px)" }}
           >
-            <div className="mx-auto w-full max-w-[1400px] px-6 md:px-10">
+            <div className="mx-auto w-full max-w-[1720px] px-6 md:px-10 xl:pr-[380px] 2xl:pr-[396px]">
               <div className="flex items-center justify-between gap-4 rounded-xl border border-background-border bg-background/90 px-4 py-3 shadow-soft backdrop-blur">
                 <div className="flex items-center gap-3">
                   {iconImage ? (
@@ -1175,6 +1178,13 @@ export default function SteamGameDetailPage() {
           </div>
         )}
       </section>
+      </div>
+      <aside
+        className="pointer-events-none fixed bottom-0 right-0 z-20 hidden w-[336px] 2xl:w-[352px] xl:block"
+        style={{ top: "var(--otoshi-topbar-height, 74px)" }}
+      >
+        <StoreMembersSidebar className="pointer-events-auto h-full rounded-t-none border-t-0" />
+      </aside>
     </div>
   );
 }

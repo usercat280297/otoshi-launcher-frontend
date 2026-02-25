@@ -8,7 +8,7 @@ import FeaturedRow from "../components/store/FeaturedRow";
 import SteamCard from "../components/store/SteamCard";
 import StoreSubnav from "../components/store/StoreSubnav";
 import StoreNewsOverlay from "../components/store/StoreNewsOverlay";
-import FixesDonateBar from "../components/fixes/FixesDonateBar";
+import StoreMembersSidebar from "../components/store/StoreMembersSidebar";
 import GuidedTour from "../components/common/GuidedTour";
 import { useGames } from "../hooks/useGames";
 import { useSteamSearchMemory } from "../hooks/useSteamSearchMemory";
@@ -1491,7 +1491,7 @@ export default function StorePage() {
         </div>
       )}
       <div className="relative min-h-[360px]">
-        <div className={`grid gap-6 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 ${allLoading ? "opacity-60" : ""}`}>
+      <div className={`grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 ${allLoading ? "opacity-60" : ""}`}>
           {allGames.map((item, index) => (
             <SteamCard
               key={item.appId}
@@ -1770,108 +1770,115 @@ export default function StorePage() {
             handleSearchSubmit(item.value);
           }}
         />
-        <div className="mt-3 flex justify-end">
-          <FixesDonateBar />
-        </div>
       </div>
-        {error && errorCode !== "no_lua_games" && (
-          <div className="glass-panel p-4 text-sm text-text-secondary">
-            {t("store.api_offline")}
-            <details className="mt-2 text-xs text-text-muted">
-              <summary className="cursor-pointer select-none">Details</summary>
-              <div className="mt-2 space-y-1 break-all">
-                {(() => {
-                  const debug = getApiDebugInfo();
-                  return (
-                    <>
-                      <div>Preferred base: {debug.preferredBase || "(empty)"}</div>
-                      <div>Resolved base: {debug.resolvedBase || "(none yet)"}</div>
-                      <div>Bases: {debug.bases.length ? debug.bases.join(", ") : "(empty)"}</div>
-                      <div>Error: {error}</div>
-                    </>
-                  );
-                })()}
-              </div>
-            </details>
-          </div>
-        )}
-      {!showIntroLoading && loading && (
-        <div className="glass-panel flex min-h-[260px] items-center justify-center p-8">
-          <div className="mx-auto flex max-w-md flex-col items-center gap-4 text-center">
-            <div className="h-11 w-11 animate-spin rounded-full border-2 border-primary/25 border-t-primary" />
-            <p className="text-xs uppercase tracking-[0.32em] text-text-secondary">
-              {t("store.syncing")}
-            </p>
-            <p className="text-sm text-text-muted">
-              {t("store.syncing_description")}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {games.length > 0 && (
-        <>
-          {!loading && heroGame && (
-            <div data-tour="store-hero">
-              <Hero
-                game={heroGame}
-                rail={railGames}
-                slides={heroSlides}
-                onOpen={(game) => handleOpen(game)}
-              />
+      <div className="relative xl:pr-[348px] 2xl:pr-[364px]">
+        <div className="space-y-10">
+          {error && errorCode !== "no_lua_games" && (
+            <div className="glass-panel p-4 text-sm text-text-secondary">
+              {t("store.api_offline")}
+              <details className="mt-2 text-xs text-text-muted">
+                <summary className="cursor-pointer select-none">Details</summary>
+                <div className="mt-2 space-y-1 break-all">
+                  {(() => {
+                    const debug = getApiDebugInfo();
+                    return (
+                      <>
+                        <div>Preferred base: {debug.preferredBase || "(empty)"}</div>
+                        <div>Resolved base: {debug.resolvedBase || "(none yet)"}</div>
+                        <div>Bases: {debug.bases.length ? debug.bases.join(", ") : "(empty)"}</div>
+                        <div>Error: {error}</div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </details>
             </div>
           )}
-          <div data-tour="store-discover">
-            <FeaturedRow
-              title={t("store.discover_new")}
-              games={discoverRow}
-              onOpen={handleOpenDiscover}
-            />
-          </div>
-          <div data-tour="store-savings">
-            <FeaturedRow
-              title={t("store.epic_savings")}
-              games={spotlightRow}
-              onOpen={(game) => handleOpen(game)}
-            />
-          </div>
-          <div className="grid gap-6 lg:grid-cols-3" data-tour="store-toplists">
-            <StoreList title={t("store.top_sellers")} items={topSellers} />
-            <StoreList title={t("store.most_played")} items={mostPlayed} />
-            <StoreList title={t("store.top_wishlisted")} items={wishlisted} />
-          </div>
-          {allGamesSection}
-          <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-3" data-tour="store-promo">
-            {promoTiles.map((tile) => (
-              <div
-                key={tile.title}
-                className="relative min-h-[220px] overflow-hidden rounded-2xl border border-background-border bg-background-elevated"
-              >
-                {tile.image && (
-                  <img
-                    src={tile.image}
-                    alt={tile.title}
-                    className="absolute inset-0 h-full w-full object-cover"
-                  />
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-background/20 to-transparent" />
-                <div className="relative z-10 flex h-full flex-col justify-end gap-3 p-5">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.3em] text-text-muted">
-                      {t("store.spotlight")}
-                    </p>
-                    <h3 className="text-xl font-semibold">{tile.title}</h3>
-                  </div>
-                  <p className="text-sm text-text-secondary">{tile.description}</p>
-                  <button className="epic-button-secondary w-fit px-4 py-2 text-xs font-semibold">
-                    {tile.cta}
-                  </button>
-                </div>
+          {!showIntroLoading && loading && (
+            <div className="glass-panel flex min-h-[260px] items-center justify-center p-8">
+              <div className="mx-auto flex max-w-md flex-col items-center gap-4 text-center">
+                <div className="h-11 w-11 animate-spin rounded-full border-2 border-primary/25 border-t-primary" />
+                <p className="text-xs uppercase tracking-[0.32em] text-text-secondary">
+                  {t("store.syncing")}
+                </p>
+                <p className="text-sm text-text-muted">
+                  {t("store.syncing_description")}
+                </p>
               </div>
-            ))}
-          </section>
-        </>
-      )}
+            </div>
+          )}
+
+          {games.length > 0 && (
+            <>
+              {!loading && heroGame && (
+                <div data-tour="store-hero">
+                  <Hero
+                    game={heroGame}
+                    rail={railGames}
+                    slides={heroSlides}
+                    onOpen={(game) => handleOpen(game)}
+                  />
+                </div>
+              )}
+              <div data-tour="store-discover">
+                <FeaturedRow
+                  title={t("store.discover_new")}
+                  games={discoverRow}
+                  onOpen={handleOpenDiscover}
+                />
+              </div>
+              <div data-tour="store-savings">
+                <FeaturedRow
+                  title={t("store.epic_savings")}
+                  games={spotlightRow}
+                  onOpen={(game) => handleOpen(game)}
+                />
+              </div>
+              <div className="grid gap-6 lg:grid-cols-3" data-tour="store-toplists">
+                <StoreList title={t("store.top_sellers")} items={topSellers} />
+                <StoreList title={t("store.most_played")} items={mostPlayed} />
+                <StoreList title={t("store.top_wishlisted")} items={wishlisted} />
+              </div>
+              {allGamesSection}
+              <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-3" data-tour="store-promo">
+                {promoTiles.map((tile) => (
+                  <div
+                    key={tile.title}
+                    className="relative min-h-[220px] overflow-hidden rounded-2xl border border-background-border bg-background-elevated"
+                  >
+                    {tile.image && (
+                      <img
+                        src={tile.image}
+                        alt={tile.title}
+                        className="absolute inset-0 h-full w-full object-cover"
+                      />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-background/20 to-transparent" />
+                    <div className="relative z-10 flex h-full flex-col justify-end gap-3 p-5">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.3em] text-text-muted">
+                          {t("store.spotlight")}
+                        </p>
+                        <h3 className="text-xl font-semibold">{tile.title}</h3>
+                      </div>
+                      <p className="text-sm text-text-secondary">{tile.description}</p>
+                      <button className="epic-button-secondary w-fit px-4 py-2 text-xs font-semibold">
+                        {tile.cta}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </section>
+            </>
+          )}
+        </div>
+        <aside
+          className="pointer-events-none fixed bottom-0 right-0 z-20 hidden w-[336px] 2xl:w-[352px] xl:block"
+          style={{ top: "var(--otoshi-topbar-height, 74px)" }}
+        >
+          <StoreMembersSidebar className="pointer-events-auto h-full rounded-t-none border-t-0" />
+        </aside>
+      </div>
     </div>
   );
 }
