@@ -23,7 +23,6 @@ export default function FixDetailPage({ kind }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
 
   // Get labels from i18n
-  const fixLabelKey = kind === "online-fix" ? "fix_detail.online_fix_label" : "fix_detail.bypass_label";
   const FIX_LABELS: Record<"online-fix" | "bypass", string> = {
     "online-fix": t("fix_detail.online_fix_label"),
     bypass: t("fix_detail.bypass_label"),

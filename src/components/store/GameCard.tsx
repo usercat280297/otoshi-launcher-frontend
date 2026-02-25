@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { artworkGet, artworkPrefetch } from "../../services/api";
 import { Game } from "../../types";
 import { getMediaProtectionProps } from "../../utils/mediaProtection";
@@ -40,23 +40,27 @@ export default function GameCard({
       ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.steamAppId}`
       : null;
 
-  const posterCandidates = [
-    game.capsuleImage,
-    game.headerImage,
-    game.heroImage,
-    game.iconImage,
-    steamStaticBase ? `${steamStaticBase}/library_600x900.jpg` : null,
-    steamStaticBase ? `${steamStaticBase}/header.jpg` : null,
-    steamStaticBase ? `${steamStaticBase}/capsule_616x353.jpg` : null,
-    steamStaticBase ? `${steamStaticBase}/capsule_231x87.jpg` : null,
-    steamStaticBase ? `${steamStaticBase}/capsule_sm_120.jpg` : null,
-    steamStaticBase ? `${steamStaticBase}/capsule_184x69.jpg` : null,
-    steamStaticBase ? `${steamStaticBase}/icon.jpg` : null,
-    steamStaticBase ? `${steamStaticBase}/logo.png` : null,
-    POSTER_PLACEHOLDER,
-  ]
-    .map((value) => (typeof value === "string" ? value.trim() : ""))
-    .filter((value, index, self) => Boolean(value) && self.indexOf(value) === index);
+  const posterCandidates = useMemo(
+    () =>
+      [
+        game.capsuleImage,
+        game.headerImage,
+        game.heroImage,
+        game.iconImage,
+        steamStaticBase ? `${steamStaticBase}/library_600x900.jpg` : null,
+        steamStaticBase ? `${steamStaticBase}/header.jpg` : null,
+        steamStaticBase ? `${steamStaticBase}/capsule_616x353.jpg` : null,
+        steamStaticBase ? `${steamStaticBase}/capsule_231x87.jpg` : null,
+        steamStaticBase ? `${steamStaticBase}/capsule_sm_120.jpg` : null,
+        steamStaticBase ? `${steamStaticBase}/capsule_184x69.jpg` : null,
+        steamStaticBase ? `${steamStaticBase}/icon.jpg` : null,
+        steamStaticBase ? `${steamStaticBase}/logo.png` : null,
+        POSTER_PLACEHOLDER,
+      ]
+        .map((value) => (typeof value === "string" ? value.trim() : ""))
+        .filter((value, index, self) => Boolean(value) && self.indexOf(value) === index),
+    [game.capsuleImage, game.headerImage, game.heroImage, game.iconImage, steamStaticBase]
+  );
 
   const getNextPosterCandidate = (current: string | null): string | null => {
     if (!posterCandidates.length) return null;
@@ -161,7 +165,7 @@ export default function GameCard({
         window.clearTimeout(commitTimerRef.current);
       }
     };
-  }, [fallbackImage, game]);
+  }, [fallbackImage, game, posterCandidates]);
 
   useEffect(() => {
     if (!prefetchGames.length) return;

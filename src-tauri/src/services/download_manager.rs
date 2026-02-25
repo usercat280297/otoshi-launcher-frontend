@@ -1121,7 +1121,9 @@ impl DownloadManager {
         install_dir_override: Option<&str>,
         control_rx: watch::Receiver<DownloadControl>,
     ) -> Result<()> {
-        let manifest: Manifest = self.api.get(&format!("manifests/{}", slug), false).await?;
+        let method_key = requested_method_text(requested_method);
+        let manifest_path = format!("manifests/{}?method={}", slug, method_key);
+        let manifest: Manifest = self.api.get_auth_first(&manifest_path).await?;
         let normalized_override = install_dir_override
             .map(str::trim)
             .filter(|value| !value.is_empty())
@@ -1161,7 +1163,6 @@ impl DownloadManager {
             .map(|chunk| ((chunk.file_id, chunk.chunk_index), chunk.hash))
             .collect();
 
-        let method_key = requested_method_text(requested_method);
         let mut plan = build_download_plan(
             &manifest,
             &install_dir,

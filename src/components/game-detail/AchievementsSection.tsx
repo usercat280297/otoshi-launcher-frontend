@@ -7,7 +7,7 @@ type AchievementsSectionProps = {
   appId: string;
 };
 
-export default function AchievementsSection({ achievements, appId }: AchievementsSectionProps) {
+export default function AchievementsSection({ achievements, appId: _appId }: AchievementsSectionProps) {
   const [showHidden, setShowHidden] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [hoveredAchievement, setHoveredAchievement] = useState<string | null>(null);

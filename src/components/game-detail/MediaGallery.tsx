@@ -45,35 +45,35 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
   const hasVideoStartedRef = useRef(false);
   const loadedVideoKeysRef = useRef<Set<string>>(new Set());
 
-  const clearWaitingTimer = () => {
+  const clearWaitingTimer = useCallback(() => {
     if (waitingTimerRef.current !== null) {
       window.clearTimeout(waitingTimerRef.current);
       waitingTimerRef.current = null;
     }
-  };
+  }, []);
 
-  const scheduleBufferingOverlay = () => {
+  const scheduleBufferingOverlay = useCallback(() => {
     clearWaitingTimer();
     waitingTimerRef.current = window.setTimeout(() => {
       setVideoLoading(true);
       waitingTimerRef.current = null;
     }, 320);
-  };
+  }, [clearWaitingTimer]);
 
-  const clearImageTimer = () => {
+  const clearImageTimer = useCallback(() => {
     if (imageTimerRef.current !== null) {
       window.clearTimeout(imageTimerRef.current);
       imageTimerRef.current = null;
     }
-  };
+  }, []);
 
-  const scheduleImageLoadingFallback = () => {
+  const scheduleImageLoadingFallback = useCallback(() => {
     clearImageTimer();
     imageTimerRef.current = window.setTimeout(() => {
       setImageLoading(false);
       imageTimerRef.current = null;
     }, 7000);
-  };
+  }, [clearImageTimer]);
 
   useEffect(() => {
     if (isInView) {
@@ -201,6 +201,7 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
       }
     },
     [
+      clearWaitingTimer,
       canUseHls,
       currentVideo,
       currentVideoHls,
@@ -233,7 +234,14 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
     setImageLoading(true);
     scheduleImageLoadingFallback();
     setVideoLoading(false);
-  }, [current?.type, current?.url, currentVideoAlreadyLoaded, shouldLoadVideo]);
+  }, [
+    clearImageTimer,
+    clearWaitingTimer,
+    current,
+    currentVideoAlreadyLoaded,
+    scheduleImageLoadingFallback,
+    shouldLoadVideo
+  ]);
 
   useEffect(() => {
     syncVideoSource(videoRef.current);
@@ -248,7 +256,7 @@ export default function MediaGallery({ screenshots, videos, className }: MediaGa
         hlsRef.current = null;
       }
     },
-    []
+    [clearImageTimer, clearWaitingTimer]
   );
 
   if (!current) {

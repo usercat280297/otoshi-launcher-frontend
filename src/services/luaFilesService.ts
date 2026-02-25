@@ -110,10 +110,10 @@ class LuaFilesService {
 
   /**
    * Extract lua files from Tauri bundle
-   */
+    */
   private async extractBundledLua(): Promise<boolean> {
     try {
-      const luaPath = await (invoke as any)('get_lua_files_path')
+      await (invoke as any)('get_lua_files_path')
       const count = await (invoke as any)('get_lua_files_count')
 
       this.syncStatus.count = count

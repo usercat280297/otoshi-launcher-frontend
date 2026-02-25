@@ -27,7 +27,7 @@ export async function pollOAuthStatus(requestId: string): Promise<{ code: string
     if (resp.ok) {
         return await resp.json();
     }
-  } catch (e) {
+  } catch {
       // ignore
   }
   return null;

@@ -137,14 +137,27 @@ export async function resolveCdnPathV2(path: string, options?: {
   channel?: string;
   signed?: boolean;
   ttl_seconds?: number;
-}) {
+  game_size_bytes?: number;
+  method?: string;
+}, token?: string) {
   const query = new URLSearchParams();
   query.set("path", path);
   if (options?.channel) query.set("channel", options.channel);
   if (typeof options?.signed === "boolean") query.set("signed", String(options.signed));
   if (typeof options?.ttl_seconds === "number") query.set("ttl_seconds", String(options.ttl_seconds));
-  return requestV2<{ origin: string; url: string; fallbacks: string[] }>(
-    `/v2/cdn/resolve?${query.toString()}`
+  if (typeof options?.game_size_bytes === "number") {
+    query.set("game_size_bytes", String(options.game_size_bytes));
+  }
+  if (options?.method) query.set("method", options.method);
+  return requestV2<{
+    origin: string;
+    url: string;
+    fallbacks: string[];
+    policy_applied?: boolean;
+    reason_codes?: string[];
+  }>(
+    `/v2/cdn/resolve?${query.toString()}`,
+    {},
+    token
   );
 }
-

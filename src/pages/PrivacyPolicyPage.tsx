@@ -95,7 +95,7 @@ export default function PrivacyPolicyPage() {
         if (data) {
           setPolicyData(data);
         }
-      } catch (error) {
+      } catch {
         // Fall back to API if available
         try {
           const response = await fetch("/api/policy/privacy");

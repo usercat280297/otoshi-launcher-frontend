@@ -1,4 +1,4 @@
-import { ChevronDown, Globe, Minus, Square, X, Code2, Upload, FileCode, BookOpen, Rocket, Package, CircleHelp, Sun, Moon } from "lucide-react";
+import { ChevronDown, Globe, Minus, Square, X, Upload, BookOpen, Rocket, Package, CircleHelp, Sun, Moon, Crown, Loader2 } from "lucide-react";
 import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useLocale } from "../../context/LocaleContext";
@@ -9,9 +9,11 @@ import { isTauri } from "@tauri-apps/api/core";
 import { openExternal } from "../../utils/openExternal";
 import { useTheme } from "../../context/ThemeContext";
 import { emitOverlayNotification } from "../../utils/notify";
+import { createDonation, fetchDonationLeaderboard } from "../../services/api";
+import type { DonationLeaderboardEntry } from "../../types";
 
 export default function TopBar() {
-  const { user, token, logout } = useAuth();
+  const { user, token, logout, updateLocalUser } = useAuth();
   const { locale, setLocale, t, options } = useLocale();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -19,14 +21,57 @@ export default function TopBar() {
   const isAdmin = user?.role === "admin";
   const [open, setOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
+  const [donationAmount, setDonationAmount] = useState("5");
+  const [donating, setDonating] = useState(false);
+  const [supportMessage, setSupportMessage] = useState<string | null>(null);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [leaderboard, setLeaderboard] = useState<DonationLeaderboardEntry[]>([]);
   const [distributeOpen, setDistributeOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const distributeMenuRef = useRef<HTMLDivElement | null>(null);
   const [tauriRuntime, setTauriRuntime] = useState(false);
   const supportLink = "https://discord.gg/6q7YRdWGZJ";
+  const normalizedTier = String(user?.membershipTier || "").trim().toLowerCase();
+  const effectiveTier = normalizedTier || (user?.role === "vip" || user?.role === "admin" ? "vip" : "");
+  const isVip = effectiveTier === "vip" || user?.role === "admin";
+  const tierLabel =
+    effectiveTier === "vip"
+      ? "VIP"
+      : effectiveTier === "supporter_plus"
+        ? "Supporter+"
+        : effectiveTier === "supporter"
+          ? "Supporter"
+          : "";
+  const tierBadgeClass = isVip
+    ? "border-amber-400/40 bg-amber-500/15 text-amber-200"
+    : "border-cyan-400/30 bg-cyan-500/10 text-cyan-200";
+  const formatDonationAmount = (amount: number, currency: string) => {
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: "currency",
+        currency: currency || "USD",
+        maximumFractionDigits: 2,
+      }).format(amount);
+    } catch {
+      return `$${amount.toFixed(2)}`;
+    }
+  };
   const closeSupport = () => setSupportOpen(false);
+  const loadSupportLeaderboard = async () => {
+    setLeaderboardLoading(true);
+    try {
+      const data = await fetchDonationLeaderboard("week", 6);
+      setLeaderboard(data);
+    } catch {
+      setLeaderboard([]);
+    } finally {
+      setLeaderboardLoading(false);
+    }
+  };
   const openSupport = () => {
     setSupportOpen(true);
+    setSupportMessage(null);
+    void loadSupportLeaderboard();
     emitOverlayNotification({
       tone: "info",
       title: "Support",
@@ -34,6 +79,51 @@ export default function TopBar() {
       source: "topbar",
       durationMs: 2200,
     });
+  };
+  const handleDonate = async () => {
+    if (!token) {
+      closeSupport();
+      navigate("/login");
+      return;
+    }
+    const amount = Number(donationAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setSupportMessage("Enter a valid donation amount.");
+      return;
+    }
+    setDonating(true);
+    setSupportMessage(null);
+    try {
+      const receipt = await createDonation(token, {
+        amount,
+        currency: "USD",
+        provider: "launcher_ui",
+      });
+      updateLocalUser({
+        membershipTier: receipt.tier ?? user?.membershipTier ?? null,
+        membershipExpiresAt: receipt.tierExpiresAt ?? user?.membershipExpiresAt ?? null,
+      });
+      setSupportMessage(`Thanks for supporting Otoshi: ${formatDonationAmount(receipt.amount, receipt.currency)}.`);
+      emitOverlayNotification({
+        tone: "success",
+        title: "Donation",
+        message: "Support donation recorded",
+        source: "topbar",
+        durationMs: 2200,
+      });
+      void loadSupportLeaderboard();
+    } catch (error: any) {
+      setSupportMessage(error?.message || "Donation failed. Try again.");
+      emitOverlayNotification({
+        tone: "error",
+        title: "Donation",
+        message: "Could not process donation",
+        source: "topbar",
+        durationMs: 2400,
+      });
+    } finally {
+      setDonating(false);
+    }
   };
   const handleLogoReload = () => window.location.reload();
   const handleLocaleChange = (value: "en" | "vi") => {
@@ -361,6 +451,17 @@ export default function TopBar() {
               </div>
               <div className="hidden text-left sm:block">
                 <p className="text-xs font-semibold">{user?.displayName || user?.username}</p>
+                {tierLabel ? (
+                  <button
+                    type="button"
+                    onClick={openSupport}
+                    className={`mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] ${tierBadgeClass}`}
+                    title="Open support panel"
+                  >
+                    <Crown size={10} />
+                    {tierLabel}
+                  </button>
+                ) : null}
                 <button
                   onClick={handleLogout}
                   className="text-[10px] uppercase tracking-[0.2em] text-text-muted hover:text-text-primary"
@@ -446,7 +547,7 @@ export default function TopBar() {
             onClick={closeSupport}
           >
             <div
-              className="w-full max-w-md scale-100 transform rounded-2xl border border-background-border bg-background-elevated p-6 shadow-2xl transition-all"
+              className="w-full max-w-lg scale-100 transform rounded-2xl border border-background-border bg-background-elevated p-6 shadow-2xl transition-all"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="mb-6 flex items-start justify-between">
@@ -480,6 +581,74 @@ export default function TopBar() {
               <p className="mb-6 text-sm leading-relaxed text-text-secondary">
                 {t("support.description")}
               </p>
+
+              <div className="mb-4 rounded-xl border border-background-border bg-background-muted/60 p-4">
+                <p className="text-xs uppercase tracking-[0.22em] text-text-muted">Support Otoshi</p>
+                <div className="mt-3 flex items-center gap-2">
+                  <div className="flex min-w-[84px] items-center rounded-lg border border-background-border bg-background px-3 py-2 text-sm text-text-primary">
+                    <span className="text-text-muted">$</span>
+                    <input
+                      type="number"
+                      min={1}
+                      step="1"
+                      value={donationAmount}
+                      onChange={(event) => setDonationAmount(event.target.value)}
+                      className="ml-2 w-full bg-transparent text-sm text-text-primary outline-none"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDonate}
+                    disabled={donating}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {donating ? <Loader2 size={14} className="animate-spin" /> : null}
+                    {donating ? "Processing..." : "Donate"}
+                  </button>
+                </div>
+                {supportMessage ? (
+                  <p className="mt-2 text-xs text-text-secondary">{supportMessage}</p>
+                ) : null}
+              </div>
+
+              <div className="mb-6 rounded-xl border border-background-border bg-background-muted/40 p-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs uppercase tracking-[0.22em] text-text-muted">Weekly supporters</p>
+                  <button
+                    type="button"
+                    onClick={() => void loadSupportLeaderboard()}
+                    className="text-[11px] uppercase tracking-[0.16em] text-primary"
+                  >
+                    Refresh
+                  </button>
+                </div>
+                {leaderboardLoading ? (
+                  <p className="text-xs text-text-secondary">Loading leaderboard...</p>
+                ) : leaderboard.length === 0 ? (
+                  <p className="text-xs text-text-secondary">No donations yet this week.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {leaderboard.map((entry) => (
+                      <div
+                        key={`${entry.userId}-${entry.rank}`}
+                        className="flex items-center justify-between rounded-lg border border-background-border bg-background px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm text-text-primary">
+                            #{entry.rank} {entry.displayName || entry.username}
+                          </p>
+                          <p className="text-[11px] text-text-muted">
+                            {entry.isOnline ? "Online" : "Offline"}
+                          </p>
+                        </div>
+                        <p className="text-sm font-semibold text-text-primary">
+                          {formatDonationAmount(entry.totalAmount, entry.currency)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <button
                 type="button"

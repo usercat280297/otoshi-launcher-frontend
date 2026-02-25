@@ -446,7 +446,7 @@ export function useDownloads() {
         setLoading(false);
       }
     }
-  }, [token]);
+  }, [token, updateMetaCache]);
 
   const start = useCallback(
     async (gameId: string) => {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { isTauri as detectTauriRuntime } from "@tauri-apps/api/core";
-import { ArrowLeft, Download, ExternalLink, Tag, Wrench, ShieldOff, Star, Info, Trophy, Package, Newspaper, ThumbsUp, Settings, RefreshCw, MessageSquare, Pause, Play, Square } from "lucide-react";
+import { ArrowLeft, Download, ExternalLink, Tag, Wrench, ShieldOff, Star, Info, Trophy, Package, Newspaper, Settings, RefreshCw, MessageSquare, Pause, Play, Square } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { useLocale } from "../context/LocaleContext";
@@ -16,7 +16,7 @@ import {
   fetchSteamDLC,
   clearGameCache
 } from "../services/api";
-import type { DownloadOptions, DownloadPreparePayload, SteamPrice, FixEntry, FixOption, SteamExtendedData } from "../types";
+import type { DownloadOptions, DownloadPreparePayload, SteamPrice, FixEntry, SteamExtendedData } from "../types";
 import { useSteamGame } from "../hooks/useSteamGame";
 import { useDownloads } from "../hooks/useDownloads";
 import Badge from "../components/common/Badge";
@@ -159,13 +159,6 @@ export default function SteamGameDetailPage() {
 
   const requiredAge = resolveRequiredAge(game?.requiredAge ?? 0);
   const gateScope = game?.appId ? `steam:${game.appId}` : "";
-  const videoSignature = useMemo(
-    () =>
-      (game?.movies || [])
-        .map((movie) => `${movie.hls || ""}|${movie.url}|${movie.thumbnail || ""}`)
-        .join("||"),
-    [game?.movies]
-  );
   const videos = useMemo(
     () =>
       (game?.movies || []).map((movie) => ({
@@ -174,7 +167,7 @@ export default function SteamGameDetailPage() {
         hls: movie.hls,
         dash: movie.dash
       })),
-    [videoSignature, game?.headerImage, game?.movies]
+    [game?.headerImage, game?.movies]
   );
 
   useEffect(() => {

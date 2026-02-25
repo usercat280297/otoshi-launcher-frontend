@@ -171,6 +171,7 @@ export default function SteamCard({ item, onOpen, prefetchItems = [] }: SteamCar
     artworkSources.t3,
     item.capsuleImage,
     item.headerImage,
+    item.background,
   ]);
 
   const getNextPosterCandidate = (current: string | null): string | null => {
@@ -281,7 +282,7 @@ export default function SteamCard({ item, onOpen, prefetchItems = [] }: SteamCar
         window.clearTimeout(commitTimerRef.current);
       }
     };
-  }, [artReady, artworkSources, item.appId, steamFallback]);
+  }, [artReady, artworkSources, item.appId, posterCandidates, steamFallback]);
 
   useEffect(() => {
     if (!artReady || !prefetchItems.length) return;

@@ -33,7 +33,7 @@ interface UpdateBannerState {
 }
 
 export const UpdateBanner: React.FC = () => {
-  const [state, setState] = useState<UpdateBannerState>({
+  const [state] = useState<UpdateBannerState>({
     updateInfo: null,
     downloadProgress: null,
     isDownloading: false,

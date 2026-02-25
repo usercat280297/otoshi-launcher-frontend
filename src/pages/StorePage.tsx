@@ -733,8 +733,16 @@ export default function StorePage() {
 
     let idleId: number | null = null;
     let timeoutId: number | null = null;
-    const requestIdle = (window as Window & { requestIdleCallback?: Function }).requestIdleCallback;
-    const cancelIdle = (window as Window & { cancelIdleCallback?: Function }).cancelIdleCallback;
+    const requestIdle = (
+      window as Window & {
+        requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+      }
+    ).requestIdleCallback;
+    const cancelIdle = (
+      window as Window & {
+        cancelIdleCallback?: (handle: number) => void;
+      }
+    ).cancelIdleCallback;
 
     if (typeof requestIdle === "function") {
       idleId = requestIdle(() => runDeferredDiagnostics(), { timeout: 2500 }) as number;
@@ -1441,7 +1449,7 @@ export default function StorePage() {
     const current = Math.min(allPage, totalPages - 1);
     const windowSize = 5;
     let start = Math.max(0, current - Math.floor(windowSize / 2));
-    let end = Math.min(totalPages - 1, start + windowSize - 1);
+    const end = Math.min(totalPages - 1, start + windowSize - 1);
     if (end - start + 1 < windowSize) {
       start = Math.max(0, end - windowSize + 1);
     }

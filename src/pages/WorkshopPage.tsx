@@ -19,7 +19,7 @@ const isTauriRuntime = isTauriRuntimeFn;
 
 export default function WorkshopPage() {
   const { token } = useAuth();
-  const { t, locale } = useLocale();
+  const { t } = useLocale();
   const [items, setItems] = useState<WorkshopItem[]>([]);
   const [steamItems, setSteamItems] = useState<WorkshopItem[]>([]);
   const [steamMode, setSteamMode] = useState(false);
@@ -111,7 +111,7 @@ export default function WorkshopPage() {
     return () => {
       mounted = false;
     };
-  }, [token, search, locale]);
+  }, [token, search, t]);
 
   const refreshLocalInstalls = async () => {
     if (!isTauriRuntime() || steamItems.length === 0) return;

@@ -3,7 +3,7 @@
 // File: frontend/src/components/game-detail/NewsSection_Enhanced.tsx
 
 import { Newspaper, ExternalLink, Calendar, User, AlertCircle, Zap } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useLocale } from "../../context/LocaleContext";
 import type { SteamNewsItem, NewsPatchNote } from "../../types";
 import { openExternal } from "../../utils/openExternal";
@@ -130,21 +130,20 @@ function PatchNoteCard({ patches }: { patches: NewsPatchNote[] }) {
   );
 }
 
-export default function NewsSection({ news, appId, gameName }: NewsSectionProps) {
+export default function NewsSection({ news, appId, gameName: _gameName }: NewsSectionProps) {
   const { t } = useLocale();
   const [expanded, setExpanded] = useState(false);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<SteamNewsItem | null>(null);
+  const selectedContent = formatContent(
+    selectedItem?.structured_content?.cleaned || selectedItem?.contents
+  );
 
   if (!news || news.length === 0) {
     return null;
   }
 
   const displayNews = expanded ? news : news.slice(0, 5);
-  const selectedContent = useMemo(
-    () => formatContent(selectedItem?.structured_content?.cleaned || selectedItem?.contents),
-    [selectedItem]
-  );
 
   return (
     <div className="space-y-4">

@@ -1,4 +1,4 @@
-import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 type TourStep = {
@@ -32,7 +32,7 @@ export default function GuidedTour({
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
 
-  const updateTargetRect = () => {
+  const updateTargetRect = useCallback(() => {
     if (!step) return;
     const target = document.querySelector(step.selector) as HTMLElement | null;
     if (!target) {
@@ -41,7 +41,7 @@ export default function GuidedTour({
     }
     const rect = target.getBoundingClientRect();
     setTargetRect(rect);
-  };
+  }, [step]);
 
   useEffect(() => {
     if (!open || !step) return;
@@ -67,7 +67,7 @@ export default function GuidedTour({
       window.removeEventListener("resize", handleScroll);
       window.removeEventListener("keydown", handleKey);
     };
-  }, [open, step, onClose, onNext, onPrev]);
+  }, [open, step, onClose, onNext, onPrev, updateTargetRect]);
 
   const tooltipStyle = useMemo(() => {
     if (!open) return {};

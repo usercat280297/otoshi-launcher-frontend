@@ -6,7 +6,10 @@ import {
   ActivityEvent,
   AuthUser,
   Bundle,
+  CommunityMember,
   CommunityComment,
+  DonationLeaderboardEntry,
+  DonationReceipt,
   DeveloperAnalytics,
   DeveloperBuild,
   DeveloperDepot,
@@ -54,6 +57,7 @@ import {
   RuntimeTuningApplyResult,
   RuntimeTuningProfile,
   RuntimeTuningRecommendation,
+  SupportProfile,
   AiSearchEventIn,
   AiSearchEventOut,
   RecommendationImpressionIn,
@@ -1656,8 +1660,6 @@ export async function fetchSteamDLC(appId: string, skipCache = false): Promise<{
   items: SteamDLC[];
   total: number;
 }> {
-  // Add cache-busting timestamp if skipCache is true
-  const cacheBuster = skipCache ? `&t=${Date.now()}` : '';
   const data = await requestJson<any>(`/steam/games/${appId}/dlc?${skipCache ? `t=${Date.now()}` : ''}`);
   return {
     appId: data.app_id ?? appId,
@@ -3082,6 +3084,57 @@ function mapCommunityComment(raw: any): CommunityComment {
   };
 }
 
+function mapCommunityMember(raw: any): CommunityMember {
+  return {
+    userId: raw.user_id,
+    username: raw.username,
+    displayName: raw.display_name ?? null,
+    avatarUrl: raw.avatar_url ?? null,
+    membershipTier: raw.membership_tier ?? null,
+    isOnline: Boolean(raw.is_online),
+    lastSeenAt: raw.last_seen_at ?? null,
+  };
+}
+
+function mapDonationLeaderboardEntry(raw: any): DonationLeaderboardEntry {
+  return {
+    rank: Number(raw.rank ?? 0),
+    userId: raw.user_id,
+    username: raw.username,
+    displayName: raw.display_name ?? null,
+    avatarUrl: raw.avatar_url ?? null,
+    membershipTier: raw.membership_tier ?? null,
+    isOnline: Boolean(raw.is_online),
+    lastSeenAt: raw.last_seen_at ?? null,
+    totalAmount: Number(raw.total_amount ?? 0),
+    currency: String(raw.currency ?? "USD"),
+  };
+}
+
+function mapSupportProfile(raw: any): SupportProfile {
+  return {
+    tier: raw.tier ?? null,
+    expiresAt: raw.expires_at ?? null,
+    lifetimeTotal: Number(raw.lifetime_total ?? 0),
+    periodTotal: Number(raw.period_total ?? 0),
+    rank: raw.rank ?? null,
+    currency: String(raw.currency ?? "USD"),
+  };
+}
+
+function mapDonationReceipt(raw: any): DonationReceipt {
+  return {
+    id: raw.id,
+    amount: Number(raw.amount ?? 0),
+    currency: String(raw.currency ?? "USD"),
+    provider: String(raw.provider ?? "donation"),
+    note: raw.note ?? null,
+    createdAt: raw.created_at,
+    tier: raw.tier ?? null,
+    tierExpiresAt: raw.tier_expires_at ?? null,
+  };
+}
+
 function mapReview(raw: any): Review {
   return {
     id: raw.id,
@@ -3835,6 +3888,31 @@ export async function fetchCommunityComments(
   return data.map(mapCommunityComment);
 }
 
+export async function fetchCommunityMembers(
+  params: { limit?: number } = {}
+): Promise<CommunityMember[]> {
+  const query = new URLSearchParams();
+  if (params.limit) query.set("limit", String(params.limit));
+  const suffix = query.toString();
+  const data = await requestJson<any[]>(
+    `/community/members${suffix ? `?${suffix}` : ""}`
+  );
+  return data.map(mapCommunityMember);
+}
+
+export async function fetchDonationLeaderboard(
+  period: "week" | "month" | "year" = "week",
+  limit = 20
+): Promise<DonationLeaderboardEntry[]> {
+  const query = new URLSearchParams();
+  query.set("period", period);
+  query.set("limit", String(limit));
+  const data = await requestJson<any[]>(
+    `/community/leaderboard/donations?${query.toString()}`
+  );
+  return data.map(mapDonationLeaderboardEntry);
+}
+
 export async function postCommunityComment(
   token: string,
   payload: { message: string; appId?: string; appName?: string }
@@ -3852,6 +3930,31 @@ export async function postCommunityComment(
     token
   );
   return mapCommunityComment(data);
+}
+
+export async function fetchSupportProfile(token: string): Promise<SupportProfile> {
+  const data = await requestJson<any>("/users/me/support", {}, token);
+  return mapSupportProfile(data);
+}
+
+export async function createDonation(
+  token: string,
+  payload: { amount: number; currency?: string; provider?: string; note?: string }
+): Promise<DonationReceipt> {
+  const data = await requestJson<any>(
+    "/payments/donate",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        amount: payload.amount,
+        currency: payload.currency || "USD",
+        provider: payload.provider || "donation",
+        note: payload.note || null,
+      }),
+    },
+    token
+  );
+  return mapDonationReceipt(data);
 }
 
 export async function fetchDeveloperAnalytics(
@@ -4613,7 +4716,7 @@ export async function pollOAuthStatus(requestId: string): Promise<{ code: string
     if (resp.ok) {
         return await resp.json();
     }
-  } catch (e) {
+  } catch {
       // ignore
   }
   return null;

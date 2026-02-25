@@ -59,6 +59,51 @@ export type AuthUser = {
   username: string;
   displayName?: string | null;
   role?: string | null;
+  membershipTier?: string | null;
+  membershipExpiresAt?: string | null;
+};
+
+export type CommunityMember = {
+  userId: string;
+  username: string;
+  displayName?: string | null;
+  avatarUrl?: string | null;
+  membershipTier?: string | null;
+  isOnline: boolean;
+  lastSeenAt?: string | null;
+};
+
+export type DonationLeaderboardEntry = {
+  rank: number;
+  userId: string;
+  username: string;
+  displayName?: string | null;
+  avatarUrl?: string | null;
+  membershipTier?: string | null;
+  isOnline: boolean;
+  lastSeenAt?: string | null;
+  totalAmount: number;
+  currency: string;
+};
+
+export type SupportProfile = {
+  tier?: string | null;
+  expiresAt?: string | null;
+  lifetimeTotal: number;
+  periodTotal: number;
+  rank?: number | null;
+  currency: string;
+};
+
+export type DonationReceipt = {
+  id: string;
+  amount: number;
+  currency: string;
+  provider: string;
+  note?: string | null;
+  createdAt: string;
+  tier?: string | null;
+  tierExpiresAt?: string | null;
 };
 
 export type OAuthProvider = {

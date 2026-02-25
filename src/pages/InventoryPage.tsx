@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Boxes, Repeat, Sparkles } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useLocale } from "../context/LocaleContext";
@@ -27,7 +27,7 @@ export default function InventoryPage() {
 
   const defaultGameId = useMemo(() => entries[0]?.game.id, [entries]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!token) {
       return;
     }
@@ -45,13 +45,11 @@ export default function InventoryPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
-    if (token) {
-      load();
-    }
-  }, [token]);
+    void load();
+  }, [load]);
 
   const handleDropCard = async () => {
     if (!token || !defaultGameId) return;

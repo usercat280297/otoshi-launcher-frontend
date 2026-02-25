@@ -7,11 +7,12 @@ import { useWishlist } from "../hooks/useWishlist";
 import {
   fetchActivity,
   fetchRemoteDownloads,
+  fetchSupportProfile,
   fetchUserProfile,
   queueRemoteDownload,
   updateUserProfile
 } from "../services/api";
-import type { ActivityEvent, RemoteDownload } from "../types";
+import type { ActivityEvent, RemoteDownload, SupportProfile } from "../types";
 import Input from "../components/common/Input";
 import Button from "../components/common/Button";
 
@@ -52,8 +53,10 @@ export default function ProfilePage() {
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [loadingActivity, setLoadingActivity] = useState(true);
   const [loadingRemote, setLoadingRemote] = useState(true);
+  const [loadingSupport, setLoadingSupport] = useState(true);
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
   const [remoteStatus, setRemoteStatus] = useState<string | null>(null);
+  const [supportProfile, setSupportProfile] = useState<SupportProfile | null>(null);
   const [saving, setSaving] = useState(false);
   const [queueGameId, setQueueGameId] = useState("");
   const [queueDevice, setQueueDevice] = useState("desktop-main");
@@ -150,6 +153,33 @@ export default function ProfilePage() {
     loadRemoteDownloads();
   }, [loadRemoteDownloads]);
 
+  useEffect(() => {
+    let mounted = true;
+    if (!token) {
+      setSupportProfile(null);
+      setLoadingSupport(false);
+      return;
+    }
+    setLoadingSupport(true);
+    fetchSupportProfile(token)
+      .then((profile) => {
+        if (!mounted) return;
+        setSupportProfile(profile);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setSupportProfile(null);
+      })
+      .finally(() => {
+        if (mounted) {
+          setLoadingSupport(false);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [token]);
+
   const handleProfileSave = async () => {
     if (!token) return;
     setSaving(true);
@@ -200,6 +230,26 @@ export default function ProfilePage() {
   };
 
   const activitySummary = useMemo(() => activity.slice(0, 8), [activity]);
+  const tierLabel = useMemo(() => {
+    const tier = String(
+      supportProfile?.tier || user?.membershipTier || user?.role || ""
+    ).toLowerCase();
+    if (tier === "vip" || tier === "admin") return "VIP";
+    if (tier === "supporter_plus") return "Supporter+";
+    if (tier === "supporter") return "Supporter";
+    return "Free";
+  }, [supportProfile?.tier, user?.membershipTier, user?.role]);
+  const formatMoney = (amount: number, currency: string) => {
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: "currency",
+        currency: currency || "USD",
+        maximumFractionDigits: 2,
+      }).format(amount);
+    } catch {
+      return `$${amount.toFixed(2)}`;
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -428,6 +478,51 @@ export default function ProfilePage() {
 
         <section className="glass-panel space-y-4 p-6">
           <h2 className="section-title">Stats</h2>
+          <div className="glass-card space-y-2 p-4 text-sm text-text-secondary">
+            <p className="text-xs uppercase tracking-[0.3em] text-text-muted">Membership & support</p>
+            {loadingSupport ? (
+              <p>Loading support profile...</p>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <span>Tier</span>
+                  <span className="text-text-primary">{tierLabel}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Expires</span>
+                  <span className="text-text-primary">
+                    {supportProfile?.expiresAt
+                      ? new Date(supportProfile.expiresAt).toLocaleDateString()
+                      : "Not set"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Lifetime</span>
+                  <span className="text-text-primary">
+                    {formatMoney(
+                      Number(supportProfile?.lifetimeTotal || 0),
+                      supportProfile?.currency || "USD"
+                    )}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Last 30 days</span>
+                  <span className="text-text-primary">
+                    {formatMoney(
+                      Number(supportProfile?.periodTotal || 0),
+                      supportProfile?.currency || "USD"
+                    )}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Rank</span>
+                  <span className="text-text-primary">
+                    {supportProfile?.rank ? `#${supportProfile.rank}` : "-"}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
           <div className="space-y-3 text-sm text-text-secondary">
             <div className="flex items-center justify-between">
               <span>Total titles</span>

@@ -19,7 +19,6 @@ export function UpdateBanner({
   const { 
     updateAvailable, 
     updateInfo, 
-    isChecking, 
     checkForUpdates 
   } = useAutoUpdate();
   
@@ -107,7 +106,7 @@ export function MaintenanceBanner() {
 
 export function UpdateCheckButton({ currentVersion = '0.1.0' }: { currentVersion?: string }) {
   const { t } = useLocale();
-  const { isChecking, checkForUpdates, updateAvailable, lastChecked } = useAutoUpdate();
+  const { isChecking, checkForUpdates, updateAvailable } = useAutoUpdate();
   
   return (
     <button

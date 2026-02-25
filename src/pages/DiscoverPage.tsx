@@ -163,7 +163,7 @@ export default function DiscoverPage() {
     };
   }, [selectedEpisodeUrl]);
 
-  const menuGroups = animeHome?.menuTags ?? [];
+  const menuGroups = useMemo(() => animeHome?.menuTags ?? [], [animeHome?.menuTags]);
   const selectedMenuGroup = useMemo(() => {
     if (!menuGroups.length) return null;
     if (!selectedTagGroupId) return menuGroups[0];

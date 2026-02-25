@@ -267,7 +267,7 @@ export default function SettingsPage() {
         maxMbps: settings.downloadLimitMbps
       });
       setStatus("Download limits updated.");
-    } catch (err) {
+    } catch {
       setStatus("Unable to update download limits.");
     }
   };

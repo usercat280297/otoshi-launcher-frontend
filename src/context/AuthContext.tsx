@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import type { AuthUser } from "../types";
 import * as api from "../services/api";
 import { emitOverlayNotification } from "../utils/notify";
@@ -110,7 +110,19 @@ function mapUser(raw: any): AuthUser {
     email: raw.email,
     username: raw.username,
     displayName: raw.display_name ?? raw.displayName ?? null,
-    role: raw.role ?? raw.user?.role ?? null
+    role: raw.role ?? raw.user?.role ?? null,
+    membershipTier:
+      raw.membership_tier ??
+      raw.membershipTier ??
+      raw.user?.membership_tier ??
+      raw.user?.membershipTier ??
+      null,
+    membershipExpiresAt:
+      raw.membership_expires_at ??
+      raw.membershipExpiresAt ??
+      raw.user?.membership_expires_at ??
+      raw.user?.membershipExpiresAt ??
+      null,
   };
 }
 
@@ -314,10 +326,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const value = useMemo(
-    () => ({ user, token, loading, updateLocalUser, login, exchangeOAuth, register, logout }),
-    [user, token, loading]
-  );
+  const value: AuthContextValue = {
+    user,
+    token,
+    loading,
+    updateLocalUser,
+    login,
+    exchangeOAuth,
+    register,
+    logout
+  };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

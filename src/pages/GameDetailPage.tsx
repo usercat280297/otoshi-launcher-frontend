@@ -21,7 +21,6 @@ import { isAgeGateAllowed, resolveRequiredAge, storeAgeGate } from "../utils/age
 import { launchGame } from "../services/launcher";
 import {
   derivePlayOptions,
-  getDefaultPlayOptions,
   loadPlayOptions,
   savePlayOptions
 } from "../utils/playOptions";

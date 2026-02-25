@@ -102,13 +102,7 @@ export default function Hero({
     // Keep hero background in lockstep with active slide to prevent
     // text/logo from changing while the previous game's backdrop remains.
     setHeroImageSrc(resolveHeroSource(activeGame));
-  }, [
-    activeGame.id,
-    activeGame.backgroundImage,
-    activeGame.heroImage,
-    activeGame.headerImage,
-    activeGame.capsuleImage,
-  ]);
+  }, [activeGame]);
 
   useEffect(() => {
     let cancelled = false;

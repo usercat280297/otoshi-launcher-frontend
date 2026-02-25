@@ -22,12 +22,12 @@ type StoreNewsOverlayProps = {
 export default function StoreNewsOverlay({ games }: StoreNewsOverlayProps) {
   const { locale } = useLocale();
   const [opening, setOpening] = useState(false);
-  const [seenVersion, setSeenVersion] = useState(0);
+  const [, setSeenVersion] = useState(0);
   const isDesktop = isTauriRuntime();
 
   const payload = useMemo(() => buildStoreNewsPayload(games), [games]);
   const hasNewsContent = useMemo(() => hasStoreNewsContent(payload), [payload]);
-  const alertCount = useMemo(() => countStoreNewsAlerts(payload), [payload, seenVersion]);
+  const alertCount = useMemo(() => countStoreNewsAlerts(payload), [payload]);
 
   const markAsSeen = useCallback(() => {
     markStoreNewsAlertsSeen(payload);

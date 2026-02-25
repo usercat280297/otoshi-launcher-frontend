@@ -16,8 +16,7 @@ import {
   VolumeX,
 } from "lucide-react";
 import { useLocale } from "../context/LocaleContext";
-import { Link, useNavigate } from "react-router-dom";
-import { isTauri } from "@tauri-apps/api/core";
+import { Link } from "react-router-dom";
 import Hls from "hls.js";
 import { getMediaProtectionProps } from "../utils/mediaProtection";
 import { openExternal } from "../utils/openExternal";
@@ -478,7 +477,6 @@ const Stat = ({ value, label, delay, isVisible }: StatProps) => (
 
 export default function DownloadLauncherPage() {
   const { t } = useLocale();
-  const navigate = useNavigate();
   const [heroVisible, setHeroVisible] = useState(false);
   const [featuresVisible, setFeaturesVisible] = useState(false);
   const [gamesVisible, setGamesVisible] = useState(false);

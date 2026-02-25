@@ -305,7 +305,7 @@ class UpdateClient {
         method: 'POST',
       });
 
-      const result = await response.json();
+      await response.json();
       console.log('Rolled back to:', targetVersion);
 
       // Restart launcher

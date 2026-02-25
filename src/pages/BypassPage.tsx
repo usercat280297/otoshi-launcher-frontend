@@ -70,8 +70,8 @@ export default function BypassPage() {
       .then((data) => {
         if (mounted) {
           setCategories(data);
-          if (data.length > 0 && !selectedCategory) {
-            setSelectedCategory(data[0].id);
+          if (data.length > 0) {
+            setSelectedCategory((prev) => prev ?? data[0].id);
           }
         }
       })

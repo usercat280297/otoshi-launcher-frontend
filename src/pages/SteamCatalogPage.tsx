@@ -487,7 +487,7 @@ export default function SteamCatalogPage() {
     } else {
       load(0, "");
     }
-  }, []);
+  }, [load]);
 
   const runSearch = useCallback(
     (nextQuery: string, record: boolean) => {
@@ -718,7 +718,7 @@ export default function SteamCatalogPage() {
     const current = Math.min(page, totalPages - 1);
     const windowSize = 5;
     let start = Math.max(0, current - Math.floor(windowSize / 2));
-    let end = Math.min(totalPages - 1, start + windowSize - 1);
+    const end = Math.min(totalPages - 1, start + windowSize - 1);
     if (end - start + 1 < windowSize) {
       start = Math.max(0, end - windowSize + 1);
     }

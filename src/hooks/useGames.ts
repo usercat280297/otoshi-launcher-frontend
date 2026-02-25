@@ -642,7 +642,7 @@ export function useGames() {
       }
       artPatchQueueRef.current.clear();
     };
-  }, []);
+  }, [allowDbFallback]);
 
   return { games, loading, error, errorCode };
 }

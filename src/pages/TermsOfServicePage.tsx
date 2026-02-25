@@ -129,7 +129,7 @@ export default function TermsOfServicePage() {
         if (data) {
           setTermsData(data);
         }
-      } catch (error) {
+      } catch {
         // Fall back to API if available
         try {
           const response = await fetch("/api/policy/terms");

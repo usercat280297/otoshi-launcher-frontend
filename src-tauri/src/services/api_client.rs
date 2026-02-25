@@ -43,6 +43,20 @@ impl ApiClient {
             .await
     }
 
+    pub async fn get_auth_first<T: DeserializeOwned>(&self, path: &str) -> Result<T> {
+        match self.get(path, true).await {
+            Ok(payload) => Ok(payload),
+            Err(err) => {
+                tracing::warn!(
+                    "api get_auth_first fallback to unauth path={} err={}",
+                    path,
+                    err
+                );
+                self.get(path, false).await
+            }
+        }
+    }
+
     pub async fn post<T: DeserializeOwned, B: Serialize + Clone>(
         &self,
         path: &str,
