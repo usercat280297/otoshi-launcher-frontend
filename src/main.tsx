@@ -8,7 +8,6 @@ import { ThemeProvider } from "./context/ThemeContext";
 import "./index.css";
 
 const CHUNK_ERROR_RELOAD_KEY = "otoshi:chunk-reload-once";
-const CANONICAL_REDIRECT_KEY = "otoshi:canonical-redirected";
 const CHUNK_ERROR_RELOAD_RETRY_PARAM = "__chunk_retry";
 const CHUNK_ERROR_RELOAD_MAX_RETRIES = 1;
 const CHUNK_ERROR_PATTERNS = [
@@ -69,25 +68,7 @@ const reloadWithCacheBustOnce = (): void => {
 };
 
 if (typeof window !== "undefined") {
-  const host = String(window.location.hostname || "").trim().toLowerCase();
   cleanupChunkRetryParams();
-
-  if (host === "www.otoshi-launcher.me") {
-    let canRedirect = true;
-    try {
-      canRedirect = window.sessionStorage.getItem(CANONICAL_REDIRECT_KEY) !== "1";
-      if (canRedirect) {
-        window.sessionStorage.setItem(CANONICAL_REDIRECT_KEY, "1");
-      }
-    } catch {
-      canRedirect = true;
-    }
-    if (canRedirect) {
-      const canonical = new URL(window.location.href);
-      canonical.hostname = "otoshi-launcher.me";
-      window.location.replace(canonical.toString());
-    }
-  }
 
   // Auto-reload on preload/chunk failures (common after a fresh deploy while tab is stale).
   window.addEventListener("vite:preloadError", (event) => {

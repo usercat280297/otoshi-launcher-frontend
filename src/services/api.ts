@@ -86,6 +86,7 @@ const isTauri = isTauriRuntimeFn;
 
 const isDev = Boolean(import.meta.env.DEV);
 const isDesktop = isTauri();
+const defaultRemoteApiBase = "https://api.otoshi-launcher.me";
 const debugLog = (...args: unknown[]) => {
   if (isDev) {
     console.log(...args);
@@ -114,10 +115,10 @@ const desktopDefaultBase = BACKEND_PORT
 const desktopApiBase =
   import.meta.env.VITE_DESKTOP_API_URL || desktopDefaultBase;
 const desktopRemoteFallbackBase = normalizeApiBase(
-  String(import.meta.env.VITE_REMOTE_API_FALLBACK || "https://api.otoshi-launcher.me")
+  String(import.meta.env.VITE_REMOTE_API_FALLBACK || defaultRemoteApiBase)
 );
 const webApiBase =
-  import.meta.env.VITE_API_URL || (isDev ? resolveDevWebBase() : "");
+  import.meta.env.VITE_API_URL || (isDev ? resolveDevWebBase() : defaultRemoteApiBase);
 const API_URL = isDesktop ? desktopApiBase : webApiBase;
 
 const isLoopbackBase = (base: string): boolean => {

@@ -4,6 +4,8 @@ const NEWS_LIMIT = 8;
 const IMAGE_PLACEHOLDER = "/icons/game-placeholder.svg";
 export const STORE_NEWS_PAYLOAD_CACHE_KEY = "otoshi.store.news.payload.v1";
 export const STORE_NEWS_AUTO_OPEN_SESSION_KEY = "otoshi.store.news.auto_open.session.v1";
+export const STORE_NEWS_SEEN_ALERTS_KEY = "otoshi.store.news.seen_alerts.v1";
+export const STORE_NEWS_AUTO_NOTIFY_SESSION_KEY = "otoshi.store.news.auto_notify.session.v1";
 
 type RankedGame = {
   game: Game;
@@ -114,9 +116,67 @@ export function buildStoreNewsPayload(games: Game[]): StoreNewsPayload {
   };
 }
 
-export function countStoreNewsAlerts(payload: StoreNewsPayload): number {
+function buildAlertId(kind: "release" | "discount", entry: StoreNewsEntry): string {
+  if (kind === "release") {
+    return `release:${entry.id}:${entry.releaseDate || "n/a"}`;
+  }
+  const percent = Number.isFinite(entry.discountPercent) ? entry.discountPercent : 0;
+  const price = Number.isFinite(entry.price) ? entry.price : 0;
+  return `discount:${entry.id}:${percent}:${price}`;
+}
+
+export function collectStoreNewsAlertIds(payload: StoreNewsPayload): string[] {
   const unique = new Set<string>();
-  payload.newReleases.forEach((game) => unique.add(game.id));
-  payload.topDiscounts.forEach((game) => unique.add(game.id));
-  return unique.size;
+  payload.newReleases.forEach((entry) => unique.add(buildAlertId("release", entry)));
+  payload.topDiscounts.forEach((entry) => unique.add(buildAlertId("discount", entry)));
+  return Array.from(unique);
+}
+
+export function loadSeenStoreNewsAlertIds(): Set<string> {
+  if (typeof window === "undefined") return new Set<string>();
+  try {
+    const raw = window.localStorage.getItem(STORE_NEWS_SEEN_ALERTS_KEY);
+    if (!raw) return new Set<string>();
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set<string>();
+    return new Set(parsed.filter((item) => typeof item === "string" && item.trim().length > 0));
+  } catch {
+    return new Set<string>();
+  }
+}
+
+export function markStoreNewsAlertsSeen(payload: StoreNewsPayload): void {
+  if (typeof window === "undefined") return;
+  try {
+    const seen = loadSeenStoreNewsAlertIds();
+    collectStoreNewsAlertIds(payload).forEach((id) => seen.add(id));
+    window.localStorage.setItem(STORE_NEWS_SEEN_ALERTS_KEY, JSON.stringify(Array.from(seen)));
+  } catch {
+    // ignore storage failures
+  }
+}
+
+export function countStoreNewsAlerts(payload: StoreNewsPayload): number {
+  const allIds = collectStoreNewsAlertIds(payload);
+  if (!allIds.length) return 0;
+  if (typeof window !== "undefined") {
+    const existing = window.localStorage.getItem(STORE_NEWS_SEEN_ALERTS_KEY);
+    // First-time baseline: avoid showing a noisy badge for historical data.
+    if (!existing) {
+      try {
+        window.localStorage.setItem(STORE_NEWS_SEEN_ALERTS_KEY, JSON.stringify(allIds));
+      } catch {
+        // ignore storage failures
+      }
+      return 0;
+    }
+  }
+  const seen = loadSeenStoreNewsAlertIds();
+  let unread = 0;
+  for (const id of allIds) {
+    if (!seen.has(id)) {
+      unread += 1;
+    }
+  }
+  return unread;
 }

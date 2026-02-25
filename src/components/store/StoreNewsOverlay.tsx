@@ -8,36 +8,34 @@ import {
   buildStoreNewsPayload,
   countStoreNewsAlerts,
   hasStoreNewsContent,
+  markStoreNewsAlertsSeen,
   serializeStoreNewsPayload,
   STORE_NEWS_AUTO_OPEN_SESSION_KEY,
+  STORE_NEWS_AUTO_NOTIFY_SESSION_KEY,
   STORE_NEWS_PAYLOAD_CACHE_KEY,
 } from "../../utils/storeNews";
-
-const POPUP_WIDTH = 920;
-const POPUP_HEIGHT = 640;
 
 type StoreNewsOverlayProps = {
   games: Game[];
 };
 
-function resolvePopupPosition() {
-  if (typeof window === "undefined") {
-    return { left: 120, top: 120 };
-  }
-  const left = Math.max(0, Math.floor(window.screenX + (window.outerWidth - POPUP_WIDTH) / 2));
-  const top = Math.max(0, Math.floor(window.screenY + (window.outerHeight - POPUP_HEIGHT) / 2));
-  return { left, top };
-}
-
 export default function StoreNewsOverlay({ games }: StoreNewsOverlayProps) {
   const { locale } = useLocale();
   const [opening, setOpening] = useState(false);
+  const [seenVersion, setSeenVersion] = useState(0);
+  const isDesktop = isTauriRuntime();
 
   const payload = useMemo(() => buildStoreNewsPayload(games), [games]);
   const hasNewsContent = useMemo(() => hasStoreNewsContent(payload), [payload]);
-  const alertCount = useMemo(() => countStoreNewsAlerts(payload), [payload]);
+  const alertCount = useMemo(() => countStoreNewsAlerts(payload), [payload, seenVersion]);
+
+  const markAsSeen = useCallback(() => {
+    markStoreNewsAlertsSeen(payload);
+    setSeenVersion((value) => value + 1);
+  }, [payload]);
 
   const openNewsWindow = useCallback(async () => {
+    if (!isDesktop) return;
     if (opening) return;
     setOpening(true);
 
@@ -46,21 +44,8 @@ export default function StoreNewsOverlay({ games }: StoreNewsOverlayProps) {
     try {
       if (isTauriRuntime()) {
         await invoke("open_store_news_window", { payload: encodedPayload });
+        markAsSeen();
         return;
-      }
-
-      // Web host currently serves deep-link paths as empty bodies in some deployments.
-      // Open from "/" and let the SPA route internally via query bootstrap.
-      const url = `/?open=steam-news&payload=${encodedPayload}`;
-      const { left, top } = resolvePopupPosition();
-      const popup = window.open(
-        url,
-        "otoshi-steam-news",
-        `popup=yes,width=${POPUP_WIDTH},height=${POPUP_HEIGHT},left=${left},top=${top},resizable=yes,scrollbars=yes`
-      );
-
-      if (!popup) {
-        window.location.assign(url);
       }
     } catch (error) {
       emitOverlayNotification({
@@ -78,7 +63,7 @@ export default function StoreNewsOverlay({ games }: StoreNewsOverlayProps) {
     } finally {
       setOpening(false);
     }
-  }, [locale, opening, payload]);
+  }, [isDesktop, locale, markAsSeen, opening, payload]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !hasNewsContent) return;
@@ -97,6 +82,31 @@ export default function StoreNewsOverlay({ games }: StoreNewsOverlayProps) {
     }, 700);
     return () => window.clearTimeout(timer);
   }, [hasNewsContent, openNewsWindow]);
+
+  useEffect(() => {
+    if (isDesktop) return;
+    if (typeof window === "undefined") return;
+    if (!hasNewsContent || alertCount <= 0) return;
+    const key = `${STORE_NEWS_AUTO_NOTIFY_SESSION_KEY}:${Math.floor(Date.now() / (1000 * 60 * 60 * 6))}`;
+    if (window.sessionStorage.getItem(key) === "1") return;
+    window.sessionStorage.setItem(key, "1");
+
+    emitOverlayNotification({
+      tone: "info",
+      title: locale === "vi" ? "Cap nhat Steam" : "Steam updates",
+      message:
+        locale === "vi"
+          ? `Ban co ${alertCount} thong bao moi tu Store.`
+          : `You have ${alertCount} new store notifications.`,
+      source: "store",
+      durationMs: 4200,
+    });
+    markAsSeen();
+  }, [alertCount, hasNewsContent, isDesktop, locale, markAsSeen]);
+
+  if (!isDesktop) {
+    return null;
+  }
 
   return (
     <button

@@ -1,17 +1,4 @@
 {
-  "redirects": [
-    {
-      "source": "/:path*",
-      "has": [
-        {
-          "type": "host",
-          "value": "www.otoshi-launcher.me"
-        }
-      ],
-      "destination": "https://otoshi-launcher.me/:path*",
-      "permanent": true
-    }
-  ],
   "rewrites": [
     {
       "source": "/:path*",

@@ -70,23 +70,6 @@ function AppContent() {
     };
   }, []);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const path = window.location.pathname || "/";
-    if (path !== "/") return;
-
-    const params = new URLSearchParams(window.location.search || "");
-    const open = (params.get("open") || "").trim().toLowerCase();
-    if (open !== "steam-news") return;
-
-    const payload = params.get("payload");
-    if (payload && payload.trim()) {
-      navigate(`/steam-news?payload=${encodeURIComponent(payload)}`, { replace: true });
-    } else {
-      navigate("/steam-news", { replace: true });
-    }
-  }, [navigate]);
-
   // Initialize media protection to prevent IDM and download managers
   useEffect(() => {
     initMediaProtection();

@@ -39,6 +39,7 @@ const routes = [
 ];
 
 const written = [];
+const redirects = [];
 
 for (const route of routes) {
   if (route === "/") continue;
@@ -46,19 +47,23 @@ for (const route of routes) {
   const normalized = route.replace(/^\/+/, "").replace(/\/+$/, "");
   if (!normalized) continue;
 
-  const routeDir = path.join(distDir, normalized);
-  if (fs.existsSync(routeDir) && !fs.statSync(routeDir).isDirectory()) {
-    fs.unlinkSync(routeDir);
+  const routePath = path.join(distDir, normalized);
+  if (fs.existsSync(routePath) && fs.statSync(routePath).isDirectory()) {
+    fs.rmSync(routePath, { recursive: true, force: true });
   }
-
-  fs.mkdirSync(routeDir, { recursive: true });
-  const routeIndex = path.join(routeDir, "index.html");
-  fs.writeFileSync(routeIndex, indexHtml, "utf8");
-  written.push(path.relative(projectRoot, routeIndex));
+  fs.mkdirSync(path.dirname(routePath), { recursive: true });
+  fs.writeFileSync(routePath, indexHtml, "utf8");
+  written.push(path.relative(projectRoot, routePath));
+  redirects.push(`/${normalized} /index.html 200`);
 }
 
 const notFoundPath = path.join(distDir, "404.html");
 fs.writeFileSync(notFoundPath, indexHtml, "utf8");
 written.push(path.relative(projectRoot, notFoundPath));
+
+const redirectsPath = path.join(distDir, "_redirects");
+const redirectsBody = [...redirects, "/* /index.html 200"].join("\n") + "\n";
+fs.writeFileSync(redirectsPath, redirectsBody, "utf8");
+written.push(path.relative(projectRoot, redirectsPath));
 
 console.log(`[deep-links] generated ${written.length} deep-link entrypoints`);
