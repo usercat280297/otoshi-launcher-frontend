@@ -1,5 +1,5 @@
-import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { isTauri as isTauriRuntime } from "@tauri-apps/api/core";
 import MainLayout from "./components/layout/MainLayout";
 import AuthLayout from "./components/layout/AuthLayout";
@@ -14,7 +14,6 @@ import { useLocale } from "./context/LocaleContext";
 import { openExternal } from "./utils/openExternal";
 import Modal from "./components/common/Modal";
 import Button from "./components/common/Button";
-import StartupAnnouncementModal from "./components/common/StartupAnnouncementModal";
 import OverlayNotifications from "./components/common/OverlayNotifications";
 import { emitOverlayNotification } from "./utils/notify";
 
@@ -22,34 +21,6 @@ type TrayActionPayload = {
   action?: string;
   locale?: string;
 };
-
-function describeRoute(pathname: string): string {
-  if (pathname.startsWith("/steam/")) return "Steam game detail";
-  if (pathname.startsWith("/games/")) return "Game detail";
-  const routeMap: Record<string, string> = {
-    "/": "Home",
-    "/store": "Store",
-    "/steam": "Steam vault",
-    "/discover": "Discover",
-    "/fixes/online": "Online fix",
-    "/fixes/bypass": "Bypass fix",
-    "/workshop": "Workshop",
-    "/community": "Community",
-    "/library": "Library",
-    "/downloads": "Downloads",
-    "/settings": "Settings",
-    "/wishlist": "Wishlist",
-    "/inventory": "Inventory",
-    "/profile": "Profile",
-    "/developer": "Developer",
-    "/login": "Sign in",
-    "/register": "Register",
-    "/download-launcher": "Download launcher",
-    "/privacy-policy": "Privacy policy",
-    "/terms-of-service": "Terms of service",
-  };
-  return routeMap[pathname] || pathname;
-}
 
 const LibraryPage = lazy(() => import("./pages/LibraryPage"));
 const GameDetailPage = lazy(() => import("./pages/GameDetailPage"));
@@ -62,6 +33,7 @@ const WishlistPage = lazy(() => import("./pages/WishlistPage"));
 const InventoryPage = lazy(() => import("./pages/InventoryPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const DeveloperPage = lazy(() => import("./pages/DeveloperPage"));
+const StorePage = lazy(() => import("./pages/StorePage"));
 const SteamCatalogPage = lazy(() => import("./pages/SteamCatalogPage"));
 const SteamGameDetailPage = lazy(() => import("./pages/SteamGameDetailPage"));
 const DiscoverPausedPage = lazy(() => import("./pages/DiscoverPausedPage"));
@@ -79,13 +51,8 @@ const IntroPage = lazy(() => import("./pages/IntroPage"));
 
 function AppContent() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { setLocale, t } = useLocale();
   const [aboutOpen, setAboutOpen] = useState(false);
-  const routeNotifyReadyRef = useRef(false);
-  const startupAnnouncementEnabled =
-    !location.pathname.startsWith("/overlay") &&
-    !location.pathname.startsWith("/big-picture");
 
   useEffect(() => {
     if (typeof window === "undefined" || !("scrollRestoration" in window.history)) {
@@ -213,23 +180,6 @@ function AppContent() {
       window.removeEventListener("otoshi:lua-games-loaded", onLuaLoaded as EventListener);
     };
   }, [t]);
-
-  useEffect(() => {
-    if (!routeNotifyReadyRef.current) {
-      routeNotifyReadyRef.current = true;
-      return;
-    }
-    if (location.pathname.startsWith("/overlay") || location.pathname.startsWith("/big-picture")) {
-      return;
-    }
-    emitOverlayNotification({
-      tone: "info",
-      title: "Navigation",
-      message: describeRoute(location.pathname),
-      source: "route",
-      durationMs: 2600,
-    });
-  }, [location.pathname, location.search]);
 
   useEffect(() => {
     if (!isTauriRuntime()) {
@@ -377,7 +327,6 @@ function AppContent() {
     <>
       <GlobalRipple />
       <CookieConsentBanner />
-      <StartupAnnouncementModal enabled={startupAnnouncementEnabled} />
       <OverlayNotifications />
       <Modal isOpen={aboutOpen} onClose={() => setAboutOpen(false)} title={t("app.about.title")} size="sm">
         <div className="space-y-4">
@@ -424,7 +373,8 @@ function AppContent() {
           <Route path="/terms-of-service" element={<TermsOfServicePage />} />
           <Route element={<MainLayout />}>
             <Route path="/store" element={<Navigate to="/steam" replace />} />
-            <Route path="/steam" element={<SteamCatalogPage />} />
+            <Route path="/steam" element={<StorePage />} />
+            <Route path="/steam-vault" element={<SteamCatalogPage />} />
             <Route path="/steam/:appId" element={<SteamGameDetailPage />} />
             <Route path="/discover" element={<DiscoverPausedPage />} />
             <Route path="/fixes/online" element={<OnlineFixPage />} />

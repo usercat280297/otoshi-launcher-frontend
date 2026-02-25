@@ -108,8 +108,8 @@ export default function StoreSubnav({
 
   const tabs = useMemo(() => [
     { key: "discover", label: t("nav.discover"), to: "/discover" },
-    { key: "browse", label: t("store.browse"), to: "/store" },
-    { key: "steam", label: t("store.steam_vault"), to: "/steam" },
+    { key: "browse", label: t("store.browse"), to: "/steam" },
+    { key: "steam", label: t("store.steam_vault"), to: "/steam-vault" },
     { key: "news", label: t("store.news"), to: "/community" }
   ], [t]);
 

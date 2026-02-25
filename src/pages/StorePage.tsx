@@ -7,6 +7,7 @@ import Hero from "../components/store/Hero";
 import FeaturedRow from "../components/store/FeaturedRow";
 import SteamCard from "../components/store/SteamCard";
 import StoreSubnav from "../components/store/StoreSubnav";
+import StoreNewsOverlay from "../components/store/StoreNewsOverlay";
 import FixesDonateBar from "../components/fixes/FixesDonateBar";
 import GuidedTour from "../components/common/GuidedTour";
 import { useGames } from "../hooks/useGames";
@@ -863,7 +864,7 @@ export default function StorePage() {
         source: "store",
         durationMs: 2600,
       });
-      navigate("/steam");
+      navigate("/steam-vault");
     },
     [emitSearchEvent, navigate, recordSearch, searchQuery]
   );
@@ -1724,6 +1725,7 @@ export default function StorePage() {
           </motion.div>
         )}
       </AnimatePresence>
+      <StoreNewsOverlay games={games} onOpenGame={handleOpen} />
 
       <div data-tour="store-search">
         <StoreSubnav
