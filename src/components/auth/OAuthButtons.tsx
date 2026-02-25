@@ -69,6 +69,14 @@ export default function OAuthButtons({ nextPath = "/" }: OAuthButtonsProps) {
     setError(null);
     activeProviderRef.current = provider;
     clearPendingTimers();
+    const finishWithError = (message: string) => {
+      clearPendingTimers();
+      if (activeProviderRef.current === provider) {
+        setLoadingProvider(null);
+        setError(message);
+      }
+      activeProviderRef.current = null;
+    };
 
     try {
       const { url, requestId } = await buildOAuthStartUrl(provider, nextPath);
@@ -79,15 +87,9 @@ export default function OAuthButtons({ nextPath = "/" }: OAuthButtonsProps) {
           await open(url);
         } catch (err) {
           console.error("Failed to open browser:", err);
+          finishWithError(t("auth.oauth_failed_start_login"));
+          return;
         }
-
-        const finishWithError = (message: string) => {
-          clearPendingTimers();
-          if (activeProviderRef.current === provider) {
-            setLoadingProvider(null);
-            setError(message);
-          }
-        };
 
         timeoutRef.current = window.setTimeout(() => {
           finishWithError(t("auth.oauth_login_timeout"));
@@ -115,7 +117,11 @@ export default function OAuthButtons({ nextPath = "/" }: OAuthButtonsProps) {
           }, 1000);
         }
       } else {
-        window.location.href = url;
+        timeoutRef.current = window.setTimeout(() => {
+          finishWithError(t("auth.oauth_failed_start_login"));
+        }, 12000);
+        window.location.assign(url);
+        return;
       }
     } catch (err: any) {
       console.error("OAuth error:", err);

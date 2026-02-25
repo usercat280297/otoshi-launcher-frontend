@@ -4,7 +4,8 @@ const NEWS_LIMIT = 8;
 const IMAGE_PLACEHOLDER = "/icons/game-placeholder.svg";
 export const STORE_NEWS_PAYLOAD_CACHE_KEY = "otoshi.store.news.payload.v1";
 export const STORE_NEWS_AUTO_OPEN_SESSION_KEY = "otoshi.store.news.auto_open.session.v1";
-export const STORE_NEWS_SEEN_ALERTS_KEY = "otoshi.store.news.seen_alerts.v1";
+// v2 resets stale badge state from older releases where seen alerts could be incomplete.
+export const STORE_NEWS_SEEN_ALERTS_KEY = "otoshi.store.news.seen_alerts.v2";
 export const STORE_NEWS_AUTO_NOTIFY_SESSION_KEY = "otoshi.store.news.auto_notify.session.v1";
 
 type RankedGame = {

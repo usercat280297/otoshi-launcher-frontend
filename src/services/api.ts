@@ -218,6 +218,8 @@ let resolvedApiBase: string | null = initialWebResolvedBase;
 let runtimeBaseResolved = false;
 const MIN_COMPATIBLE_CDN_CHUNK_LIMIT_BYTES = 100 * 1024 * 1024;
 const API_HEALTH_TIMEOUT_MS = 1500;
+const API_AUTH_REQUEST_TIMEOUT_MS = 15_000;
+const API_OAUTH_POLL_TIMEOUT_MS = 8_000;
 const API_RUNTIME_READY_CACHE_MS = 15_000;
 const API_RUNTIME_READY_ATTEMPTS = 18;
 const API_RUNTIME_READY_DELAY_MS = 250;
@@ -267,6 +269,41 @@ async function fetchWithTimeout(url: string): Promise<Response> {
     });
   } finally {
     window.clearTimeout(timeoutId);
+  }
+}
+
+async function fetchWithRequestTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number
+): Promise<Response> {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return fetch(url, init);
+  }
+
+  const controller = new AbortController();
+  const sourceSignal = init.signal;
+  const forwardAbort = () => controller.abort();
+
+  if (sourceSignal) {
+    if (sourceSignal.aborted) {
+      controller.abort();
+    } else {
+      sourceSignal.addEventListener("abort", forwardAbort, { once: true });
+    }
+  }
+
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    window.clearTimeout(timeoutId);
+    if (sourceSignal) {
+      sourceSignal.removeEventListener("abort", forwardAbort);
+    }
   }
 }
 
@@ -752,6 +789,7 @@ async function requestJson<T>(
   const method = (options.method || "GET").toUpperCase();
   const authPath = isAuthPath(path);
   const steamPath = isSteamPath(path);
+  const requestTimeoutMs = authPath ? API_AUTH_REQUEST_TIMEOUT_MS : 0;
   const canFallbackMethod = method === "GET" || method === "HEAD";
   // For web dev we can safely fail over non-idempotent requests only on transport errors
   // (for example local backend is down but remote API is healthy).
@@ -788,10 +826,14 @@ async function requestJson<T>(
       const url = `${base}${path}`;
       debugLog(`[API] Trying base: ${base}`);
 
-      const response = await fetch(url, {
-        ...options,
-        headers
-      });
+      const response = await fetchWithRequestTimeout(
+        url,
+        {
+          ...options,
+          headers,
+        },
+        requestTimeoutMs
+      );
 
       debugLog(`[API] Response from ${base}: status=${response.status}`);
 
@@ -832,6 +874,13 @@ async function requestJson<T>(
       debugLog(`[API] Success from ${base}`, { path, resolvedApiBase });
       return data;
     } catch (err: any) {
+      if (
+        authPath &&
+        (err?.name === "AbortError" ||
+          (typeof err?.message === "string" && /timed out/i.test(err.message)))
+      ) {
+        err = new Error("Authentication request timed out. Please try again.");
+      }
       if (canFallback) {
         const networkLike = isNetworkLikeError(err);
         const retryable =
@@ -4556,7 +4605,11 @@ export async function buildOAuthStartUrl(provider: string, next: string = "/"): 
 export async function pollOAuthStatus(requestId: string): Promise<{ code: string } | null> {
   const baseUrl = getPreferredAuthApiBase();
   try {
-    const resp = await fetch(`${baseUrl}/auth/oauth/poll/${requestId}`);
+    const resp = await fetchWithRequestTimeout(
+      `${baseUrl}/auth/oauth/poll/${requestId}`,
+      { method: "GET" },
+      API_OAUTH_POLL_TIMEOUT_MS
+    );
     if (resp.ok) {
         return await resp.json();
     }
