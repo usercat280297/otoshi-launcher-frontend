@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { fetchLocaleBundle, fetchLocaleSettings, updateLocaleSettings } from "../services/api";
+
 
 type Locale = "en" | "vi";
 
@@ -974,16 +974,9 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
   }, [locale]);
 
   const refreshLocaleBundle = useCallback(async (targetLocale: Locale) => {
-    const [staticBundle, remoteBundle] = await Promise.all([
-      loadStaticBundle(targetLocale),
-      fetchLocaleBundle(targetLocale).catch(() => ({})),
-    ]);
-    const merged = {
-      ...staticBundle,
-      ...remoteBundle,
-    };
-    setBundleMessages(merged);
-    writeCachedBundle(targetLocale, merged);
+    const staticBundle = await loadStaticBundle(targetLocale);
+    setBundleMessages(staticBundle);
+    writeCachedBundle(targetLocale, staticBundle);
   }, []);
 
   useEffect(() => {
