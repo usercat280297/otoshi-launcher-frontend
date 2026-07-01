@@ -516,8 +516,8 @@ export default function DownloadLauncherPage() {
 
   useEffect(() => {
     setArtifacts([
-      { kind: "installer", version: "v1.0.10", filename: "0xoLemon_1.0.10_x64-setup.exe", size_bytes: 0, sha256: "", download_url: "https://github.com/dangjimmy33-dotcom/0xoLemon-Launcher/releases/download/v1.0.10/0xoLemon_1.0.10_x64-setup.exe" },
-      { kind: "portable", version: "v1.0.10", filename: "0xoLemon_1.0.10_x64_en-US.msi", size_bytes: 0, sha256: "", download_url: "https://github.com/dangjimmy33-dotcom/0xoLemon-Launcher/releases/download/v1.0.10/0xoLemon_1.0.10_x64_en-US.msi" },
+      { kind: "installer", version: "v1.0.11", filename: "0xoLemon_1.0.11_x64-setup.exe", size_bytes: 0, sha256: "", download_url: "https://github.com/dangjimmy33-dotcom/0xoLemon-Launcher/releases/download/v1.0.11/0xoLemon_1.0.11_x64-setup.exe" },
+      { kind: "portable", version: "v1.0.11", filename: "0xoLemon_1.0.11_x64_en-US.msi", size_bytes: 0, sha256: "", download_url: "https://github.com/dangjimmy33-dotcom/0xoLemon-Launcher/releases/download/v1.0.11/0xoLemon_1.0.11_x64_en-US.msi" },
     ]);
   }, []);
 
@@ -917,7 +917,7 @@ export default function DownloadLauncherPage() {
             <Link to="/terms-of-service" className="transition hover:text-text-primary">
               {t("policy.terms_title")}
             </Link>
-            <a href="https://discord.gg/6q7YRdWGZJ" target="_blank" rel="noopener noreferrer" className="transition hover:text-text-primary">
+            <a href="https://discord.gg/6MF7yvVEJJ" target="_blank" rel="noopener noreferrer" className="transition hover:text-text-primary">
               Discord
             </a>
           </div>
