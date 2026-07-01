@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, Shield, Mail, Calendar, ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
-import { invoke } from "@tauri-apps/api/core";
 import { useLocale } from "../context/LocaleContext";
 import { getMediaProtectionProps } from "../utils/mediaProtection";
-import { openExternal } from "../utils/openExternal";
 
 interface PolicySection {
   title: string;
@@ -24,7 +22,7 @@ interface PolicyData {
 const defaultPolicyData: PolicyData = {
   lastUpdated: "2026-01-30",
   introduction:
-    "OTOSHI Launcher values your privacy. This policy explains what data we collect, how we use it, and the choices you have. By using OTOSHI Launcher, you agree to the practices described below.",
+    "0xoLemon values your privacy. This policy explains what data we collect, how we use it, and the choices you have. By using 0xoLemon Launcher, you agree to the practices described below.",
   sections: [
     {
       title: "Information we collect",
@@ -70,13 +68,13 @@ const defaultPolicyData: PolicyData = {
     {
       title: "Children",
       content: [
-        "OTOSHI Launcher is not intended for children under the age of 13.",
+        "0xoLemon Launcher is not intended for children under the age of 13.",
         "If you believe a child has provided personal information, contact us to remove it.",
       ],
     },
   ],
   contact: {
-    email: "support@otoshi-launcher.me",
+    email: "support@0xolemon.me",
     message: "Questions about this policy? Contact us at",
   },
 };
@@ -88,31 +86,7 @@ export default function PrivacyPolicyPage() {
   const [expandedSection, setExpandedSection] = useState<number | null>(null);
 
   useEffect(() => {
-    const fetchPolicy = async () => {
-      try {
-        // Try to fetch from Tauri command first (native/offline)
-        const data = await invoke<PolicyData>("get_privacy_policy");
-        if (data) {
-          setPolicyData(data);
-        }
-      } catch {
-        // Fall back to API if available
-        try {
-          const response = await fetch("/api/policy/privacy");
-          if (response.ok) {
-            const data = await response.json();
-            setPolicyData(data);
-          }
-        } catch {
-          // Use default data
-          console.log("Using default privacy policy data");
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchPolicy();
+    setLoading(false);
   }, []);
 
   const toggleSection = (index: number) => {
@@ -134,11 +108,11 @@ export default function PrivacyPolicyPage() {
           <div className="flex items-center gap-3">
             <img
               src="/OTOSHI_icon.png"
-              alt="Otoshi"
+              alt="0xoLemon"
               className="h-8 w-8"
               {...getMediaProtectionProps()}
             />
-            <span className="font-bold text-text-primary">OTOSHI</span>
+            <span className="font-bold text-text-primary">0xoLemon</span>
           </div>
         </div>
       </header>
@@ -241,7 +215,7 @@ export default function PrivacyPolicyPage() {
               {...getMediaProtectionProps()}
             />
             <span className="text-sm text-text-muted">
-              © 2026 Otoshi Launcher. All rights reserved.
+              © 2025 0xoLemon. All rights reserved.
             </span>
           </div>
           <div className="flex items-center gap-6 text-sm text-text-muted">
@@ -251,13 +225,14 @@ export default function PrivacyPolicyPage() {
             <Link to="/terms-of-service" className="transition hover:text-text-primary">
               Terms of Service
             </Link>
-            <button
-              type="button"
-              onClick={() => void openExternal("https://discord.gg/6q7YRdWGZJ")}
+            <a
+              href="https://discord.gg/6MF7yvVEJJ"
+              target="_blank"
+              rel="noopener noreferrer"
               className="transition hover:text-text-primary"
             >
               Discord
-            </button>
+            </a>
           </div>
         </div>
       </footer>

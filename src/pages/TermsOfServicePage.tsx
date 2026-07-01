@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, FileText, Mail, Calendar, ChevronRight, AlertTriangle } from "lucide-react";
 import { Link } from "react-router-dom";
-import { invoke } from "@tauri-apps/api/core";
 import { useLocale } from "../context/LocaleContext";
 import { getMediaProtectionProps } from "../utils/mediaProtection";
-import { openExternal } from "../utils/openExternal";
 
 interface PolicySection {
   title: string;
@@ -25,12 +23,12 @@ interface TermsData {
 const defaultTermsData: TermsData = {
   lastUpdated: "2026-01-30",
   introduction:
-    "Welcome to OTOSHI Launcher. These Terms of Service govern your use of our software and services. By accessing or using OTOSHI Launcher, you agree to be bound by these terms.",
+    "Welcome to 0xoLemon Launcher. These Terms of Service govern your use of our software and services. By accessing or using 0xoLemon Launcher, you agree to be bound by these terms.",
   sections: [
     {
       title: "Acceptance of Terms",
       content: [
-        "By downloading, installing, or using OTOSHI Launcher, you agree to these Terms of Service.",
+        "By downloading, installing, or using 0xoLemon Launcher, you agree to these Terms of Service.",
         "If you do not agree to these terms, you must not use the software.",
         "We reserve the right to modify these terms at any time. Continued use after changes constitutes acceptance.",
       ],
@@ -47,7 +45,7 @@ const defaultTermsData: TermsData = {
     {
       title: "Permitted Use",
       content: [
-        "OTOSHI Launcher is provided for personal, non-commercial use only.",
+        "0xoLemon Launcher is provided for personal, non-commercial use only.",
         "You may download and install games through the launcher for your own use.",
         "You may use community features in accordance with our Community Guidelines.",
         "You may not reverse engineer, decompile, or modify the launcher software.",
@@ -67,7 +65,7 @@ const defaultTermsData: TermsData = {
     {
       title: "Intellectual Property",
       content: [
-        "OTOSHI Launcher and its original content are owned by OTOSHI and protected by copyright laws.",
+        "0xoLemon Launcher and its original content are owned by 0xoLemon and protected by copyright laws.",
         "Game content is owned by respective publishers and developers.",
         "Trademarks and logos are the property of their respective owners.",
         "You may not use our intellectual property without explicit permission.",
@@ -94,7 +92,7 @@ const defaultTermsData: TermsData = {
     {
       title: "Limitation of Liability",
       content: [
-        "OTOSHI Launcher is provided 'as is' without warranties of any kind.",
+        "0xoLemon Launcher is provided 'as is' without warranties of any kind.",
         "We are not liable for any indirect, incidental, or consequential damages.",
         "Our total liability is limited to the amount you paid for our services.",
         "Some jurisdictions do not allow limitation of liability, so this may not apply to you.",
@@ -110,7 +108,7 @@ const defaultTermsData: TermsData = {
     },
   ],
   contact: {
-    email: "legal@otoshi-launcher.me",
+    email: "legal@0xolemon.me",
     message: "For legal inquiries or questions about these terms, contact us at",
   },
 };
@@ -122,31 +120,7 @@ export default function TermsOfServicePage() {
   const [expandedSection, setExpandedSection] = useState<number | null>(null);
 
   useEffect(() => {
-    const fetchTerms = async () => {
-      try {
-        // Try to fetch from Tauri command first (native/offline)
-        const data = await invoke<TermsData>("get_terms_of_service");
-        if (data) {
-          setTermsData(data);
-        }
-      } catch {
-        // Fall back to API if available
-        try {
-          const response = await fetch("/api/policy/terms");
-          if (response.ok) {
-            const data = await response.json();
-            setTermsData(data);
-          }
-        } catch {
-          // Use default data
-          console.log("Using default terms of service data");
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchTerms();
+    setLoading(false);
   }, []);
 
   const toggleSection = (index: number) => {
@@ -168,11 +142,11 @@ export default function TermsOfServicePage() {
           <div className="flex items-center gap-3">
             <img
               src="/OTOSHI_icon.png"
-              alt="Otoshi"
+              alt="0xoLemon"
               className="h-8 w-8"
               {...getMediaProtectionProps()}
             />
-            <span className="font-bold text-text-primary">OTOSHI</span>
+            <span className="font-bold text-text-primary">0xoLemon</span>
           </div>
         </div>
       </header>
@@ -304,7 +278,7 @@ export default function TermsOfServicePage() {
               {...getMediaProtectionProps()}
             />
             <span className="text-sm text-text-muted">
-              © 2026 Otoshi Launcher. All rights reserved.
+              © 2025 0xoLemon. All rights reserved.
             </span>
           </div>
           <div className="flex items-center gap-6 text-sm text-text-muted">
@@ -314,13 +288,14 @@ export default function TermsOfServicePage() {
             <Link to="/terms-of-service" className="text-accent-blue transition hover:text-text-primary">
               Terms of Service
             </Link>
-            <button
-              type="button"
-              onClick={() => void openExternal("https://discord.gg/6q7YRdWGZJ")}
+            <a
+              href="https://discord.gg/6MF7yvVEJJ"
+              target="_blank"
+              rel="noopener noreferrer"
               className="transition hover:text-text-primary"
             >
               Discord
-            </button>
+            </a>
           </div>
         </div>
       </footer>
