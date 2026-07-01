@@ -518,18 +518,10 @@ export default function DownloadLauncherPage() {
   }, []);
 
   useEffect(() => {
-    fetch("https://api.github.com/repos/dangjimmy33-dotcom/0xoLemon-Launcher/releases/latest")
-      .then(async (resp) => {
-        if (!resp.ok) return;
-        const data = await resp.json();
-        const assets: LauncherArtifact[] = (data.assets || []).flatMap((a: { name: string; browser_download_url: string; size: number }) => {
-          if (a.name.endsWith(".sig") || a.name === "latest.json") return [];
-          const kind = a.name.includes("setup") || a.name.endsWith(".exe") ? "installer" : "portable";
-          return [{ kind, version: data.tag_name, filename: a.name, size_bytes: a.size, sha256: "", download_url: a.browser_download_url }];
-        });
-        if (assets.length) setArtifacts(assets);
-      })
-      .catch(() => undefined);
+    setArtifacts([
+      { kind: "installer", version: "v1.0.10", filename: "0xoLemon_1.0.10_x64-setup.exe", size_bytes: 0, sha256: "", download_url: "https://github.com/dangjimmy33-dotcom/0xoLemon-Launcher/releases/download/v1.0.10/0xoLemon_1.0.10_x64-setup.exe" },
+      { kind: "portable", version: "v1.0.10", filename: "0xoLemon_1.0.10_x64_en-US.msi", size_bytes: 0, sha256: "", download_url: "https://github.com/dangjimmy33-dotcom/0xoLemon-Launcher/releases/download/v1.0.10/0xoLemon_1.0.10_x64_en-US.msi" },
+    ]);
   }, []);
 
   const resolveDownloadUrl = useCallback(
