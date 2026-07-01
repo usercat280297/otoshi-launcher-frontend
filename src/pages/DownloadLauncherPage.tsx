@@ -575,9 +575,22 @@ export default function DownloadLauncherPage() {
     },
   ];
 
+  const [gameCount, setGameCount] = useState<string>("...");
+
+  useEffect(() => {
+    fetch(
+      "https://firestore.googleapis.com/v1/projects/xolemon-b360e/databases/(default)/documents/gameDetails?pageSize=300&key=AIzaSyAdqkMDJTjeVAfnwd8twlF2dvrKpWdNlUY"
+    )
+      .then((r) => r.json())
+      .then((data) => {
+        const count = data.documents?.length ?? 0;
+        setGameCount(count.toLocaleString());
+      })
+      .catch(() => setGameCount("16"));
+  }, []);
+
   const stats = [
-    { value: "30,218", label: t("launcher.stats.games") },
-    { value: "40", label: t("launcher.stats.users") },
+    { value: gameCount, label: t("launcher.stats.games") },
     { value: "99.9%", label: t("launcher.stats.uptime") },
     { value: "24/7", label: t("launcher.stats.support") },
   ];
