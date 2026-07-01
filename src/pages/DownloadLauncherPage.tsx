@@ -483,8 +483,6 @@ export default function DownloadLauncherPage() {
   const [ctaVisible, setCtaVisible] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadingKind, setDownloadingKind] = useState<"installer" | "portable">("installer");
-  const [downloadProgress, setDownloadProgress] = useState(0);
-  const [downloadComplete, setDownloadComplete] = useState(false);
   const [artifacts, setArtifacts] = useState<LauncherArtifact[]>([]);
 
   const featuresRef = useRef<HTMLDivElement>(null);
@@ -539,11 +537,8 @@ export default function DownloadLauncherPage() {
 
     setDownloadingKind(kind);
     setIsDownloading(true);
-    setDownloadProgress(0);
 
     // GitHub releases are external URLs — let browser handle download directly
-    setDownloadProgress(100);
-    setDownloadComplete(true);
     setIsDownloading(false);
     const link = document.createElement("a");
     link.href = url;
@@ -698,7 +693,8 @@ export default function DownloadLauncherPage() {
               className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
               style={{ animation: "shimmer 2s linear infinite" }}
             />
-            {downloadComplete ? (
+            {downloadComplete
+                ? (
               <>
                 <Check size={24} />
                 {t("launcher.download.complete")}
@@ -712,9 +708,9 @@ export default function DownloadLauncherPage() {
           </button>
 
           <DownloadProgress
-            progress={Math.min(downloadProgress, 100)}
-            isDownloading={isDownloading}
-            label={downloadingKind === "portable" ? "Downloading portable" : "Downloading installer"}
+            progress={0}
+            isDownloading={false}
+            label=""
           />
 
           <button
@@ -903,7 +899,7 @@ export default function DownloadLauncherPage() {
                 className="inline-flex items-center gap-3 rounded-xl bg-primary px-8 py-4 text-lg font-bold text-black transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-primary/30"
               >
                 <Download size={24} />
-                {downloadComplete ? t("launcher.download.complete") : t("launcher.download.button")}
+                {t("launcher.download.button")}
               </button>
               <button
                 onClick={() => void handleDownload("portable")}
