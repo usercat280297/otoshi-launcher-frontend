@@ -988,17 +988,17 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    fetchLocaleSettings()
-      .then((data) => {
-        if (!active) return;
-        const resolved = normalizeLocale(data.locale || data.systemLocale);
-        setLocaleState(resolved);
-        void refreshLocaleBundle(resolved);
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
+    // Skip API call - use browser locale detection only
+    const browserLocale =
+      typeof navigator !== "undefined" && typeof navigator.language === "string"
+        ? navigator.language.toLowerCase()
+        : "en";
+    const resolved = browserLocale.startsWith("vi") ? "vi" : "en";
+    if (active) {
+      setLocaleState(resolved);
+      void refreshLocaleBundle(resolved);
+    }
+    return () => { active = false; };
   }, [refreshLocaleBundle]);
 
   useEffect(() => {
@@ -1007,7 +1007,7 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
 
   const setLocale = (value: Locale) => {
     setLocaleState(value);
-    updateLocaleSettings(value).catch(() => undefined);
+    // Skip API call - not needed for static site
   };
 
   const t = useCallback(
