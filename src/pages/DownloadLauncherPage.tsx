@@ -533,19 +533,8 @@ export default function DownloadLauncherPage() {
     if (isDownloading) return;
     const url = resolveDownloadUrl(kind);
     if (!url) { void fallbackDownload(kind); return; }
-
     setDownloadingKind(kind);
-    setIsDownloading(true);
-
-    // GitHub releases are external URLs — let browser handle download directly
-    setIsDownloading(false);
-    const link = document.createElement("a");
-    link.href = url;
-    link.rel = "noopener noreferrer";
-    link.target = "_blank";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    window.location.href = url;
   };
 
   const fallbackDownload = (_kind: "installer" | "portable" = "installer") => {
