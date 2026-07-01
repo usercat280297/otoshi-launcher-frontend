@@ -7,7 +7,6 @@ import {
   Users,
   Shield,
   ChevronDown,
-  Check,
   Sparkles,
   Library,
   Wrench,
@@ -683,28 +682,16 @@ export default function DownloadLauncherPage() {
           <button
             onClick={() => void handleDownload("installer")}
             disabled={isDownloading}
-            className={`group relative inline-flex items-center gap-3 overflow-hidden rounded-xl px-8 py-4 text-lg font-bold transition-all duration-300 ${
-              downloadComplete
-                ? "bg-accent-green text-white"
-                : "bg-primary text-black hover:scale-105 hover:shadow-xl hover:shadow-primary/30"
-            }`}
+            className="group relative inline-flex items-center gap-3 overflow-hidden rounded-xl px-8 py-4 text-lg font-bold transition-all duration-300 bg-primary text-black hover:scale-105 hover:shadow-xl hover:shadow-primary/30"
           >
             <span
               className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
               style={{ animation: "shimmer 2s linear infinite" }}
             />
-            {downloadComplete
-                ? (
-              <>
-                <Check size={24} />
-                {t("launcher.download.complete")}
-              </>
-            ) : (
-              <>
+            <>
                 <Download size={24} className={isDownloading ? "animate-bounce" : ""} />
                 {t("launcher.download.button")}
               </>
-            )}
           </button>
 
           <DownloadProgress
