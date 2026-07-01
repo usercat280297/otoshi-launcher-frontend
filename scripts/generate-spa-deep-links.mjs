@@ -52,7 +52,9 @@ for (const route of routes) {
     fs.rmSync(routePath, { force: true });
   }
   fs.mkdirSync(routePath, { recursive: true });
-  fs.writeFileSync(path.join(routePath, "index.html"), indexHtml, "utf8");
+  // Use a redirect HTML instead of copying index.html to avoid broken asset paths
+  const redirectHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><script>window.location.replace('/?_r=' + encodeURIComponent(window.location.pathname + window.location.search));<\/script></head></html>`;
+  fs.writeFileSync(path.join(routePath, "index.html"), redirectHtml, "utf8");
   written.push(path.relative(projectRoot, path.join(routePath, "index.html")));
   redirects.push(`/${normalized} /index.html 200`);
 }
