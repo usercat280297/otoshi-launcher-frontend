@@ -48,12 +48,12 @@ for (const route of routes) {
   if (!normalized) continue;
 
   const routePath = path.join(distDir, normalized);
-  if (fs.existsSync(routePath) && fs.statSync(routePath).isDirectory()) {
-    fs.rmSync(routePath, { recursive: true, force: true });
+  if (fs.existsSync(routePath) && !fs.statSync(routePath).isDirectory()) {
+    fs.rmSync(routePath, { force: true });
   }
-  fs.mkdirSync(path.dirname(routePath), { recursive: true });
-  fs.writeFileSync(routePath, indexHtml, "utf8");
-  written.push(path.relative(projectRoot, routePath));
+  fs.mkdirSync(routePath, { recursive: true });
+  fs.writeFileSync(path.join(routePath, "index.html"), indexHtml, "utf8");
+  written.push(path.relative(projectRoot, path.join(routePath, "index.html")));
   redirects.push(`/${normalized} /index.html 200`);
 }
 
