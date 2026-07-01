@@ -217,14 +217,14 @@ const messages: Record<string, Record<Locale, string>> = {
 
   // Download Launcher Page
   "launcher.badge": { en: "New Version Available", vi: "Phiên bản mới" },
-  "launcher.hero.title": { en: "Otoshi Launcher", vi: "Otoshi Launcher" },
+  "launcher.hero.title": { en: "0xoLemon Launcher", vi: "0xoLemon Launcher" },
   "launcher.hero.subtitle": {
-    en: "Your ultimate gaming hub. Access thousands of games, lightning-fast downloads, cloud saves, and a vibrant community — all in one place.",
+    en: "Your gaming hub. Access thousands of games, ultra-fast downloads, cloud saves, and a vibrant community — all in one place.",
     vi: "Trung tâm gaming của bạn. Truy cập hàng nghìn game, tải xuống siêu nhanh, lưu đám mây, và cộng đồng sôi động — tất cả trong một.",
   },
   "launcher.download.button": { en: "Download Launcher", vi: "Tải Launcher" },
   "launcher.download.complete": { en: "Download Complete!", vi: "Tải xong!" },
-  "launcher.requirements": { en: "Windows 10/11 • 64-bit • ~150MB", vi: "Windows 10/11 • 64-bit • ~150MB" },
+  "launcher.requirements": { en: "Windows 10/11 • 64-bit • ~9MB", vi: "Windows 10/11 • 64-bit • ~9MB" },
   "launcher.features.title": { en: "Everything You Need to Play", vi: "Tất Cả Những Gì Bạn Cần" },
   "launcher.features.subtitle": {
     en: "Discover powerful features designed to enhance your gaming experience.",
@@ -271,10 +271,10 @@ const messages: Record<string, Record<Locale, string>> = {
   "launcher.stats.support": { en: "Support", vi: "Hỗ trợ" },
   "launcher.cta.title": { en: "Ready to Play?", vi: "Sẵn Sàng Chơi?" },
   "launcher.cta.subtitle": {
-    en: "Join millions of gamers using Otoshi Launcher. Download now and start your adventure!",
-    vi: "Tham gia cùng hàng triệu gamers sử dụng Otoshi Launcher. Tải ngay và bắt đầu cuộc phiêu lưu!",
+    en: "Download 0xoLemon Launcher today and experience gaming at a new level.",
+    vi: "Tải 0xoLemon Launcher ngay hôm nay và trải nghiệm gaming ở tầm cao mới.",
   },
-  "launcher.footer.copyright": { en: "© 2026 Otoshi Launcher. All rights reserved.", vi: "© 2026 Otoshi Launcher. Đã đăng ký mọi quyền." },
+  "launcher.footer.copyright": { en: "© 2025 0xoLemon. All rights reserved.", vi: "© 2025 0xoLemon. Đã đăng ký mọi quyền." },
   "store.spotlight": { en: "Spotlight", vi: "Nổi bật" },
   "store.base_game": { en: "Base Game", vi: "Game gốc" },
   "store.play_now": { en: "Play now", vi: "Chơi ngay" },
