@@ -19,7 +19,6 @@ import { useLocale } from "../context/LocaleContext";
 import { Link } from "react-router-dom";
 import Hls from "hls.js";
 import { getMediaProtectionProps } from "../utils/mediaProtection";
-import { openExternal } from "../utils/openExternal";
 
 type LauncherArtifact = {
   kind: "installer" | "portable" | string;
@@ -519,177 +518,53 @@ export default function DownloadLauncherPage() {
   }, []);
 
   useEffect(() => {
-    const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
-    fetch(`${API_URL}/launcher-download/artifacts`)
+    fetch("https://api.github.com/repos/dangjimmy33-dotcom/0xoLemon-Launcher/releases/latest")
       .then(async (resp) => {
-        if (!resp.ok) return [];
-        return (await resp.json()) as LauncherArtifact[];
-      })
-      .then((items) => {
-        if (Array.isArray(items)) {
-          setArtifacts(items);
-        }
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const assets: LauncherArtifact[] = (data.assets || []).flatMap((a: { name: string; browser_download_url: string; size: number }) => {
+          if (a.name.endsWith(".sig") || a.name === "latest.json") return [];
+          const kind = a.name.includes("setup") || a.name.endsWith(".exe") ? "installer" : "portable";
+          return [{ kind, version: data.tag_name, filename: a.name, size_bytes: a.size, sha256: "", download_url: a.browser_download_url }];
+        });
+        if (assets.length) setArtifacts(assets);
       })
       .catch(() => undefined);
   }, []);
 
   const resolveDownloadUrl = useCallback(
     (kind: "installer" | "portable", artifactList: LauncherArtifact[] = artifacts): string | null => {
-      const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
-      const envOverride =
-        kind === "portable" ? import.meta.env.VITE_PORTABLE_URL : import.meta.env.VITE_INSTALLER_URL;
-      const staticFallback =
-        kind === "portable"
-          ? "/downloads/OtoshiLauncher-Portable.zip"
-          : "/downloads/OtoshiLauncher-Setup.exe";
-      if (envOverride) {
-        return String(envOverride);
-      }
-
       const artifact = artifactList.find((item) => item.kind === kind);
-      if (!artifact?.download_url) {
-        return staticFallback;
-      }
-      if (/^https?:\/\//i.test(artifact.download_url)) {
-        return artifact.download_url;
-      }
-      return `${API_URL}${artifact.download_url.startsWith("/") ? "" : "/"}${artifact.download_url}`;
+      return artifact?.download_url || null;
     },
     [artifacts]
   );
 
   const handleDownload = async (kind: "installer" | "portable" = "installer") => {
     if (isDownloading) return;
+    const url = resolveDownloadUrl(kind);
+    if (!url) { void fallbackDownload(kind); return; }
 
     setDownloadingKind(kind);
     setIsDownloading(true);
     setDownloadProgress(0);
 
-    try {
-      // Get launcher info from API
-      const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
-      let selectedArtifact = artifacts.find((item) => item.kind === kind);
-      if (!selectedArtifact && kind === "portable") {
-        const artifactResp = await fetch(`${API_URL}/launcher-download/artifacts`);
-        if (artifactResp.ok) {
-          const latestArtifacts = (await artifactResp.json()) as LauncherArtifact[];
-          selectedArtifact = latestArtifacts.find((item) => item.kind === "portable");
-        }
-      }
-      const infoResponse = selectedArtifact
-        ? { ok: true, json: async () => selectedArtifact }
-        : await fetch(`${API_URL}/launcher-download/info`);
-
-      if (infoResponse.ok) {
-        const info = await infoResponse.json();
-        const rawDownloadUrl = String(info?.download_url ?? "").trim();
-        if (!rawDownloadUrl) {
-          throw new Error("Missing download URL");
-        }
-        const isExternalUrl = /^https?:\/\//i.test(rawDownloadUrl);
-        const resolvedDownloadUrl = isExternalUrl
-          ? rawDownloadUrl
-          : `${API_URL}${rawDownloadUrl.startsWith("/") ? "" : "/"}${rawDownloadUrl}`;
-
-        // Simulate progress while downloading
-        const progressInterval = setInterval(() => {
-          setDownloadProgress((prev) => {
-            if (prev >= 95) {
-              return prev;
-            }
-            return prev + Math.random() * 8;
-          });
-        }, 200);
-
-        if (isExternalUrl) {
-          // Avoid CORS issues: do not fetch() cross-origin binaries, let the browser handle the download.
-          clearInterval(progressInterval);
-          setDownloadProgress(100);
-          setDownloadComplete(true);
-          setIsDownloading(false);
-          const link = document.createElement("a");
-          link.href = resolvedDownloadUrl;
-          link.rel = "noopener noreferrer";
-          link.target = "_blank";
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          return;
-        }
-
-        // Download the file
-        const downloadResponse = await fetch(resolvedDownloadUrl);
-
-        if (downloadResponse.ok) {
-          const blob = await downloadResponse.blob();
-          const url = window.URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = info.filename;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          window.URL.revokeObjectURL(url);
-
-          clearInterval(progressInterval);
-          setDownloadProgress(100);
-          setDownloadComplete(true);
-          setIsDownloading(false);
-        } else {
-          throw new Error("Download failed");
-        }
-
-        clearInterval(progressInterval);
-      } else {
-        // Fallback to direct file download
-        void fallbackDownload(kind);
-      }
-    } catch (error) {
-      console.warn("API download failed, using fallback:", error);
-      void fallbackDownload(kind);
-    }
+    // GitHub releases are external URLs — let browser handle download directly
+    setDownloadProgress(100);
+    setDownloadComplete(true);
+    setIsDownloading(false);
+    const link = document.createElement("a");
+    link.href = url;
+    link.rel = "noopener noreferrer";
+    link.target = "_blank";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
-  const fallbackDownload = async (kind: "installer" | "portable" = "installer") => {
-    const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
-    let targetUrl = resolveDownloadUrl(kind);
-
-    if (!targetUrl) {
-      try {
-        const artifactResp = await fetch(`${API_URL}/launcher-download/artifacts`);
-        if (artifactResp.ok) {
-          const latestArtifacts = (await artifactResp.json()) as LauncherArtifact[];
-          setArtifacts(latestArtifacts);
-          targetUrl = resolveDownloadUrl(kind, latestArtifacts);
-        }
-      } catch {
-        // Keep fallback path silent and fail below if no URL can be resolved.
-      }
-    }
-
-    if (!targetUrl) {
-      console.error(`No download URL available for ${kind}`);
-      setIsDownloading(false);
-      return;
-    }
-
-    const interval = setInterval(() => {
-      setDownloadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsDownloading(false);
-          setDownloadComplete(true);
-          const link = document.createElement("a");
-          link.href = targetUrl;
-          link.download = kind === "portable" ? "OtoshiLauncher-Portable.zip" : "OtoshiLauncher-Setup.exe";
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          return 100;
-        }
-        return prev + Math.random() * 12;
-      });
-    }, 200);
+  const fallbackDownload = (_kind: "installer" | "portable" = "installer") => {
+    window.open("https://github.com/dangjimmy33-dotcom/0xoLemon-Launcher/releases/latest", "_blank", "noopener,noreferrer");
+    setIsDownloading(false);
   };
 
   const features = [
@@ -771,14 +646,12 @@ export default function DownloadLauncherPage() {
       {/* Navigation */}
       <nav className="fixed left-0 right-0 top-0 z-50 border-b border-white/5 bg-background/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <Link to="/steam" className="flex items-center gap-3">
-            <img src="/OTOSHI_icon.png" alt="Otoshi" className="h-8 w-8" {...getMediaProtectionProps()} />
-            <span className="text-lg font-bold text-text-primary">Otoshi Launcher</span>
+          <Link to="/download-launcher" className="flex items-center gap-3">
+            <img src="/OTOSHI_icon.png" alt="0xoLemon" className="h-8 w-8" {...getMediaProtectionProps()} />
+            <span className="text-lg font-bold text-text-primary">0xoLemon</span>
           </Link>
           <div className="flex items-center gap-4">
-            <Link to="/steam" className="text-sm text-text-secondary transition hover:text-text-primary">
-              {t("nav.store")}
-            </Link>
+
             <button
               onClick={() => void handleDownload("installer")}
               className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-black transition hover:bg-primary/90"
@@ -911,13 +784,15 @@ export default function DownloadLauncherPage() {
               </h2>
               <p className="text-text-secondary">{t("launcher.games.subtitle")}</p>
             </div>
-            <Link
-              to="/steam"
+            <a
+              href="https://github.com/dangjimmy33-dotcom/0xoLemon-Launcher/releases/latest"
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-primary transition hover:gap-3"
             >
               {t("launcher.games.browse")}
               <ArrowRight size={18} />
-            </Link>
+            </a>
           </div>
 
           {/* Grid needs overflow-visible for scaling items */}
@@ -953,9 +828,11 @@ export default function DownloadLauncherPage() {
            <div className="marquee-track flex w-max gap-6">
              {/* First set */}
              {denuvoGames.map((game) => (
-               <Link
+               <a
                  key={`first-${game.id}`}
-                 to={`/steam/${game.id}`}
+                 href={`https://store.steampowered.com/app/${game.id}`}
+                 target="_blank"
+                 rel="noopener noreferrer"
                  className="group relative h-48 w-80 flex-shrink-0 overflow-hidden rounded-xl border border-white/10 transition-all duration-300 hover:border-primary/50 hover:scale-105"
                >
                  <img
@@ -967,13 +844,15 @@ export default function DownloadLauncherPage() {
                  <div className="absolute bottom-0 left-0 right-0 p-4">
                    <span className="text-sm font-bold text-white drop-shadow-lg">{game.title}</span>
                  </div>
-               </Link>
+               </a>
              ))}
              {/* Duplicate set for seamless loop */}
              {denuvoGames.map((game) => (
-               <Link
+               <a
                  key={`second-${game.id}`}
-                 to={`/steam/${game.id}`}
+                 href={`https://store.steampowered.com/app/${game.id}`}
+                 target="_blank"
+                 rel="noopener noreferrer"
                  className="group relative h-48 w-80 flex-shrink-0 overflow-hidden rounded-xl border border-white/10 transition-all duration-300 hover:border-primary/50 hover:scale-105"
                >
                  <img
@@ -985,7 +864,7 @@ export default function DownloadLauncherPage() {
                  <div className="absolute bottom-0 left-0 right-0 p-4">
                    <span className="text-sm font-bold text-white drop-shadow-lg">{game.title}</span>
                  </div>
-               </Link>
+               </a>
              ))}
            </div>
          </div>
@@ -1051,8 +930,8 @@ export default function DownloadLauncherPage() {
       <footer className="border-t border-white/5 px-6 py-12">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 text-center md:flex-row md:text-left">
           <div className="flex items-center gap-3">
-            <img src="/OTOSHI_icon.png" alt="Otoshi" className="h-6 w-6" {...getMediaProtectionProps()} />
-            <span className="text-sm text-text-muted">{t("launcher.footer.copyright")}</span>
+            <img src="/OTOSHI_icon.png" alt="0xoLemon" className="h-6 w-6" {...getMediaProtectionProps()} />
+            <span className="text-sm text-text-muted">© 2025 0xoLemon. All rights reserved.</span>
           </div>
           <div className="flex items-center gap-6 text-sm text-text-muted">
             <Link to="/privacy-policy" className="transition hover:text-text-primary">
@@ -1061,9 +940,9 @@ export default function DownloadLauncherPage() {
             <Link to="/terms-of-service" className="transition hover:text-text-primary">
               {t("policy.terms_title")}
             </Link>
-            <button type="button" onClick={() => void openExternal("https://discord.gg/6q7YRdWGZJ")} className="transition hover:text-text-primary">
-              {t("common.discord")}
-            </button>
+            <a href="https://discord.gg/6q7YRdWGZJ" target="_blank" rel="noopener noreferrer" className="transition hover:text-text-primary">
+              Discord
+            </a>
           </div>
         </div>
       </footer>

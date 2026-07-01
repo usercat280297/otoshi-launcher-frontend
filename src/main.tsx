@@ -2,9 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
-import { AuthProvider } from "./context/AuthContext";
 import { LocaleProvider } from "./context/LocaleContext";
-import { ThemeProvider } from "./context/ThemeContext";
 import "./index.css";
 
 const CHUNK_ERROR_RELOAD_KEY = "otoshi:chunk-reload-once";
@@ -113,13 +111,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         v7_relativeSplatPath: true,
       }}
     >
-      <ThemeProvider>
-        <AuthProvider>
-          <LocaleProvider>
+      <LocaleProvider>
             <App />
           </LocaleProvider>
-        </AuthProvider>
-      </ThemeProvider>
     </BrowserRouter>
   </React.StrictMode>
 );
