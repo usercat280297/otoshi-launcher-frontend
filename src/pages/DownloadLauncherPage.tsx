@@ -761,15 +761,7 @@ export default function DownloadLauncherPage() {
               </h2>
               <p className="text-text-secondary">{t("launcher.games.subtitle")}</p>
             </div>
-            <a
-              href="https://github.com/dangjimmy33-dotcom/0xoLemon-Launcher/releases/latest"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-primary transition hover:gap-3"
-            >
-              {t("launcher.games.browse")}
-              <ArrowRight size={18} />
-            </a>
+
           </div>
 
           {/* Grid needs overflow-visible for scaling items */}
