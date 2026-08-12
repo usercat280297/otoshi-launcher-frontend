@@ -516,8 +516,8 @@ export default function DownloadLauncherPage() {
 
   useEffect(() => {
     setArtifacts([
-      { kind: "installer", version: "v1.0.11", filename: "0xoLemon_1.0.11_x64-setup.exe", size_bytes: 0, sha256: "", download_url: "https://github.com/dangjimmy33-dotcom/0xoLemon-Launcher/releases/download/v1.0.11/0xoLemon_1.0.11_x64-setup.exe" },
-      { kind: "portable", version: "v1.0.11", filename: "0xoLemon_1.0.11_x64_en-US.msi", size_bytes: 0, sha256: "", download_url: "https://github.com/dangjimmy33-dotcom/0xoLemon-Launcher/releases/download/v1.0.11/0xoLemon_1.0.11_x64_en-US.msi" },
+      { kind: "installer", version: "v2.0.48", filename: "0xoLemon_2.0.48_x64-setup.exe", size_bytes: 0, sha256: "", download_url: "https://github.com/dangjimmy33-dotcom/0xoLemon-Launcher/releases/download/v2.0.48/0xoLemon_2.0.48_x64-setup.exe" },
+      { kind: "portable", version: "v2.0.48", filename: "0xoLemon_2.0.48_x64_en-US.msi", size_bytes: 0, sha256: "", download_url: "https://github.com/dangjimmy33-dotcom/0xoLemon-Launcher/releases/download/v2.0.48/0xoLemon_2.0.48_x64_en-US.msi" },
     ]);
   }, []);
 
