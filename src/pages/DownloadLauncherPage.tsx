@@ -538,7 +538,7 @@ export default function DownloadLauncherPage() {
   };
 
   const fallbackDownload = (_kind: "installer" | "portable" = "installer") => {
-    window.open("https://github.com/dangjimmy33-dotcom/0xoLemon-Launcher/releases/latest", "_blank", "noopener,noreferrer");
+    window.open("https://github.com/isagi3097-cell/0xoLemon/releases/latest", "_blank", "noopener,noreferrer");
     setIsDownloading(false);
   };
 
