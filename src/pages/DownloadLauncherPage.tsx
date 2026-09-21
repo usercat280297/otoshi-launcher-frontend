@@ -516,8 +516,8 @@ export default function DownloadLauncherPage() {
 
   useEffect(() => {
     setArtifacts([
-      { kind: "installer", version: "v3.0.1", filename: "0xoLemon_3.0.1_x64-setup.exe", size_bytes: 0, sha256: "", download_url: "https://github.com/isagi3097-cell/0xoLemon/releases/download/v3.0.1/0xoLemon_3.0.1_x64-setup.exe" },
-      { kind: "portable", version: "v3.0.1", filename: "0xoLemon_3.0.1_x64_en-US.msi", size_bytes: 0, sha256: "", download_url: "https://github.com/isagi3097-cell/0xoLemon/releases/download/v3.0.1/0xoLemon_3.0.1_x64_en-US.msi" },
+      { kind: "installer", version: "v3.0.5", filename: "0xoLemon_3.0.5_x64-setup.exe", size_bytes: 0, sha256: "", download_url: "https://gitlab.com/api/v4/projects/86677736/packages/generic/0xolemon/3.0.5/0xoLemon_3.0.5_x64-setup.exe" },
+      { kind: "portable", version: "v3.0.5", filename: "0xoLemon_3.0.5_x64-setup.exe", size_bytes: 0, sha256: "", download_url: "https://gitlab.com/api/v4/projects/86677736/packages/generic/0xolemon/3.0.5/0xoLemon_3.0.5_x64-setup.exe" },
     ]);
   }, []);
 
@@ -538,7 +538,7 @@ export default function DownloadLauncherPage() {
   };
 
   const fallbackDownload = (_kind: "installer" | "portable" = "installer") => {
-    window.open("https://github.com/isagi3097-cell/0xoLemon/releases/latest", "_blank", "noopener,noreferrer");
+    window.open("https://gitlab.com/0xolemon-group/0xolemon-bobo/-/releases", "_blank", "noopener,noreferrer");
     setIsDownloading(false);
   };
 
