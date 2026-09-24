@@ -516,8 +516,8 @@ export default function DownloadLauncherPage() {
 
   useEffect(() => {
     setArtifacts([
-      { kind: "installer", version: "v3.0.5", filename: "0xoLemon_3.0.5_x64-setup.exe", size_bytes: 0, sha256: "", download_url: "https://gitlab.com/api/v4/projects/86677736/packages/generic/0xolemon/3.0.5/0xoLemon_3.0.5_x64-setup.exe" },
-      { kind: "portable", version: "v3.0.5", filename: "0xoLemon_3.0.5_x64-setup.exe", size_bytes: 0, sha256: "", download_url: "https://gitlab.com/api/v4/projects/86677736/packages/generic/0xolemon/3.0.5/0xoLemon_3.0.5_x64-setup.exe" },
+      { kind: "installer", version: "v3.0.7", filename: "0xoLemon-Setup.exe", size_bytes: 0, sha256: "", download_url: "https://gitlab.com/api/v4/projects/86677736/packages/generic/0xolemon/3.0.7/0xoLemon-Setup.exe" },
+      { kind: "portable", version: "v3.0.7", filename: "0xoLemon-Setup.exe", size_bytes: 0, sha256: "", download_url: "https://gitlab.com/api/v4/projects/86677736/packages/generic/0xolemon/3.0.7/0xoLemon-Setup.exe" },
     ]);
   }, []);
 
